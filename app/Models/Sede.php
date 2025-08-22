@@ -13,11 +13,11 @@ class Sede extends Model
     protected $fillable = [
         'nombre',
         'codigo',
-        'activa'
+        'activo'
     ];
 
     protected $casts = [
-        'activa' => 'boolean'
+        'activo' => 'boolean'
     ];
 
     public function pacientes(): HasMany

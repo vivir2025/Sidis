@@ -13,143 +13,315 @@ class PacienteController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Paciente::with([
-            'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
-            'departamentoNacimiento', 'departamentoResidencia',
-            'municipioNacimiento', 'municipioResidencia', 'raza',
-            'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
-        ])->bySede($request->user()->sede_id);
+        try {
+            $query = Paciente::with([
+                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+                'departamentoNacimiento', 'departamentoResidencia',
+                'municipioNacimiento', 'municipioResidencia', 'raza',
+                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+            ]);
 
-        // Filtros
-        if ($request->filled('documento')) {
-            $query->where('documento', 'like', '%' . $request->documento . '%');
+            // ✅ Filtro por sede del usuario autenticado
+            if ($request->user()) {
+                $query->where('sede_id', $request->user()->sede_id);
+            }
+
+            // Filtros opcionales
+            if ($request->filled('documento')) {
+                $query->where('documento', 'like', '%' . $request->documento . '%');
+            }
+
+            if ($request->filled('nombre')) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('primer_nombre', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('segundo_nombre', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('primer_apellido', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('segundo_apellido', 'like', '%' . $request->nombre . '%');
+                });
+            }
+
+            if ($request->filled('estado')) {
+                $query->where('estado', $request->estado);
+            }
+
+            if ($request->filled('sexo')) {
+                $query->where('sexo', $request->sexo);
+            }
+
+            $pacientes = $query->paginate($request->get('per_page', 15));
+
+            return response()->json([
+                'success' => true,
+                'data' => PacienteResource::collection($pacientes),
+                'meta' => [
+                    'current_page' => $pacientes->currentPage(),
+                    'last_page' => $pacientes->lastPage(),
+                    'per_page' => $pacientes->perPage(),
+                    'total' => $pacientes->total()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error obteniendo pacientes: ' . $e->getMessage()
+            ], 500);
         }
-
-        if ($request->filled('nombre')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('primer_nombre', 'like', '%' . $request->nombre . '%')
-                  ->orWhere('segundo_nombre', 'like', '%' . $request->nombre . '%')
-                  ->orWhere('primer_apellido', 'like', '%' . $request->nombre . '%')
-                  ->orWhere('segundo_apellido', 'like', '%' . $request->nombre . '%');
-            });
-        }
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        $pacientes = $query->paginate($request->get('per_page', 15));
-
-        return response()->json([
-            'success' => true,
-            'data' => PacienteResource::collection($pacientes),
-            'meta' => [
-                'current_page' => $pacientes->currentPage(),
-                'last_page' => $pacientes->lastPage(),
-                'per_page' => $pacientes->perPage(),
-                'total' => $pacientes->total()
-            ]
-        ]);
     }
 
     public function store(StorePacienteRequest $request): JsonResponse
     {
-        $data = $request->validated();
-        $data['sede_id'] = $request->user()->sede_id;
-        $data['fecha_registro'] = now();
+        try {
+            $data = $request->validated();
+            $data['sede_id'] = $request->user()->sede_id;
+            $data['fecha_registro'] = now();
+            $data['uuid'] = \Str::uuid(); // ✅ Generar UUID
 
-        $paciente = Paciente::create($data);
-        $paciente->load([
-            'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
-            'departamentoNacimiento', 'departamentoResidencia',
-            'municipioNacimiento', 'municipioResidencia', 'raza',
-            'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
-        ]);
+            $paciente = Paciente::create($data);
+            $paciente->load([
+                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+                'departamentoNacimiento', 'departamentoResidencia',
+                'municipioNacimiento', 'municipioResidencia', 'raza',
+                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'data' => new PacienteResource($paciente),
-            'message' => 'Paciente creado exitosamente'
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'data' => new PacienteResource($paciente),
+                'message' => 'Paciente creado exitosamente'
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error creando paciente: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function show(string $uuid): JsonResponse
     {
-        $paciente = Paciente::where('uuid', $uuid)
-            ->with([
+        try {
+            $query = Paciente::where('uuid', $uuid);
+            
+            // ✅ Filtro por sede si hay usuario autenticado
+            if (auth()->check()) {
+                $query->where('sede_id', auth()->user()->sede_id);
+            }
+
+            $paciente = $query->with([
                 'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
                 'departamentoNacimiento', 'departamentoResidencia',
                 'municipioNacimiento', 'municipioResidencia', 'raza',
                 'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion',
                 'citas.agenda', 'historiasClinicas'
-            ])
-            ->firstOrFail();
+            ])->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'data' => new PacienteResource($paciente)
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => new PacienteResource($paciente)
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Paciente no encontrado'
+            ], 404);
+        }
     }
 
     public function update(UpdatePacienteRequest $request, string $uuid): JsonResponse
     {
-        $paciente = Paciente::where('uuid', $uuid)->firstOrFail();
-        
-        $data = $request->validated();
-        $data['fecha_actualizacion'] = now();
-        
-        $paciente->update($data);
-        $paciente->load([
-            'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
-            'departamentoNacimiento', 'departamentoResidencia',
-            'municipioNacimiento', 'municipioResidencia', 'raza',
-            'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
-        ]);
+        try {
+            $query = Paciente::where('uuid', $uuid);
+            
+            if ($request->user()) {
+                $query->where('sede_id', $request->user()->sede_id);
+            }
 
-        return response()->json([
-            'success' => true,
-            'data' => new PacienteResource($paciente),
-            'message' => 'Paciente actualizado exitosamente'
-        ]);
-    }
-
-    public function destroy(string $uuid): JsonResponse
-    {
-        $paciente = Paciente::where('uuid', $uuid)->firstOrFail();
-        $paciente->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Paciente eliminado exitosamente'
-        ]);
-    }
-
-    public function searchByDocument(Request $request): JsonResponse
-    {
-        $request->validate([
-            'documento' => 'required|string'
-        ]);
-
-        $paciente = Paciente::where('documento', $request->documento)
-            ->bySede($request->user()->sede_id)
-            ->with([
+            $paciente = $query->firstOrFail();
+            
+            $data = $request->validated();
+            $data['fecha_actualizacion'] = now();
+            
+            $paciente->update($data);
+            $paciente->load([
                 'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
                 'departamentoNacimiento', 'departamentoResidencia',
                 'municipioNacimiento', 'municipioResidencia', 'raza',
                 'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
-            ])
-            ->first();
+            ]);
 
-        if (!$paciente) {
+            return response()->json([
+                'success' => true,
+                'data' => new PacienteResource($paciente),
+                'message' => 'Paciente actualizado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Paciente no encontrado'
-            ], 404);
+                'error' => 'Error actualizando paciente: ' . $e->getMessage()
+            ], 500);
         }
+    }
 
+    public function destroy(string $uuid): JsonResponse
+    {
+        try {
+            $query = Paciente::where('uuid', $uuid);
+            
+            if (auth()->check()) {
+                $query->where('sede_id', auth()->user()->sede_id);
+            }
+
+            $paciente = $query->firstOrFail();
+            $paciente->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Paciente eliminado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error eliminando paciente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function searchByDocument(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'documento' => 'required|string'
+            ]);
+
+            $query = Paciente::where('documento', $request->documento);
+            
+            if ($request->user()) {
+                $query->where('sede_id', $request->user()->sede_id);
+            }
+
+            $paciente = $query->with([
+                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+                'departamentoNacimiento', 'departamentoResidencia',
+                'municipioNacimiento', 'municipioResidencia', 'raza',
+                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+            ])->first();
+
+            if (!$paciente) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Paciente no encontrado'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => new PacienteResource($paciente)
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error buscando paciente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ Búsqueda general
+     */
+    public function search(Request $request): JsonResponse
+    {
+        try {
+            $query = Paciente::with([
+                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+                'departamentoNacimiento', 'departamentoResidencia',
+                'municipioNacimiento', 'municipioResidencia', 'raza',
+                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+            ]);
+
+            if ($request->user()) {
+                $query->where('sede_id', $request->user()->sede_id);
+            }
+
+            // Aplicar filtros de búsqueda
+            if ($request->filled('documento')) {
+                $query->where('documento', 'like', '%' . $request->documento . '%');
+            }
+
+            if ($request->filled('nombre')) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('primer_nombre', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('segundo_nombre', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('primer_apellido', 'like', '%' . $request->nombre . '%')
+                      ->orWhere('segundo_apellido', 'like', '%' . $request->nombre . '%');
+                });
+            }
+
+            if ($request->filled('telefono')) {
+                $query->where('telefono', 'like', '%' . $request->telefono . '%');
+            }
+
+            if ($request->filled('estado')) {
+                $query->where('estado', $request->estado);
+            }
+
+            if ($request->filled('sexo')) {
+                $query->where('sexo', $request->sexo);
+            }
+
+            $pacientes = $query->paginate($request->get('per_page', 15));
+
+            return response()->json([
+                'success' => true,
+                'data' => PacienteResource::collection($pacientes),
+                'meta' => [
+                    'current_page' => $pacientes->currentPage(),
+                    'last_page' => $pacientes->lastPage(),
+                    'per_page' => $pacientes->perPage(),
+                    'total' => $pacientes->total()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error en búsqueda: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    
+    public function test(): JsonResponse
+{
+    try {
+        $user = auth()->user();
+        
         return response()->json([
             'success' => true,
-            'data' => new PacienteResource($paciente)
+            'message' => 'Endpoint de pacientes funcionando correctamente',
+            'timestamp' => now(),
+            'user_info' => $user ? [
+                'id' => $user->id,
+                'sede_id' => $user->sede_id ?? 'NO_SEDE',
+                'email' => $user->email ?? 'NO_EMAIL'
+            ] : 'NO_AUTH',
+            'database_info' => [
+                'pacientes_count' => \App\Models\Paciente::count(),
+                'connection' => 'OK'
+            ]
         ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
     }
+}
 }

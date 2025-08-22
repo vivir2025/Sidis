@@ -53,15 +53,24 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     // PACIENTES
     // ================================
-    Route::prefix('pacientes')->group(function () {
+     Route::prefix('pacientes')->group(function () {
         Route::get('/', [PacienteController::class, 'index']);
+         Route::get('/test', [PacienteController::class, 'test']); // ✅ AGREGAR ESTA
         Route::post('/', [PacienteController::class, 'store']);
-        Route::get('/buscar-documento', [PacienteController::class, 'searchByDocument']);
-        Route::get('/{paciente}', [PacienteController::class, 'show']);
-        Route::put('/{paciente}', [PacienteController::class, 'update']);
-        Route::delete('/{paciente}', [PacienteController::class, 'destroy']);
-        Route::get('/{paciente}/historias', [HistoriaClinicaController::class, 'historiasPaciente']);
-        Route::get('/{paciente}/citas', [CitaController::class, 'citasPaciente']);
+        
+        // ✅ Rutas de búsqueda (ANTES de las rutas con parámetros)
+        Route::get('/search', [PacienteController::class, 'search']);
+        Route::get('/search/document', [PacienteController::class, 'searchByDocument']);
+        Route::get('/buscar-documento', [PacienteController::class, 'searchByDocument']); // ✅ Mantener compatibilidad
+        
+        // ✅ Rutas con parámetros UUID (DESPUÉS de las rutas específicas)
+        Route::get('/{uuid}', [PacienteController::class, 'show']);
+        Route::put('/{uuid}', [PacienteController::class, 'update']);
+        Route::delete('/{uuid}', [PacienteController::class, 'destroy']);
+        
+        // Rutas relacionadas
+        Route::get('/{uuid}/historias', [HistoriaClinicaController::class, 'historiasPaciente']);
+        Route::get('/{uuid}/citas', [CitaController::class, 'citasPaciente']);
     });
 
     // ================================
