@@ -117,6 +117,14 @@ class PacienteResource extends JsonResource
                 ];
             }),
             
+            // ✅ Agregar parentesco que faltaba
+            'parentesco' => $this->whenLoaded('tipoParentesco', function () {
+                return [
+                    'uuid' => $this->tipoParentesco->uuid,
+                    'nombre' => $this->tipoParentesco->nombre
+                ];
+            }),
+            
             // Acudiente
             'acudiente' => [
                 'nombre' => $this->nombre_acudiente,
@@ -141,9 +149,31 @@ class PacienteResource extends JsonResource
             'total_citas' => $this->whenCounted('citas'),
             'total_historias' => $this->whenCounted('historiasClinicas'),
             
-            // Citas recientes (cuando se cargan)
-            'citas_recientes' => CitaResource::collection($this->whenLoaded('citas')),
-            'historias_recientes' => HistoriaClinicaResource::collection($this->whenLoaded('historiasClinicas'))
+            // ✅ COMENTAR ESTAS LÍNEAS HASTA QUE CREES CitaResource y HistoriaClinicaResource
+            // 'citas_recientes' => CitaResource::collection($this->whenLoaded('citas')),
+            // 'historias_recientes' => HistoriaClinicaResource::collection($this->whenLoaded('historiasClinicas'))
+            
+            // ✅ ALTERNATIVA TEMPORAL: Mostrar solo datos básicos
+            'citas_recientes' => $this->whenLoaded('citas', function () {
+                return $this->citas->take(5)->map(function ($cita) {
+                    return [
+                        'uuid' => $cita->uuid ?? null,
+                        'fecha' => $cita->fecha?->format('Y-m-d'),
+                        'estado' => $cita->estado,
+                        'motivo' => $cita->motivo
+                    ];
+                });
+            }),
+            
+            'historias_recientes' => $this->whenLoaded('historiasClinicas', function () {
+                return $this->historiasClinicas->take(5)->map(function ($historia) {
+                    return [
+                        'uuid' => $historia->uuid ?? null,
+                        'fecha' => $historia->fecha?->format('Y-m-d'),
+                        'tipo' => $historia->tipo ?? 'CONSULTA'
+                    ];
+                });
+            })
         ];
     }
 }

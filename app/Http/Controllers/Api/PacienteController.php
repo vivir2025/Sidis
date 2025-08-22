@@ -75,7 +75,17 @@ class PacienteController extends Controller
             $data = $request->validated();
             $data['sede_id'] = $request->user()->sede_id;
             $data['fecha_registro'] = now();
-            $data['uuid'] = \Str::uuid(); // ✅ Generar UUID
+            $data['uuid'] = \Str::uuid();
+            
+            // ✅ Generar registro automático si no se proporciona
+            if (empty($data['registro'])) {
+                $data['registro'] = $this->generateRegistro($request->user()->sede_id);
+            }
+            
+            // ✅ Estado por defecto
+            if (empty($data['estado'])) {
+                $data['estado'] = 'ACTIVO';
+            }
 
             $paciente = Paciente::create($data);
             $paciente->load([
@@ -231,9 +241,6 @@ class PacienteController extends Controller
         }
     }
 
-    /**
-     * ✅ Búsqueda general
-     */
     public function search(Request $request): JsonResponse
     {
         try {
@@ -295,33 +302,48 @@ class PacienteController extends Controller
         }
     }
     
-    
     public function test(): JsonResponse
-{
-    try {
-        $user = auth()->user();
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Endpoint de pacientes funcionando correctamente',
-            'timestamp' => now(),
-            'user_info' => $user ? [
-                'id' => $user->id,
-                'sede_id' => $user->sede_id ?? 'NO_SEDE',
-                'email' => $user->email ?? 'NO_EMAIL'
-            ] : 'NO_AUTH',
-            'database_info' => [
-                'pacientes_count' => \App\Models\Paciente::count(),
-                'connection' => 'OK'
-            ]
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
-        ], 500);
+    {
+        try {
+            $user = auth()->user();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Endpoint de pacientes funcionando correctamente',
+                'timestamp' => now(),
+                'user_info' => $user ? [
+                    'id' => $user->id,
+                    'sede_id' => $user->sede_id ?? 'NO_SEDE',
+                    'email' => $user->email ?? 'NO_EMAIL'
+                ] : 'NO_AUTH',
+                'database_info' => [
+                    'pacientes_count' => \App\Models\Paciente::count(),
+                    'connection' => 'OK'
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ], 500);
+        }
     }
-}
+
+    /**
+     * ✅ Generar número de registro automático
+     */
+    private function generateRegistro(int $sedeId): string
+    {
+        $year = date('Y');
+        $lastPaciente = Paciente::where('sede_id', $sedeId)
+            ->whereYear('created_at', $year)
+            ->orderBy('id', 'desc')
+            ->first();
+        
+        $nextNumber = $lastPaciente ? (intval(substr($lastPaciente->registro, -6)) + 1) : 1;
+        
+        return sprintf('REG%s%06d', $year, $nextNumber);
+    }
 }

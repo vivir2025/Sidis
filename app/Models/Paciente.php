@@ -2,37 +2,80 @@
 // app/Models/Paciente.php
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Traits\{HasUuidTrait, SyncableTrait};
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class Paciente extends Model
 {
-    use SoftDeletes, HasUuidTrait, SyncableTrait;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'sede_id', 'empresa_id', 'regimen_id', 'tipo_afiliacion_id',
-        'zona_residencia_id', 'depto_nacimiento_id', 'depto_residencia_id',
-        'municipio_nacimiento_id', 'municipio_residencia_id', 'raza_id',
-        'escolaridad_id', 'parentesco_id', 'tipo_documento_id', 'registro',
-        'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
-        'documento', 'fecha_nacimiento', 'sexo', 'direccion', 'telefono',
-        'correo', 'observacion', 'estado_civil', 'ocupacion_id',
-        'nombre_acudiente', 'parentesco_acudiente', 'telefono_acudiente',
-        'direccion_acudiente', 'estado', 'acompanante_nombre',
-        'acompanante_telefono', 'fecha_registro', 'novedad_id',
-        'auxiliar_id', 'brigada_id', 'fecha_actualizacion'
+        'uuid',
+        'sede_id',
+        'empresa_id',
+        'regimen_id',
+        'tipo_afiliacion_id',
+        'zona_residencia_id',
+        'depto_nacimiento_id',
+        'depto_residencia_id',
+        'municipio_nacimiento_id',
+        'municipio_residencia_id',
+        'raza_id',
+        'escolaridad_id',
+        'parentesco_id',
+        'tipo_documento_id',
+        'registro',
+        'primer_nombre',
+        'segundo_nombre',
+        'primer_apellido',
+        'segundo_apellido',
+        'documento',
+        'fecha_nacimiento',
+        'sexo',
+        'direccion',
+        'telefono',
+        'correo',
+        'observacion',
+        'estado_civil',
+        'ocupacion_id',
+        'nombre_acudiente',
+        'parentesco_acudiente',
+        'telefono_acudiente',
+        'direccion_acudiente',
+        'estado',
+        'acompanante_nombre',
+        'acompanante_telefono',
+        'fecha_registro',
+        'novedad_id',
+        'auxiliar_id',
+        'brigada_id',
+        'fecha_actualizacion'
     ];
 
     protected $casts = [
         'fecha_nacimiento' => 'date',
         'fecha_registro' => 'date',
-        'fecha_actualizacion' => 'date'
+        'fecha_actualizacion' => 'date',
     ];
 
-    // Relaciones
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::creating(function ($paciente) {
+            if (empty($paciente->uuid)) {
+                $paciente->uuid = Str::uuid();
+            }
+        });
+    }
+
+    // Relaciones BelongsTo
     public function sede(): BelongsTo
     {
         return $this->belongsTo(Sede::class);
@@ -50,7 +93,7 @@ class Paciente extends Model
 
     public function tipoAfiliacion(): BelongsTo
     {
-        return $this->belongsTo(TipoAfiliacion::class);
+        return $this->belongsTo(TipoAfiliacion::class, 'tipo_afiliacion_id');
     }
 
     public function zonaResidencia(): BelongsTo
@@ -118,6 +161,12 @@ class Paciente extends Model
         return $this->belongsTo(Brigada::class);
     }
 
+    // Relaciones HasMany (si existen otras tablas)
+    public function visitas(): HasMany
+    {
+        return $this->hasMany(Visita::class);
+    }
+
     public function citas(): HasMany
     {
         return $this->hasMany(Cita::class);
@@ -129,35 +178,31 @@ class Paciente extends Model
     }
 
     // Accessors
-    public function getNombreCompletoAttribute(): string
+    public function getEdadAttribute()
     {
-        return trim($this->primer_nombre . ' ' . $this->segundo_nombre . ' ' . 
-                   $this->primer_apellido . ' ' . $this->segundo_apellido);
+        return $this->fecha_nacimiento ? Carbon::parse($this->fecha_nacimiento)->age : null;
     }
 
-    public function getEdadAttribute(): int
+    public function getNombreCompletoAttribute()
     {
-        return $this->fecha_nacimiento->age;
+        $nombre = trim($this->primer_nombre . ' ' . ($this->segundo_nombre ?? ''));
+        $apellido = trim($this->primer_apellido . ' ' . ($this->segundo_apellido ?? ''));
+        return trim($nombre . ' ' . $apellido);
     }
 
     // Scopes
-    public function scopeBySede($query, $sedeId)
-    {
-        return $query->where('sede_id', $sedeId);
-    }
-
     public function scopeActivos($query)
     {
         return $query->where('estado', 'ACTIVO');
     }
 
-    public function scopeByDocumento($query, $documento)
+    public function scopePorSede($query, $sedeId)
     {
-        return $query->where('documento', $documento);
+        return $query->where('sede_id', $sedeId);
     }
 
-    public function facturas(): HasMany
+    public function scopePorDocumento($query, $documento)
     {
-        return $this->hasMany(Factura::class);
+        return $query->where('documento', $documento);
     }
 }
