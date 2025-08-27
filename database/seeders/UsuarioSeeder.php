@@ -12,7 +12,7 @@ class UsuarioSeeder extends Seeder
 {
     public function run(): void
     {
-        // Usuario Administrador
+        
         Usuario::updateOrCreate(
             ['documento' => '12345678'],
             [

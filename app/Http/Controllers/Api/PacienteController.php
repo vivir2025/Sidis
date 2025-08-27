@@ -11,6 +11,12 @@ use App\Http\Requests\{StorePacienteRequest, UpdatePacienteRequest};
 
 class PacienteController extends Controller
 {
+    
+      public function __construct()
+    {
+        $this->middleware('auth:sanctum');
+       
+    }
     public function index(Request $request): JsonResponse
     {
         try {
@@ -346,4 +352,28 @@ class PacienteController extends Controller
         
         return sprintf('REG%s%06d', $year, $nextNumber);
     }
+    
+    public function health(): JsonResponse
+{
+    try {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'status' => 'ok',
+                'timestamp' => now()->toISOString(),
+                'service' => 'SIDIS API',
+                'version' => '1.0.0',
+                'database' => 'connected'
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'data' => [
+                'status' => 'error',
+                'error' => $e->getMessage()
+            ]
+        ], 500);
+    }
+}
 }
