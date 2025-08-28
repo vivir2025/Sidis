@@ -1,5 +1,5 @@
 <?php
-// routes/api.php
+// routes/api.php - VERSIÓN CORREGIDA
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{
     AuthController,
@@ -17,7 +17,10 @@ use App\Http\Controllers\Api\{
     CategoriaCupsController,
     CupsController,
     ContratoController,
-    CupsContratadoController
+    CupsContratadoController,
+    NovedadController,
+    AuxiliarController,
+    BrigadaController
 };
 
 /*
@@ -31,9 +34,14 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/health', function () {
         return response()->json([
-            'status' => 'ok',
-            'timestamp' => now()->toISOString(),
-            'version' => '1.0.0'
+            'success' => true,
+            'data' => [
+                'status' => 'ok',
+                'timestamp' => now()->toISOString(),
+                'service' => 'SIDIS API',
+                'version' => '1.0.0',
+                'database' => 'connected'
+            ]
         ]);
     });
 });
@@ -53,17 +61,17 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     // PACIENTES
     // ================================
-     Route::prefix('pacientes')->group(function () {
+    Route::prefix('pacientes')->group(function () {
         Route::get('/', [PacienteController::class, 'index']);
-         Route::get('/test', [PacienteController::class, 'test']); // ✅ AGREGAR ESTA
+        Route::get('/test', [PacienteController::class, 'test']);
         Route::post('/', [PacienteController::class, 'store']);
         
-        // ✅ Rutas de búsqueda (ANTES de las rutas con parámetros)
+        // Rutas de búsqueda (ANTES de las rutas con parámetros)
         Route::get('/search', [PacienteController::class, 'search']);
         Route::get('/search/document', [PacienteController::class, 'searchByDocument']);
-        Route::get('/buscar-documento', [PacienteController::class, 'searchByDocument']); // ✅ Mantener compatibilidad
+        Route::get('/buscar-documento', [PacienteController::class, 'searchByDocument']);
         
-        // ✅ Rutas con parámetros UUID (DESPUÉS de las rutas específicas)
+        // Rutas con parámetros UUID (DESPUÉS de las rutas específicas)
         Route::get('/{uuid}', [PacienteController::class, 'show']);
         Route::put('/{uuid}', [PacienteController::class, 'update']);
         Route::delete('/{uuid}', [PacienteController::class, 'destroy']);
@@ -114,9 +122,16 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/{id}/medicos', [EspecialidadController::class, 'medicos']);
         Route::patch('/{id}/estado', [EspecialidadController::class, 'cambiarEstado']);
     });
+    
+    // ================================
+    // RECURSOS ADICIONALES
+    // ================================
+    Route::apiResource('novedades', NovedadController::class);
+    Route::apiResource('auxiliares', AuxiliarController::class);
+    Route::apiResource('brigadas', BrigadaController::class);
 
     // ================================
-    // CONTRATOS ✅ NUEVO
+    // CONTRATOS
     // ================================
     Route::prefix('contratos')->group(function () {
         Route::get('/', [ContratoController::class, 'index']);
@@ -130,7 +145,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     });
 
     // ================================
-    // CATEGORÍAS CUPS ✅ NUEVO
+    // CATEGORÍAS CUPS
     // ================================
     Route::prefix('categorias-cups')->group(function () {
         Route::get('/', [CategoriaCupsController::class, 'index']);
@@ -142,7 +157,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     });
 
     // ================================
-    // CUPS ✅ NUEVO
+    // CUPS
     // ================================
     Route::prefix('cups')->group(function () {
         Route::get('/', [CupsController::class, 'index']);
@@ -156,7 +171,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     });
 
     // ================================
-    // CUPS CONTRATADOS ✅ NUEVO
+    // CUPS CONTRATADOS
     // ================================
     Route::prefix('cups-contratados')->group(function () {
         Route::get('/', [CupsContratadoController::class, 'index']);
@@ -236,6 +251,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // DATOS MAESTROS
     // ================================
     Route::prefix('master-data')->group(function () {
+        Route::get('/all', [MasterDataController::class, 'allMasterData']);
         Route::get('/departamentos', [MasterDataController::class, 'departamentos']);
         Route::get('/municipios/{departamento}', [MasterDataController::class, 'municipios']);
         Route::get('/empresas', [MasterDataController::class, 'empresas']);
@@ -254,7 +270,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/cups', [MasterDataController::class, 'cups']);
         Route::get('/cups-contratados', [MasterDataController::class, 'cupsContratados']);
         Route::get('/contratos', [MasterDataController::class, 'contratos']);
-        Route::get('/all', [MasterDataController::class, 'allMasterData']);
+        Route::get('/novedades', [MasterDataController::class, 'novedades']);
+        Route::get('/auxiliares', [MasterDataController::class, 'auxiliares']);
+        Route::get('/brigadas', [MasterDataController::class, 'brigadas']);
     });
 
     // ================================

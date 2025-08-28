@@ -358,24 +358,27 @@ class MasterDataController extends Controller
 
     public function allMasterData(): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'departamentos' => $this->getDepartamentosData(),
-                'empresas' => $this->getEmpresasData(),
-                'regimenes' => $this->getRegimenesData(),
-                'tipos_afiliacion' => $this->getTiposAfiliacionData(),
-                'zonas_residenciales' => $this->getZonasResidencialesData(),
-                'razas' => $this->getRazasData(),
-                'escolaridades' => $this->getEscolaridadesData(),
-                'tipos_parentesco' => $this->getTiposParentescoData(),
-                'tipos_documento' => $this->getTiposDocumentoData(),
-                'ocupaciones' => $this->getOcupacionesData(),
-                'especialidades' => $this->getEspecialidadesData(),
-                'contratos' => $this->getContratosData(),
-                'last_updated' => now()->toISOString()
-            ]
-        ]);
+         return response()->json([
+        'success' => true,
+        'data' => [
+            'departamentos' => $this->getDepartamentosData(),
+            'empresas' => $this->getEmpresasData(),
+            'regimenes' => $this->getRegimenesData(),
+            'tipos_afiliacion' => $this->getTiposAfiliacionData(),
+            'zonas_residenciales' => $this->getZonasResidencialesData(),
+            'razas' => $this->getRazasData(),
+            'escolaridades' => $this->getEscolaridadesData(),
+            'tipos_parentesco' => $this->getTiposParentescoData(),
+            'tipos_documento' => $this->getTiposDocumentoData(),
+            'ocupaciones' => $this->getOcupacionesData(),
+            'especialidades' => $this->getEspecialidadesData(),
+            'contratos' => $this->getContratosData(),
+            'novedades' => $this->getNovedadesData(),
+            'auxiliares' => $this->getAuxiliaresData(),
+            'brigadas' => $this->getBrigadasData(),
+            'last_updated' => now()->toISOString()
+        ]
+    ]);
     }
 
     // Métodos privados para obtener datos
@@ -503,6 +506,36 @@ class MasterDataController extends Controller
             ];
         });
     }
+    // Métodos privados adicionales
+private function getNovedadesData()
+{
+    return Novedad::orderBy('tipo_novedad')->get()->map(function ($novedad) {
+        return [
+            'uuid' => $novedad->uuid,
+            'tipo_novedad' => $novedad->tipo_novedad
+        ];
+    });
+}
+
+private function getAuxiliaresData()
+{
+    return Auxiliar::orderBy('nombre')->get()->map(function ($auxiliar) {
+        return [
+            'uuid' => $auxiliar->uuid,
+            'nombre' => $auxiliar->nombre
+        ];
+    });
+}
+
+private function getBrigadasData()
+{
+    return Brigada::orderBy('nombre')->get()->map(function ($brigada) {
+        return [
+            'uuid' => $brigada->uuid,
+            'nombre' => $brigada->nombre
+        ];
+    });
+}
 
     private function getContratosData()
     {
@@ -520,4 +553,50 @@ class MasterDataController extends Controller
             ];
         });
     }
+    
+    public function novedades(): JsonResponse
+{
+    $novedades = Novedad::orderBy('tipo_novedad')->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $novedades->map(function ($novedad) {
+            return [
+                'uuid' => $novedad->uuid,
+                'tipo_novedad' => $novedad->tipo_novedad
+            ];
+        })
+    ]);
+}
+
+public function auxiliares(): JsonResponse
+{
+    $auxiliares = Auxiliar::orderBy('nombre')->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $auxiliares->map(function ($auxiliar) {
+            return [
+                'uuid' => $auxiliar->uuid,
+                'nombre' => $auxiliar->nombre
+            ];
+        })
+    ]);
+}
+
+public function brigadas(): JsonResponse
+{
+    $brigadas = Brigada::orderBy('nombre')->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $brigadas->map(function ($brigada) {
+            return [
+                'uuid' => $brigada->uuid,
+                'nombre' => $brigada->nombre
+            ];
+        })
+    ]);
+}
+
 }

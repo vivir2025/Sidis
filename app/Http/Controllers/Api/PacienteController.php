@@ -75,30 +75,84 @@ class PacienteController extends Controller
         }
     }
 
-    public function store(StorePacienteRequest $request): JsonResponse
+  public function store(Request $request): JsonResponse
     {
         try {
-            $data = $request->validated();
-            $data['sede_id'] = $request->user()->sede_id;
-            $data['fecha_registro'] = now();
-            $data['uuid'] = \Str::uuid();
-            
-            // ✅ Generar registro automático si no se proporciona
-            if (empty($data['registro'])) {
-                $data['registro'] = $this->generateRegistro($request->user()->sede_id);
-            }
-            
-            // ✅ Estado por defecto
-            if (empty($data['estado'])) {
-                $data['estado'] = 'ACTIVO';
-            }
+            Log::info('🏥 PacienteController@store - Datos recibidos', [
+                'data' => $request->all(),
+                'user_id' => auth()->id(),
+                'user_sede' => auth()->user()->sede_id ?? 'NO_SEDE'
+            ]);
 
-            $paciente = Paciente::create($data);
+            // ✅ VALIDACIÓN CORREGIDA
+            $validatedData = $request->validate([
+                // Campos obligatorios
+                'primer_nombre' => 'required|string|max:50',
+                'primer_apellido' => 'required|string|max:50',
+                'documento' => 'required|string|max:20',
+                'fecha_nacimiento' => 'required|date|before:today',
+                'sexo' => 'required|in:M,F',
+                
+                // Campos opcionales
+                'segundo_nombre' => 'nullable|string|max:50',
+                'segundo_apellido' => 'nullable|string|max:50',
+                'direccion' => 'nullable|string|max:255',
+                'telefono' => 'nullable|string|max:50',
+                'correo' => 'nullable|email|max:100',
+                'estado_civil' => 'nullable|string|max:50',
+                'observacion' => 'nullable|string',
+                'registro' => 'nullable|string|max:50',
+                'estado' => 'nullable|in:ACTIVO,INACTIVO',
+                
+                // ✅ IDs de relaciones (UUIDs como strings)
+                'tipo_documento_id' => 'nullable|string',
+                'empresa_id' => 'nullable|string',
+                'regimen_id' => 'nullable|string',
+                'tipo_afiliacion_id' => 'nullable|string',
+                'zona_residencia_id' => 'nullable|string',
+                'depto_nacimiento_id' => 'nullable|string',
+                'depto_residencia_id' => 'nullable|string',
+                'municipio_nacimiento_id' => 'nullable|string',
+                'municipio_residencia_id' => 'nullable|string',
+                'raza_id' => 'nullable|string',
+                'escolaridad_id' => 'nullable|string',
+                'parentesco_id' => 'nullable|string',
+                'ocupacion_id' => 'nullable|string',
+                'novedad_id' => 'nullable|string',
+                'auxiliar_id' => 'nullable|string',
+                'brigada_id' => 'nullable|string',
+                
+                // Campos adicionales
+                'nombre_acudiente' => 'nullable|string|max:100',
+                'parentesco_acudiente' => 'nullable|string|max:50',
+                'telefono_acudiente' => 'nullable|string|max:50',
+                'direccion_acudiente' => 'nullable|string|max:255',
+                'acompanante_nombre' => 'nullable|string|max:100',
+                'acompanante_telefono' => 'nullable|string|max:50'
+            ]);
+
+            // ✅ PROCESAR DATOS PARA GUARDAR
+            $pacienteData = $this->procesarDatosParaGuardar($validatedData, $request);
+
+            Log::info('📝 Datos procesados para guardar', [
+                'data' => $pacienteData
+            ]);
+
+            // ✅ CREAR PACIENTE
+            $paciente = Paciente::create($pacienteData);
+
+            // ✅ CARGAR RELACIONES
             $paciente->load([
                 'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
                 'departamentoNacimiento', 'departamentoResidencia',
                 'municipioNacimiento', 'municipioResidencia', 'raza',
                 'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+            ]);
+
+            Log::info('✅ Paciente creado exitosamente', [
+                'id' => $paciente->id,
+                'uuid' => $paciente->uuid,
+                'documento' => $paciente->documento
             ]);
 
             return response()->json([
@@ -107,13 +161,133 @@ class PacienteController extends Controller
                 'message' => 'Paciente creado exitosamente'
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('❌ Errores de validación', [
+                'errors' => $e->errors(),
+                'input' => $request->all()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'error' => 'Error creando paciente: ' . $e->getMessage()
+                'error' => 'Datos inválidos',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            Log::error('💥 Error creando paciente', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'input' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno del servidor: ' . $e->getMessage()
             ], 500);
         }
     }
+     private function procesarDatosParaGuardar(array $validatedData, Request $request): array
+    {
+        $user = auth()->user();
+        
+        $data = [
+            'uuid' => \Str::uuid(),
+            'sede_id' => $user->sede_id ?? 1,
+            'fecha_registro' => now(),
+            'estado' => $validatedData['estado'] ?? 'ACTIVO',
+            
+            // ✅ CAMPOS BÁSICOS
+            'registro' => $validatedData['registro'] ?? $this->generateRegistro($user->sede_id ?? 1),
+            'primer_nombre' => $validatedData['primer_nombre'],
+            'segundo_nombre' => $validatedData['segundo_nombre'],
+            'primer_apellido' => $validatedData['primer_apellido'],
+            'segundo_apellido' => $validatedData['segundo_apellido'],
+            'documento' => $validatedData['documento'],
+            'fecha_nacimiento' => $validatedData['fecha_nacimiento'],
+            'sexo' => $validatedData['sexo'],
+            'direccion' => $validatedData['direccion'] ?? '',
+            'telefono' => $validatedData['telefono'] ?? '',
+            'correo' => $validatedData['correo'],
+            'observacion' => $validatedData['observacion'],
+            'estado_civil' => $validatedData['estado_civil'] ?? '',
+            
+            // ✅ CAMPOS ADICIONALES
+            'nombre_acudiente' => $validatedData['nombre_acudiente'],
+            'parentesco_acudiente' => $validatedData['parentesco_acudiente'],
+            'telefono_acudiente' => $validatedData['telefono_acudiente'],
+            'direccion_acudiente' => $validatedData['direccion_acudiente'],
+            'acompanante_nombre' => $validatedData['acompanante_nombre'],
+            'acompanante_telefono' => $validatedData['acompanante_telefono']
+        ];
+
+        // ✅ CONVERTIR UUIDs A IDs USANDO MÉTODO HELPER
+        $relationMappings = [
+            'tipo_documento_id' => 'tipos_documento',
+            'empresa_id' => 'empresas',
+            'regimen_id' => 'regimenes',
+            'tipo_afiliacion_id' => 'tipos_afiliacion',
+            'zona_residencia_id' => 'zonas_residenciales',
+            'depto_nacimiento_id' => 'departamentos',
+            'depto_residencia_id' => 'departamentos',
+            'municipio_nacimiento_id' => 'municipios',
+            'municipio_residencia_id' => 'municipios',
+            'raza_id' => 'razas',
+            'escolaridad_id' => 'escolaridades',
+            'parentesco_id' => 'tipos_parentesco',
+            'ocupacion_id' => 'ocupaciones',
+            'novedad_id' => 'novedades',
+            'auxiliar_id' => 'auxiliares',
+            'brigada_id' => 'brigadas'
+        ];
+
+        foreach ($relationMappings as $field => $table) {
+            if (!empty($validatedData[$field])) {
+                $id = $this->convertUuidToId($validatedData[$field], $table);
+                $data[$field] = $id;
+                
+                Log::info("🔄 Conversión UUID->ID", [
+                    'field' => $field,
+                    'uuid' => $validatedData[$field],
+                    'id' => $id,
+                    'table' => $table
+                ]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * ✅ NUEVO: Convertir UUID a ID
+     */
+    private function convertUuidToId(?string $uuid, string $table): ?int
+    {
+        if (!$uuid) return null;
+
+        try {
+            $id = DB::table($table)->where('uuid', $uuid)->value('id');
+            
+            if (!$id) {
+                Log::warning("⚠️ UUID no encontrado en tabla", [
+                    'uuid' => $uuid,
+                    'table' => $table
+                ]);
+                return null;
+            }
+
+            return $id;
+        } catch (\Exception $e) {
+            Log::error("❌ Error convirtiendo UUID a ID", [
+                'uuid' => $uuid,
+                'table' => $table,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+    
 
     public function show(string $uuid): JsonResponse
     {
