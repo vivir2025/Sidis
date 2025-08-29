@@ -9,7 +9,7 @@ use App\Models\{
     Departamento, Municipio, Empresa, Regimen, TipoAfiliacion,
     ZonaResidencial, Raza, Escolaridad, TipoParentesco, TipoDocumento,
     Ocupacion, Especialidad, Diagnostico, Medicamento, Remision,
-    Cups, CupsContratado, Contrato,Novedad, Auxiliar, Brigada
+    Cups, CupsContratado, Contrato,Novedad, Auxiliar, Brigada, Proceso
 };
 
 class MasterDataController extends Controller
@@ -17,7 +17,6 @@ class MasterDataController extends Controller
     public function departamentos(): JsonResponse
     {
         $departamentos = Departamento::orderBy('nombre')->get();
-        
         return response()->json([
             'success' => true,
             'data' => $departamentos->map(function ($depto) {
@@ -376,6 +375,7 @@ class MasterDataController extends Controller
             'novedades' => $this->getNovedadesData(),
             'auxiliares' => $this->getAuxiliaresData(),
             'brigadas' => $this->getBrigadasData(),
+            'procesos' => $this->getProcesosData(),
             'last_updated' => now()->toISOString()
         ]
     ]);
@@ -537,6 +537,17 @@ private function getBrigadasData()
     });
 }
 
+    private function getProcesosData()
+    {
+        return Proceso::orderBy('nombre')->get()->map(function ($proceso) {
+            return [
+                'uuid' => $proceso->uuid,
+                'nombre' => $proceso->nombre,
+                'n_cups' => $proceso->n_cups
+            ];
+        });
+    }
+
     private function getContratosData()
     {
         return Contrato::with('empresa')->orderBy('numero')->get()->map(function ($contrato) {
@@ -598,5 +609,20 @@ public function brigadas(): JsonResponse
         })
     ]);
 }
+public function procesos(): JsonResponse
+{
+    $procesos = Proceso::orderBy('nombre')->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $procesos->map(function ($proceso) {
+            return [
+                'uuid' => $proceso->uuid,
+                'nombre' => $proceso->nombre,
+                'n_cups' => $proceso->n_cups
+            ];
+        })
+    ]);
 
+}
 }
