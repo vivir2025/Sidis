@@ -20,7 +20,8 @@ use App\Http\Controllers\Api\{
     CupsContratadoController,
     NovedadController,
     AuxiliarController,
-    BrigadaController
+    BrigadaController,
+    ProcesoController
 };
 
 /*
@@ -129,6 +130,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     Route::apiResource('novedades', NovedadController::class);
     Route::apiResource('auxiliares', AuxiliarController::class);
     Route::apiResource('brigadas', BrigadaController::class);
+    Route::apiResource('procesos', ProcesoController::class);
 
     // ================================
     // CONTRATOS
