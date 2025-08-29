@@ -9,7 +9,7 @@ use App\Models\{
     Departamento, Municipio, Empresa, Regimen, TipoAfiliacion,
     ZonaResidencial, Raza, Escolaridad, TipoParentesco, TipoDocumento,
     Ocupacion, Especialidad, Diagnostico, Medicamento, Remision,
-    Cups, CupsContratado, Contrato
+    Cups, CupsContratado, Contrato,Novedad, Auxiliar, Brigada
 };
 
 class MasterDataController extends Controller

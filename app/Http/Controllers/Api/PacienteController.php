@@ -8,6 +8,10 @@ use Illuminate\Http\JsonResponse;
 use App\Models\Paciente;
 use App\Http\Resources\PacienteResource;
 use App\Http\Requests\{StorePacienteRequest, UpdatePacienteRequest};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
 
 class PacienteController extends Controller
 {
@@ -259,35 +263,40 @@ class PacienteController extends Controller
         return $data;
     }
 
-    /**
-     * ✅ NUEVO: Convertir UUID a ID
-     */
-    private function convertUuidToId(?string $uuid, string $table): ?int
-    {
-        if (!$uuid) return null;
+  
+private function convertUuidToId(?string $uuid, string $table): ?int
+{
+    if (!$uuid) return null;
 
-        try {
-            $id = DB::table($table)->where('uuid', $uuid)->value('id');
-            
-            if (!$id) {
-                Log::warning("⚠️ UUID no encontrado en tabla", [
-                    'uuid' => $uuid,
-                    'table' => $table
-                ]);
-                return null;
-            }
+    try {
+        // ✅ VERIFICAR SI YA ES UN ID NUMÉRICO
+        if (is_numeric($uuid)) {
+            return (int) $uuid;
+        }
 
-            return $id;
-        } catch (\Exception $e) {
-            Log::error("❌ Error convirtiendo UUID a ID", [
+        // ✅ BUSCAR POR UUID
+        $id = DB::table($table)->where('uuid', $uuid)->value('id');
+        
+        if (!$id) {
+            Log::warning("⚠️ UUID no encontrado en tabla", [
                 'uuid' => $uuid,
-                'table' => $table,
-                'error' => $e->getMessage()
+                'table' => $table
             ]);
+            // ✅ RETORNAR NULL EN LUGAR DE FALLAR
             return null;
         }
+
+        return (int) $id;
+    } catch (\Exception $e) {
+        Log::error("❌ Error convirtiendo UUID a ID", [
+            'uuid' => $uuid,
+            'table' => $table,
+            'error' => $e->getMessage()
+        ]);
+        return null;
     }
-    
+}
+
 
     public function show(string $uuid): JsonResponse
     {
@@ -514,8 +523,9 @@ class PacienteController extends Controller
     /**
      * ✅ Generar número de registro automático
      */
-    private function generateRegistro(int $sedeId): string
-    {
+  private function generateRegistro(int $sedeId): string
+{
+    try {
         $year = date('Y');
         $lastPaciente = Paciente::where('sede_id', $sedeId)
             ->whereYear('created_at', $year)
@@ -525,8 +535,11 @@ class PacienteController extends Controller
         $nextNumber = $lastPaciente ? (intval(substr($lastPaciente->registro, -6)) + 1) : 1;
         
         return sprintf('REG%s%06d', $year, $nextNumber);
+    } catch (\Exception $e) {
+        Log::error('Error generando registro', ['error' => $e->getMessage()]);
+        return 'REG' . $year . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
     }
-    
+}
     public function health(): JsonResponse
 {
     try {
