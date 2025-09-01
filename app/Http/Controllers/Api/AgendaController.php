@@ -73,53 +73,21 @@ class AgendaController extends Controller
     }
 
     public function store(Request $request): JsonResponse
-{
-    // ✅ Validación básica
-    $request->validate([
-        'sede_id' => 'required|exists:sedes,id',
-        'modalidad' => 'required|in:Telemedicina,Ambulatoria',
-        'fecha' => 'required|date|after_or_equal:today',
-        'consultorio' => 'required|string|max:50',
-        'hora_inicio' => 'required|date_format:H:i',
-        'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
-        'intervalo' => 'required|string|max:10',
-        'etiqueta' => 'required|string|max:50',
-        'usuario_id' => 'required|exists:usuarios,id',
-        'proceso_id' => 'nullable|string',
-        'brigada_id' => 'nullable|string',
-    ]);
+    {
+        $validated = $request->validate([
+            'sede_id' => 'required|exists:sedes,id',
+            'modalidad' => 'required|in:Telemedicina,Ambulatoria',
+            'fecha' => 'required|date|after_or_equal:today',
+            'consultorio' => 'required|string|max:50',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+            'intervalo' => 'required|string|max:10',
+            'etiqueta' => 'required|string|max:50',
+            'proceso_id' => 'required|exists:procesos,id',
+            'usuario_id' => 'required|exists:usuarios,id',
+            'brigada_id' => 'required|exists:brigadas,id',
+        ]);
 
-    // ✅ Validación personalizada para UUIDs
-    $validated = $request->only([
-        'sede_id', 'modalidad', 'fecha', 'consultorio', 
-        'hora_inicio', 'hora_fin', 'intervalo', 'etiqueta', 'usuario_id'
-    ]);
-
-    // Validar y resolver proceso_id
-    if ($request->filled('proceso_id')) {
-        $proceso = \App\Models\Proceso::where('uuid', $request->proceso_id)->first();
-        if (!$proceso) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El proceso seleccionado no es válido',
-                'errors' => ['proceso_id' => ['El proceso seleccionado no existe']]
-            ], 422);
-        }
-        $validated['proceso_id'] = $proceso->id;
-    }
-
-    // Validar y resolver brigada_id
-    if ($request->filled('brigada_id')) {
-        $brigada = \App\Models\Brigada::where('uuid', $request->brigada_id)->first();
-        if (!$brigada) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La brigada seleccionada no es válida',
-                'errors' => ['brigada_id' => ['La brigada seleccionada no existe']]
-            ], 422);
-        }
-        $validated['brigada_id'] = $brigada->id;
-    }
         // Validar que no exista conflicto de horarios
         $conflicto = Agenda::where('sede_id', $validated['sede_id'])
             ->where('consultorio', $validated['consultorio'])
