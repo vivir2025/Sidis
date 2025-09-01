@@ -72,22 +72,34 @@ class AgendaController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'sede_id' => 'required|exists:sedes,id',
-            'modalidad' => 'required|in:Telemedicina,Ambulatoria',
-            'fecha' => 'required|date|after_or_equal:today',
-            'consultorio' => 'required|string|max:50',
-            'hora_inicio' => 'required|date_format:H:i',
-            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
-            'intervalo' => 'required|string|max:10',
-            'etiqueta' => 'required|string|max:50',
-            'proceso_id' => 'required|exists:procesos,id',
-            'usuario_id' => 'required|exists:usuarios,id',
-            'brigada_id' => 'required|exists:brigadas,id',
-        ]);
+   public function store(Request $request): JsonResponse
+{
+    $validated = $request->validate([
+        'sede_id' => 'required|exists:sedes,id',
+        'modalidad' => 'required|in:Telemedicina,Ambulatoria',
+        'fecha' => 'required|date|after_or_equal:today',
+        'consultorio' => 'required|string|max:50',
+        'hora_inicio' => 'required|date_format:H:i',
+        'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+        'intervalo' => 'required|string|max:10',
+        'etiqueta' => 'required|string|max:50',
+        
+        // ✅ CORREGIDO: Validar por UUID y hacer campos opcionales
+        'proceso_id' => 'nullable|exists:procesos,uuid',  // Buscar por UUID
+        'usuario_id' => 'required|exists:usuarios,id',
+        'brigada_id' => 'nullable|exists:brigadas,uuid',  // Buscar por UUID
+    ]);
 
+    // ✅ NUEVO: Resolver UUIDs a IDs para guardar en BD
+    if (!empty($validated['proceso_id'])) {
+        $proceso = \App\Models\Proceso::where('uuid', $validated['proceso_id'])->first();
+        $validated['proceso_id'] = $proceso ? $proceso->id : null;
+    }
+    
+    if (!empty($validated['brigada_id'])) {
+        $brigada = \App\Models\Brigada::where('uuid', $validated['brigada_id'])->first();
+        $validated['brigada_id'] = $brigada ? $brigada->id : null;
+    }
         // Validar que no exista conflicto de horarios
         $conflicto = Agenda::where('sede_id', $validated['sede_id'])
             ->where('consultorio', $validated['consultorio'])

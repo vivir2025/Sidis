@@ -1,5 +1,5 @@
 <?php
-// app/Models/Brigada.php
+// app/Models/Proceso.php
 
 namespace App\Models;
 
@@ -8,22 +8,23 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-class Brigada extends Model
+class Proceso extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'uuid',
-        'nombre'
+        'nombre',
+        'n_cups'
     ];
 
     protected static function boot()
     {
         parent::boot();
         
-        static::creating(function ($brigada) {
-            if (empty($brigada->uuid)) {
-                $brigada->uuid = Str::uuid();
+        static::creating(function ($proceso) {
+            if (empty($proceso->uuid)) {
+                $proceso->uuid = Str::uuid();
             }
         });
     }
@@ -34,20 +35,20 @@ class Brigada extends Model
         return $this->hasMany(Agenda::class);
     }
 
-    public function usuarios()
+    public function citas()
     {
-        return $this->belongsToMany(Usuario::class, 'brigada_usuario');
+        return $this->hasManyThrough(Cita::class, Agenda::class);
     }
 
     // Scopes
-    public function scopeBuscar($query, $termino)
+    public function scopeConCups($query)
     {
-        return $query->where('nombre', 'like', "%{$termino}%");
+        return $query->whereNotNull('n_cups');
     }
 
-    // Métodos auxiliares
-    public function getAgendasActivasAttribute()
+    public function scopeBuscar($query, $termino)
     {
-        return $this->agendas()->activas()->count();
+        return $query->where('nombre', 'like', "%{$termino}%")
+                    ->orWhere('n_cups', 'like', "%{$termino}%");
     }
 }
