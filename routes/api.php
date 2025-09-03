@@ -106,7 +106,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ✅ NUEVA RUTA: Contar citas por UUID de agenda
     Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
     
-    Route::get('/{agenda}', [AgendaController::class, 'show']);
+    Route::get('/{uuid}', [AgendaController::class, 'show'])->where('uuid', '[0-9a-f-]{36}');
     Route::put('/{agenda}', [AgendaController::class, 'update']);
     Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
     Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);

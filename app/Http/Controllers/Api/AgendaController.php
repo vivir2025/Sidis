@@ -133,16 +133,26 @@ class AgendaController extends Controller
         ], 201);
     }
 
-    public function show(Agenda $agenda): JsonResponse
-    {
-        $agenda->load(['sede', 'proceso', 'usuario', 'brigada', 'citas.paciente']);
-
+   public function show(string $uuid): JsonResponse  // ← Cambiar parámetro
+{
+    // ✅ BUSCAR POR UUID EN LUGAR DE ID
+    $agenda = Agenda::where('uuid', $uuid)->first();
+    
+    if (!$agenda) {
         return response()->json([
-            'success' => true,
-            'data' => $agenda,
-            'message' => 'Agenda obtenida exitosamente'
-        ]);
+            'success' => false,
+            'message' => 'Agenda no encontrada'
+        ], 404);
     }
+
+    $agenda->load(['sede', 'proceso', 'usuario', 'brigada', 'citas.paciente']);
+
+    return response()->json([
+        'success' => true,
+        'data' => $agenda,
+        'message' => 'Agenda obtenida exitosamente'
+    ]);
+}
 
     public function update(Request $request, Agenda $agenda): JsonResponse
     {
