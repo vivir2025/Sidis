@@ -85,13 +85,13 @@ class AgendaController extends Controller
         'intervalo' => 'required|string|max:10',
         'etiqueta' => 'required|string|max:50',
         
-        // �7�3 CORREGIDO: Validar por UUID y hacer campos opcionales
+        // �7�3 CORREGIDO: Validar por UUID y hacer campos opcionales
         'proceso_id' => 'nullable|exists:procesos,uuid',  // Buscar por UUID
         'usuario_id' => 'required|exists:usuarios,id',
         'brigada_id' => 'nullable|exists:brigadas,uuid',  // Buscar por UUID
     ]);
 
-    // �7�3 NUEVO: Resolver UUIDs a IDs para guardar en BD
+    // �7�3 NUEVO: Resolver UUIDs a IDs para guardar en BD
     if (!empty($validated['proceso_id'])) {
         $proceso = \App\Models\Proceso::where('uuid', $validated['proceso_id'])->first();
         $validated['proceso_id'] = $proceso ? $proceso->id : null;
@@ -261,51 +261,51 @@ class AgendaController extends Controller
         ]);
     }
    
- public function contarCitas($uuid): JsonResponse
-    {
-        try {
-            // Buscar la agenda por UUID
-            $agenda = Agenda::where('uuid', $uuid)->first();
-            
-            if (!$agenda) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Agenda no encontrada'
-                ], 404);
-            }
-
-            // Contar citas activas de esta agenda
-            $count = Cita::where('agenda_uuid', $uuid)
-                ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
-                ->count();
-
-            // Calcular cupos totales
-            $cuposTotales = $this->calcularCuposTotales($agenda);
-            $cuposDisponibles = max(0, $cuposTotales - $count);
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'agenda_uuid' => $uuid,
-                    'citas_count' => $count,
-                    'total_cupos' => $cuposTotales,
-                    'cupos_disponibles' => $cuposDisponibles
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Error contando citas de agenda', [
-                'uuid' => $uuid,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+public function contarCitas($uuid): JsonResponse
+{
+    try {
+        // ✅ Buscar la agenda por UUID
+        $agenda = Agenda::where('uuid', $uuid)->first();
+        
+        if (!$agenda) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error interno del servidor'
-            ], 500);
+                'message' => 'Agenda no encontrada'
+            ], 404);
         }
+
+        // ✅ CORRECCIÓN: Usar el ID de la agenda, no el UUID
+        $count = Cita::where('agenda_id', $agenda->id) // ← CAMBIO AQUÍ
+            ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+            ->count();
+
+        // Calcular cupos totales
+        $cuposTotales = $this->calcularCuposTotales($agenda);
+        $cuposDisponibles = max(0, $cuposTotales - $count);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'agenda_uuid' => $uuid,
+                'citas_count' => $count,
+                'total_cupos' => $cuposTotales,
+                'cupos_disponibles' => $cuposDisponibles
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error contando citas de agenda', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor'
+        ], 500);
     }
+}
 
     /**
      * Calcular cupos totales de una agenda

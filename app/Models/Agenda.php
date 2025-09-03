@@ -34,6 +34,9 @@ class Agenda extends Model
         'hora_fin' => 'datetime:H:i',
     ];
 
+    protected $appends = ['cupos_disponibles', 'total_cupos'];
+
+
     protected static function boot()
     {
         parent::boot();
@@ -93,19 +96,39 @@ class Agenda extends Model
                     ->where('fecha', '>=', now()->toDateString());
     }
 
-    // Métodos auxiliares
-    public function getCuposDisponiblesAttribute()
-    {
-        $totalMinutos = $this->hora_inicio->diffInMinutes($this->hora_fin);
-        $intervalos = intval($this->intervalo);
-        $totalCupos = floor($totalMinutos / $intervalos);
-        $citasOcupadas = $this->citas()->where('estado', '!=', 'CANCELADA')->count();
-        
-        return $totalCupos - $citasOcupadas;
-    }
+   
 
     public function getEstaLlenaAttribute()
     {
         return $this->cupos_disponibles <= 0;
     }
+    public function getCuposDisponiblesAttribute()
+{
+    try {
+        $totalCupos = $this->total_cupos;
+        $citasOcupadas = $this->citas()
+            ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+            ->count();
+        
+        return max(0, $totalCupos - $citasOcupadas);
+    } catch (\Exception $e) {
+        return 0;
+    }
+}
+
+public function getTotalCuposAttribute()
+{
+    try {
+        $inicio = \Carbon\Carbon::parse($this->hora_inicio);
+        $fin = \Carbon\Carbon::parse($this->hora_fin);
+        $intervalo = (int) ($this->intervalo ?? 15);
+        
+        if ($intervalo <= 0) return 0;
+        
+        $duracionMinutos = $fin->diffInMinutes($inicio);
+        return floor($duracionMinutos / $intervalo);
+    } catch (\Exception $e) {
+        return 0;
+    }
+}
 }
