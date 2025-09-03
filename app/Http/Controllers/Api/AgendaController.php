@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agenda;
+use App\Models\Cita;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
@@ -258,5 +259,72 @@ class AgendaController extends Controller
             'data' => $citas,
             'message' => 'Citas de la agenda obtenidas exitosamente'
         ]);
+    }
+   
+ public function contarCitas($uuid): JsonResponse
+    {
+        try {
+            // Buscar la agenda por UUID
+            $agenda = Agenda::where('uuid', $uuid)->first();
+            
+            if (!$agenda) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Agenda no encontrada'
+                ], 404);
+            }
+
+            // Contar citas activas de esta agenda
+            $count = Cita::where('agenda_uuid', $uuid)
+                ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+                ->count();
+
+            // Calcular cupos totales
+            $cuposTotales = $this->calcularCuposTotales($agenda);
+            $cuposDisponibles = max(0, $cuposTotales - $count);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'agenda_uuid' => $uuid,
+                    'citas_count' => $count,
+                    'total_cupos' => $cuposTotales,
+                    'cupos_disponibles' => $cuposDisponibles
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error contando citas de agenda', [
+                'uuid' => $uuid,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error interno del servidor'
+            ], 500);
+        }
+    }
+
+    /**
+     * Calcular cupos totales de una agenda
+     */
+    private function calcularCuposTotales($agenda): int
+    {
+        try {
+            $inicio = \Carbon\Carbon::parse($agenda->hora_inicio);
+            $fin = \Carbon\Carbon::parse($agenda->hora_fin);
+            $intervalo = (int) ($agenda->intervalo ?? 15);
+            
+            $duracionMinutos = $fin->diffInMinutes($inicio);
+            return floor($duracionMinutos / $intervalo);
+        } catch (\Exception $e) {
+            \Log::warning('Error calculando cupos totales', [
+                'agenda_id' => $agenda->id ?? 'unknown',
+                'error' => $e->getMessage()
+            ]);
+            return 0;
+        }
     }
 }

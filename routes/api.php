@@ -1,5 +1,4 @@
 <?php
-// routes/api.php - VERSIÓN CORREGIDA
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{
     AuthController,
@@ -99,16 +98,19 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     // AGENDAS
     // ================================
-    Route::prefix('agendas')->group(function () {
-        Route::get('/', [AgendaController::class, 'index']);
-        Route::post('/', [AgendaController::class, 'store']);
-        Route::get('/disponibles', [AgendaController::class, 'disponibles']);
-        Route::get('/{agenda}', [AgendaController::class, 'show']);
-        Route::put('/{agenda}', [AgendaController::class, 'update']);
-        Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
-        Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);
-    });
-
+  Route::prefix('agendas')->group(function () {
+    Route::get('/', [AgendaController::class, 'index']);
+    Route::post('/', [AgendaController::class, 'store']);
+    Route::get('/disponibles', [AgendaController::class, 'disponibles']);
+    
+    // ✅ NUEVA RUTA: Contar citas por UUID de agenda
+    Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
+    
+    Route::get('/{agenda}', [AgendaController::class, 'show']);
+    Route::put('/{agenda}', [AgendaController::class, 'update']);
+    Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
+    Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);
+});
     // ================================
     // ESPECIALIDADES
     // ================================
