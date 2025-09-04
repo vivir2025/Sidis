@@ -107,6 +107,11 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
     
     Route::get('/{uuid}', [AgendaController::class, 'show'])->where('uuid', '[0-9a-f-]{36}');
+    Route::get('/{uuid}/citas', [AgendaController::class, 'getCitas'])
+    ->where('uuid', '[0-9a-f-]{36}');
+
+Route::get('/{uuid}/citas/count', [AgendaController::class, 'getCitasCount'])
+    ->where('uuid', '[0-9a-f-]{36}');
     Route::put('/{agenda}', [AgendaController::class, 'update']);
     Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
     Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);

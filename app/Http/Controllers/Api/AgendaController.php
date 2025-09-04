@@ -133,27 +133,55 @@ class AgendaController extends Controller
         ], 201);
     }
 
-   public function show(string $uuid): JsonResponse  // ← Cambiar parámetro
+  public function show(string $uuid): JsonResponse
 {
-    // ✅ BUSCAR POR UUID EN LUGAR DE ID
-    $agenda = Agenda::where('uuid', $uuid)->first();
-    
-    if (!$agenda) {
+    try {
+        $agenda = Agenda::where('uuid', $uuid)->first();
+        
+        if (!$agenda) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Agenda no encontrada'
+            ], 404);
+        }
+
+        // ✅ CARGAR TODAS LAS RELACIONES NECESARIAS
+        $agenda->load([
+            'sede', 
+            'proceso', 
+            'usuario', // ← Asegurar que se carga
+            'brigada', 
+            'citas' => function ($query) {
+                $query->with('paciente')
+                      ->whereNotIn('estado', ['CANCELADA'])
+                      ->orderBy('fecha_inicio');
+            }
+        ]);
+
+        // ✅ AGREGAR INFORMACIÓN ADICIONAL DEL USUARIO
+        if ($agenda->usuario) {
+            $agenda->usuario->nombre_completo = $agenda->usuario->nombre_completo ?? 
+                ($agenda->usuario->nombre . ' ' . $agenda->usuario->apellido);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $agenda,
+            'message' => 'Agenda obtenida exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo agenda', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage()
+        ]);
+
         return response()->json([
             'success' => false,
-            'message' => 'Agenda no encontrada'
-        ], 404);
+            'message' => 'Error interno del servidor'
+        ], 500);
     }
-
-    $agenda->load(['sede', 'proceso', 'usuario', 'brigada', 'citas.paciente']);
-
-    return response()->json([
-        'success' => true,
-        'data' => $agenda,
-        'message' => 'Agenda obtenida exitosamente'
-    ]);
 }
-
     public function update(Request $request, Agenda $agenda): JsonResponse
     {
         $validated = $request->validate([
@@ -337,4 +365,99 @@ public function contarCitas($uuid): JsonResponse
             return 0;
         }
     }
+
+    /**
+ * ✅ NUEVO: Obtener citas de una agenda
+ */
+public function getCitas(string $uuid): JsonResponse
+{
+    try {
+        $agenda = Agenda::where('uuid', $uuid)->first();
+        
+        if (!$agenda) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Agenda no encontrada'
+            ], 404);
+        }
+
+        $citas = $agenda->citas()
+            ->with('paciente')
+            ->whereNotIn('estado', ['CANCELADA'])
+            ->orderBy('fecha_inicio')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $citas,
+            'message' => 'Citas obtenidas exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo citas de agenda', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor'
+        ], 500);
+    }
+}
+
+/**
+ * ✅ NUEVO: Contar citas de una agenda
+ */
+public function getCitasCount(string $uuid): JsonResponse
+{
+    try {
+        $agenda = Agenda::where('uuid', $uuid)->first();
+        
+        if (!$agenda) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Agenda no encontrada'
+            ], 404);
+        }
+
+        // Contar citas activas
+        $citasCount = $agenda->citas()
+            ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+            ->count();
+
+        // Calcular cupos totales
+        $inicio = \Carbon\Carbon::parse($agenda->hora_inicio);
+        $fin = \Carbon\Carbon::parse($agenda->hora_fin);
+        $intervalo = $agenda->intervalo ?? 15;
+        
+        $duracionMinutos = $fin->diffInMinutes($inicio);
+        $totalCupos = floor($duracionMinutos / $intervalo);
+        $cuposDisponibles = max(0, $totalCupos - $citasCount);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'citas_count' => $citasCount,
+                'total_cupos' => $totalCupos,
+                'cupos_disponibles' => $cuposDisponibles,
+                'duracion_minutos' => $duracionMinutos,
+                'intervalo' => $intervalo
+            ],
+            'message' => 'Conteo de citas obtenido exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error contando citas de agenda', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor'
+        ], 500);
+    }
+}
+
 }
