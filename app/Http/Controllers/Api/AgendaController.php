@@ -145,16 +145,21 @@ public function show(string $uuid): JsonResponse
             ], 404);
         }
 
-        // ✅ CARGAR CITAS CON PACIENTE CORRECTAMENTE
+        // ✅ CARGAR USUARIO CON DATOS COMPLETOS
         $agenda->load([
             'sede', 
             'proceso', 
-            'usuario',
+            'usuario' => function ($query) {
+                // ✅ ASEGURAR QUE SE CARGUEN TODOS LOS CAMPOS DEL USUARIO
+                $query->select([
+                    'id', 'uuid', 'nombre', 'apellido', 
+                    'documento', 'correo', 'login'
+                ]);
+            },
             'brigada', 
             'citas' => function ($query) {
                 $query->with([
                     'paciente' => function ($q) {
-                        // ✅ ASEGURAR QUE SE CARGUEN TODOS LOS CAMPOS DEL PACIENTE
                         $q->select([
                             'id', 'uuid', 'documento', 
                             'primer_nombre', 'segundo_nombre',
@@ -167,11 +172,17 @@ public function show(string $uuid): JsonResponse
             }
         ]);
 
-        // ✅ PROCESAR DATOS DE CITAS PARA ASEGURAR NOMBRE COMPLETO
+        // ✅ PROCESAR DATOS DEL USUARIO
+        if ($agenda->usuario) {
+            $agenda->usuario->nombre_completo = trim(
+                ($agenda->usuario->nombre ?? '') . ' ' . ($agenda->usuario->apellido ?? '')
+            ) ?: 'Usuario del Sistema';
+        }
+
+        // ✅ PROCESAR DATOS DE CITAS
         if ($agenda->citas) {
             $agenda->citas->each(function ($cita) {
                 if ($cita->paciente) {
-                    // ✅ ASEGURAR QUE EL NOMBRE COMPLETO ESTÉ DISPONIBLE
                     $cita->paciente->nombre_completo = trim(
                         ($cita->paciente->primer_nombre ?? '') . ' ' .
                         ($cita->paciente->segundo_nombre ?? '') . ' ' .
@@ -200,6 +211,7 @@ public function show(string $uuid): JsonResponse
         ], 500);
     }
 }
+
     public function update(Request $request, Agenda $agenda): JsonResponse
     {
         $validated = $request->validate([
