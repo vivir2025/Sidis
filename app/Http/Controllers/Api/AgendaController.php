@@ -133,7 +133,7 @@ class AgendaController extends Controller
         ], 201);
     }
 
-  public function show(string $uuid): JsonResponse
+public function show(string $uuid): JsonResponse
 {
     try {
         $agenda = Agenda::where('uuid', $uuid)->first();
@@ -145,23 +145,41 @@ class AgendaController extends Controller
             ], 404);
         }
 
-        // ✅ CARGAR TODAS LAS RELACIONES NECESARIAS
+        // ✅ CARGAR CITAS CON PACIENTE CORRECTAMENTE
         $agenda->load([
             'sede', 
             'proceso', 
-            'usuario', // ← Asegurar que se carga
+            'usuario',
             'brigada', 
             'citas' => function ($query) {
-                $query->with('paciente')
-                      ->whereNotIn('estado', ['CANCELADA'])
-                      ->orderBy('fecha_inicio');
+                $query->with([
+                    'paciente' => function ($q) {
+                        // ✅ ASEGURAR QUE SE CARGUEN TODOS LOS CAMPOS DEL PACIENTE
+                        $q->select([
+                            'id', 'uuid', 'documento', 
+                            'primer_nombre', 'segundo_nombre',
+                            'primer_apellido', 'segundo_apellido'
+                        ]);
+                    }
+                ])
+                ->whereNotIn('estado', ['CANCELADA'])
+                ->orderBy('fecha_inicio');
             }
         ]);
 
-        // ✅ AGREGAR INFORMACIÓN ADICIONAL DEL USUARIO
-        if ($agenda->usuario) {
-            $agenda->usuario->nombre_completo = $agenda->usuario->nombre_completo ?? 
-                ($agenda->usuario->nombre . ' ' . $agenda->usuario->apellido);
+        // ✅ PROCESAR DATOS DE CITAS PARA ASEGURAR NOMBRE COMPLETO
+        if ($agenda->citas) {
+            $agenda->citas->each(function ($cita) {
+                if ($cita->paciente) {
+                    // ✅ ASEGURAR QUE EL NOMBRE COMPLETO ESTÉ DISPONIBLE
+                    $cita->paciente->nombre_completo = trim(
+                        ($cita->paciente->primer_nombre ?? '') . ' ' .
+                        ($cita->paciente->segundo_nombre ?? '') . ' ' .
+                        ($cita->paciente->primer_apellido ?? '') . ' ' .
+                        ($cita->paciente->segundo_apellido ?? '')
+                    );
+                }
+            });
         }
 
         return response()->json([
@@ -171,7 +189,7 @@ class AgendaController extends Controller
         ]);
 
     } catch (\Exception $e) {
-        Log::error('Error obteniendo agenda', [
+        \Log::error('Error obteniendo agenda', [
             'uuid' => $uuid,
             'error' => $e->getMessage()
         ]);
@@ -382,10 +400,30 @@ public function getCitas(string $uuid): JsonResponse
         }
 
         $citas = $agenda->citas()
-            ->with('paciente')
+            ->with([
+                'paciente' => function ($q) {
+                    $q->select([
+                        'id', 'uuid', 'documento',
+                        'primer_nombre', 'segundo_nombre', 
+                        'primer_apellido', 'segundo_apellido'
+                    ]);
+                }
+            ])
             ->whereNotIn('estado', ['CANCELADA'])
             ->orderBy('fecha_inicio')
             ->get();
+
+        // ✅ PROCESAR NOMBRES COMPLETOS
+        $citas->each(function ($cita) {
+            if ($cita->paciente) {
+                $cita->paciente->nombre_completo = trim(
+                    ($cita->paciente->primer_nombre ?? '') . ' ' .
+                    ($cita->paciente->segundo_nombre ?? '') . ' ' .
+                    ($cita->paciente->primer_apellido ?? '') . ' ' .
+                    ($cita->paciente->segundo_apellido ?? '')
+                );
+            }
+        });
 
         return response()->json([
             'success' => true,
@@ -394,7 +432,7 @@ public function getCitas(string $uuid): JsonResponse
         ]);
 
     } catch (\Exception $e) {
-        Log::error('Error obteniendo citas de agenda', [
+        \Log::error('Error obteniendo citas de agenda', [
             'uuid' => $uuid,
             'error' => $e->getMessage()
         ]);
@@ -405,6 +443,7 @@ public function getCitas(string $uuid): JsonResponse
         ], 500);
     }
 }
+
 
 /**
  * ✅ NUEVO: Contar citas de una agenda

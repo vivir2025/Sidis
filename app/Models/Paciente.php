@@ -183,12 +183,7 @@ class Paciente extends Model
         return $this->fecha_nacimiento ? Carbon::parse($this->fecha_nacimiento)->age : null;
     }
 
-    public function getNombreCompletoAttribute()
-    {
-        $nombre = trim($this->primer_nombre . ' ' . ($this->segundo_nombre ?? ''));
-        $apellido = trim($this->primer_apellido . ' ' . ($this->segundo_apellido ?? ''));
-        return trim($nombre . ' ' . $apellido);
-    }
+
 
     // Scopes
     public function scopeActivos($query)
@@ -205,4 +200,11 @@ class Paciente extends Model
     {
         return $query->where('documento', $documento);
     }
+
+    public function getNombreCompletoAttribute()
+{
+    $nombre = trim(($this->primer_nombre ?? '') . ' ' . ($this->segundo_nombre ?? ''));
+    $apellido = trim(($this->primer_apellido ?? '') . ' ' . ($this->segundo_apellido ?? ''));
+    return trim($nombre . ' ' . $apellido) ?: 'Paciente sin nombre';
+}
 }
