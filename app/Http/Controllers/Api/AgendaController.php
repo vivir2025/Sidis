@@ -9,6 +9,7 @@ use App\Models\Cita;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class AgendaController extends Controller
 {
