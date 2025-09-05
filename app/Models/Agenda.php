@@ -25,7 +25,8 @@ class Agenda extends Model
         'estado',
         'proceso_id',
         'usuario_id',
-        'brigada_id'
+        'brigada_id',
+        'usuario_medico_id'
     ];
 
     protected $casts = [
@@ -94,6 +95,11 @@ class Agenda extends Model
     {
         return $query->where('estado', 'ACTIVO')
                     ->where('fecha', '>=', now()->toDateString());
+    }
+
+      public function usuarioMedico()
+    {
+        return $this->belongsTo(Usuario::class, 'usuario_medico_id');
     }
 
    

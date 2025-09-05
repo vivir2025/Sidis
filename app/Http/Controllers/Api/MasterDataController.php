@@ -9,7 +9,7 @@ use App\Models\{
     Departamento, Municipio, Empresa, Regimen, TipoAfiliacion,
     ZonaResidencial, Raza, Escolaridad, TipoParentesco, TipoDocumento,
     Ocupacion, Especialidad, Diagnostico, Medicamento, Remision,
-    Cups, CupsContratado, Contrato,Novedad, Auxiliar, Brigada, Proceso
+    Cups, CupsContratado, Contrato,Novedad, Auxiliar, Brigada, Proceso, Usuario
 };
 
 class MasterDataController extends Controller
@@ -355,6 +355,52 @@ class MasterDataController extends Controller
         ]);
     }
 
+    public function usuariosConEspecialidad(): JsonResponse
+{
+    try {
+        $usuarios = Usuario::with(['especialidad', 'estado', 'sede'])
+            ->whereNotNull('especialidad_id')
+            ->whereHas('especialidad')
+            ->whereHas('estado', function ($q) {
+                $q->where('nombre', 'ACTIVO');
+            })
+            ->orderBy('nombre')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $usuarios->map(function ($usuario) {
+                return [
+                    'id' => $usuario->id,
+                    'uuid' => $usuario->uuid,
+                    'documento' => $usuario->documento,
+                    'nombre' => $usuario->nombre,
+                    'apellido' => $usuario->apellido,
+                    'nombre_completo' => $usuario->nombre_completo,
+                    'login' => $usuario->login,
+                    'especialidad_id' => $usuario->especialidad_id,
+                    'especialidad' => [
+                        'id' => $usuario->especialidad->id,
+                        'uuid' => $usuario->especialidad->uuid,
+                        'nombre' => $usuario->especialidad->nombre
+                    ],
+                    'sede_id' => $usuario->sede_id,
+                    'sede' => [
+                        'id' => $usuario->sede->id,
+                        'nombre' => $usuario->sede->nombre
+                    ]
+                ];
+            })
+        ]);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error obteniendo usuarios con especialidad: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
     public function allMasterData(): JsonResponse
     {
          return response()->json([
@@ -376,6 +422,7 @@ class MasterDataController extends Controller
             'auxiliares' => $this->getAuxiliaresData(),
             'brigadas' => $this->getBrigadasData(),
             'procesos' => $this->getProcesosData(),
+            'usuarios_con_especialidad' => $this->getUsuariosConEspecialidadData(), 
             'last_updated' => now()->toISOString()
         ]
     ]);
@@ -564,6 +611,40 @@ private function getBrigadasData()
             ];
         });
     }
+
+    private function getUsuariosConEspecialidadData()
+{
+    return Usuario::with(['especialidad', 'estado', 'sede'])
+        ->whereNotNull('especialidad_id')
+        ->whereHas('especialidad')
+        ->whereHas('estado', function ($q) {
+            $q->where('nombre', 'ACTIVO');
+        })
+        ->orderBy('nombre')
+        ->get()
+        ->map(function ($usuario) {
+            return [
+                'id' => $usuario->id,
+                'uuid' => $usuario->uuid,
+                'documento' => $usuario->documento,
+                'nombre' => $usuario->nombre,
+                'apellido' => $usuario->apellido,
+                'nombre_completo' => $usuario->nombre_completo,
+                'login' => $usuario->login,
+                'especialidad_id' => $usuario->especialidad_id,
+                'especialidad' => [
+                    'id' => $usuario->especialidad->id,
+                    'uuid' => $usuario->especialidad->uuid,
+                    'nombre' => $usuario->especialidad->nombre
+                ],
+                'sede_id' => $usuario->sede_id,
+                'sede' => [
+                    'id' => $usuario->sede->id,
+                    'nombre' => $usuario->sede->nombre
+                ]
+            ];
+        });
+}
     
     public function novedades(): JsonResponse
 {

@@ -284,6 +284,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/auxiliares', [MasterDataController::class, 'auxiliares']);
         Route::get('/brigadas', [MasterDataController::class, 'brigadas']);
         Route::get('/procesos', [MasterDataController::class, 'procesos']);
+        Route::get('/usuarios-con-especialidad', [MasterDataController::class, 'usuariosConEspecialidad']);
     });
 
     // ================================
