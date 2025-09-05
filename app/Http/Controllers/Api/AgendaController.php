@@ -81,7 +81,7 @@ class AgendaController extends Controller
             'all_data' => $request->all(),
             'proceso_id_raw' => $request->input('proceso_id'),
             'brigada_id_raw' => $request->input('brigada_id'),
-            'usuario_medico_id_raw' => $request->input('usuario_medico_id') // ✅ NUEVO LOG
+            'usuario_medico_uuid_raw' => $request->input('usuario_medico_uuid') 
         ]);
 
         // ✅ VALIDACIÓN ACTUALIZADA - AGREGAR usuario_medico_id
@@ -97,7 +97,7 @@ class AgendaController extends Controller
             'proceso_id' => 'nullable|exists:procesos,uuid',
             'usuario_id' => 'required|exists:usuarios,id',
             'brigada_id' => 'nullable|exists:brigadas,uuid',
-            'usuario_medico_id' => 'nullable|exists:usuarios,id', // ✅ NUEVO CAMPO
+            'usuario_medico_uuid' => 'nullable|exists:usuarios,uuid', // ✅ NUEVO CAMPO
         ]);
 
         // ✅ RESOLVER UUIDs A IDs PARA GUARDAR EN BD
