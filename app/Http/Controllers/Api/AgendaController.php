@@ -74,7 +74,7 @@ class AgendaController extends Controller
         ]);
     }
 
-  public function store(Request $request): JsonResponse
+public function store(Request $request): JsonResponse
 {
     try {
         Log::info('🔍 AgendaController@store - Datos RAW recibidos', [
@@ -84,7 +84,7 @@ class AgendaController extends Controller
             'usuario_medico_uuid_raw' => $request->input('usuario_medico_uuid') 
         ]);
 
-        // ✅ VALIDACIÓN ACTUALIZADA - AGREGAR usuario_medico_id
+        // ✅ VALIDACIÓN ACTUALIZADA - MANTENER usuario_medico_uuid
         $validated = $request->validate([
             'sede_id' => 'required|exists:sedes,id',
             'modalidad' => 'required|in:Telemedicina,Ambulatoria',
@@ -97,7 +97,7 @@ class AgendaController extends Controller
             'proceso_id' => 'nullable|exists:procesos,uuid',
             'usuario_id' => 'required|exists:usuarios,id',
             'brigada_id' => 'nullable|exists:brigadas,uuid',
-            'usuario_medico_uuid' => 'nullable|exists:usuarios,uuid', // ✅ NUEVO CAMPO
+            'usuario_medico_uuid' => 'nullable|exists:usuarios,uuid', // ✅ VALIDAR UUID
         ]);
 
         // ✅ RESOLVER UUIDs A IDs PARA GUARDAR EN BD
@@ -111,11 +111,22 @@ class AgendaController extends Controller
             $validated['brigada_id'] = $brigada ? $brigada->id : null;
         }
 
-        // ✅ NUEVO: Log para verificar usuario_medico_id
-        Log::info('✅ usuario_medico_id después de validación', [
-            'usuario_medico_id' => $validated['usuario_medico_id'] ?? 'null',
-            'type' => gettype($validated['usuario_medico_id'] ?? null)
-        ]);
+        // ✅ NUEVO: RESOLVER usuario_medico_uuid A usuario_medico_id
+        if (!empty($validated['usuario_medico_uuid'])) {
+            $usuarioMedico = \App\Models\Usuario::where('uuid', $validated['usuario_medico_uuid'])->first();
+            $validated['usuario_medico_id'] = $usuarioMedico ? $usuarioMedico->id : null;
+            
+            Log::info('✅ Usuario médico resuelto', [
+                'uuid' => $validated['usuario_medico_uuid'],
+                'id_resuelto' => $validated['usuario_medico_id'],
+                'nombre' => $usuarioMedico ? $usuarioMedico->nombre_completo : 'No encontrado'
+            ]);
+        } else {
+            $validated['usuario_medico_id'] = null;
+        }
+
+        // ✅ REMOVER EL UUID YA QUE NO SE GUARDA EN LA BD
+        unset($validated['usuario_medico_uuid']);
 
         // Validar que no exista conflicto de horarios
         $conflicto = Agenda::where('sede_id', $validated['sede_id'])
@@ -140,7 +151,7 @@ class AgendaController extends Controller
         }
 
         // ✅ LOG ANTES DE CREAR
-        Log::info('📝 Creando agenda con datos', [
+        Log::info('📝 Creando agenda con datos finales', [
             'validated_data' => $validated,
             'usuario_medico_id_final' => $validated['usuario_medico_id'] ?? 'null'
         ]);
@@ -149,7 +160,7 @@ class AgendaController extends Controller
         $agenda->load(['sede', 'proceso', 'usuario', 'brigada', 'usuarioMedico']); // ✅ CARGAR RELACIÓN
 
         // ✅ LOG DESPUÉS DE CREAR
-        Log::info('✅ Agenda creada', [
+        Log::info('✅ Agenda creada exitosamente', [
             'id' => $agenda->id,
             'uuid' => $agenda->uuid,
             'usuario_medico_id_saved' => $agenda->usuario_medico_id,
@@ -187,6 +198,7 @@ class AgendaController extends Controller
         ], 500);
     }
 }
+
 
 public function show(string $uuid): JsonResponse
 {
