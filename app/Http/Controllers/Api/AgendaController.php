@@ -73,34 +73,49 @@ class AgendaController extends Controller
         ]);
     }
 
-   public function store(Request $request): JsonResponse
+  public function store(Request $request): JsonResponse
 {
-    $validated = $request->validate([
-        'sede_id' => 'required|exists:sedes,id',
-        'modalidad' => 'required|in:Telemedicina,Ambulatoria',
-        'fecha' => 'required|date|after_or_equal:today',
-        'consultorio' => 'required|string|max:50',
-        'hora_inicio' => 'required|date_format:H:i',
-        'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
-        'intervalo' => 'required|string|max:10',
-        'etiqueta' => 'required|string|max:50',
-        
-        // �7�3 CORREGIDO: Validar por UUID y hacer campos opcionales
-        'proceso_id' => 'nullable|exists:procesos,uuid',  // Buscar por UUID
-        'usuario_id' => 'required|exists:usuarios,id',
-        'brigada_id' => 'nullable|exists:brigadas,uuid',  // Buscar por UUID
-    ]);
+    try {
+        Log::info('🔍 AgendaController@store - Datos RAW recibidos', [
+            'all_data' => $request->all(),
+            'proceso_id_raw' => $request->input('proceso_id'),
+            'brigada_id_raw' => $request->input('brigada_id'),
+            'usuario_medico_id_raw' => $request->input('usuario_medico_id') // ✅ NUEVO LOG
+        ]);
 
-    // �7�3 NUEVO: Resolver UUIDs a IDs para guardar en BD
-    if (!empty($validated['proceso_id'])) {
-        $proceso = \App\Models\Proceso::where('uuid', $validated['proceso_id'])->first();
-        $validated['proceso_id'] = $proceso ? $proceso->id : null;
-    }
-    
-    if (!empty($validated['brigada_id'])) {
-        $brigada = \App\Models\Brigada::where('uuid', $validated['brigada_id'])->first();
-        $validated['brigada_id'] = $brigada ? $brigada->id : null;
-    }
+        // ✅ VALIDACIÓN ACTUALIZADA - AGREGAR usuario_medico_id
+        $validated = $request->validate([
+            'sede_id' => 'required|exists:sedes,id',
+            'modalidad' => 'required|in:Telemedicina,Ambulatoria',
+            'fecha' => 'required|date|after_or_equal:today',
+            'consultorio' => 'required|string|max:50',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+            'intervalo' => 'required|string|max:10',
+            'etiqueta' => 'required|string|max:50',
+            'proceso_id' => 'nullable|exists:procesos,uuid',
+            'usuario_id' => 'required|exists:usuarios,id',
+            'brigada_id' => 'nullable|exists:brigadas,uuid',
+            'usuario_medico_id' => 'nullable|exists:usuarios,id', // ✅ NUEVO CAMPO
+        ]);
+
+        // ✅ RESOLVER UUIDs A IDs PARA GUARDAR EN BD
+        if (!empty($validated['proceso_id'])) {
+            $proceso = \App\Models\Proceso::where('uuid', $validated['proceso_id'])->first();
+            $validated['proceso_id'] = $proceso ? $proceso->id : null;
+        }
+        
+        if (!empty($validated['brigada_id'])) {
+            $brigada = \App\Models\Brigada::where('uuid', $validated['brigada_id'])->first();
+            $validated['brigada_id'] = $brigada ? $brigada->id : null;
+        }
+
+        // ✅ NUEVO: Log para verificar usuario_medico_id
+        Log::info('✅ usuario_medico_id después de validación', [
+            'usuario_medico_id' => $validated['usuario_medico_id'] ?? 'null',
+            'type' => gettype($validated['usuario_medico_id'] ?? null)
+        ]);
+
         // Validar que no exista conflicto de horarios
         $conflicto = Agenda::where('sede_id', $validated['sede_id'])
             ->where('consultorio', $validated['consultorio'])
@@ -123,15 +138,54 @@ class AgendaController extends Controller
             ], 422);
         }
 
+        // ✅ LOG ANTES DE CREAR
+        Log::info('📝 Creando agenda con datos', [
+            'validated_data' => $validated,
+            'usuario_medico_id_final' => $validated['usuario_medico_id'] ?? 'null'
+        ]);
+
         $agenda = Agenda::create($validated);
-        $agenda->load(['sede', 'proceso', 'usuario', 'brigada']);
+        $agenda->load(['sede', 'proceso', 'usuario', 'brigada', 'usuarioMedico']); // ✅ CARGAR RELACIÓN
+
+        // ✅ LOG DESPUÉS DE CREAR
+        Log::info('✅ Agenda creada', [
+            'id' => $agenda->id,
+            'uuid' => $agenda->uuid,
+            'usuario_medico_id_saved' => $agenda->usuario_medico_id,
+            'usuario_medico_loaded' => $agenda->usuarioMedico ? $agenda->usuarioMedico->nombre_completo : 'null'
+        ]);
 
         return response()->json([
             'success' => true,
             'data' => $agenda,
             'message' => 'Agenda creada exitosamente'
         ], 201);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('❌ Error de validación en agenda', [
+            'errors' => $e->errors(),
+            'input' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Datos de validación incorrectos',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error crítico creando agenda', [
+            'error' => $e->getMessage(),
+            'input' => $request->all(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor'
+        ], 500);
     }
+}
 
 public function show(string $uuid): JsonResponse
 {

@@ -185,6 +185,7 @@ class Usuario extends Authenticatable
         return $this->estado?->nombre;
     }
 
+
     // Relación con pacientes (cuando la tabla exista)
 public function pacientes(): HasMany
 {
