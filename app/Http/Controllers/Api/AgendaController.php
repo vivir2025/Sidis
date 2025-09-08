@@ -64,7 +64,7 @@ class AgendaController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         // Paginación
-        $perPage = $request->get('per_page', 15);
+        $perPage = $request->get('per_page', 99999999999999999999);
         $agendas = $query->paginate($perPage);
 
         return response()->json([
