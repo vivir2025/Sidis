@@ -224,6 +224,7 @@ public function show(string $uuid): JsonResponse
                 ]);
             },
             'brigada', 
+            'usuarioMedico',
             'citas' => function ($query) {
                 $query->with([
                     'paciente' => function ($q) {
@@ -245,6 +246,13 @@ public function show(string $uuid): JsonResponse
                 ($agenda->usuario->nombre ?? '') . ' ' . ($agenda->usuario->apellido ?? '')
             ) ?: 'Usuario del Sistema';
         }
+
+        // ✅ AGREGAR PROCESAMIENTO DEL USUARIO MÉDICO
+if ($agenda->usuarioMedico) {
+    $agenda->usuarioMedico->nombre_completo = trim(
+        ($agenda->usuarioMedico->nombre ?? '') . ' ' . ($agenda->usuarioMedico->apellido ?? '')
+    ) ?: 'Usuario Médico';
+}
 
         // ✅ PROCESAR DATOS DE CITAS
         if ($agenda->citas) {
