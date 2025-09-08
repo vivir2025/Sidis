@@ -14,65 +14,112 @@ use Illuminate\Support\Facades\Log;
 class AgendaController extends Controller
 {
     public function index(Request $request): JsonResponse
-    {
-        $query = Agenda::with(['sede', 'proceso', 'usuario', 'brigada']);
+{
+    $query = Agenda::with(['sede', 'proceso', 'usuario', 'brigada', 'usuarioMedico']);
 
-        // Filtros
-        if ($request->filled('sede_id')) {
-            $query->where('sede_id', $request->sede_id);
-        }
-
-        if ($request->filled('fecha_desde')) {
-            $query->whereDate('fecha', '>=', $request->fecha_desde);
-        }
-
-        if ($request->filled('fecha_hasta')) {
-            $query->whereDate('fecha', '<=', $request->fecha_hasta);
-        }
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        if ($request->filled('modalidad')) {
-            $query->where('modalidad', $request->modalidad);
-        }
-
-        if ($request->filled('proceso_id')) {
-            $query->where('proceso_id', $request->proceso_id);
-        }
-
-        if ($request->filled('brigada_id')) {
-            $query->where('brigada_id', $request->brigada_id);
-        }
-
-        // Búsqueda
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('consultorio', 'like', "%{$search}%")
-                  ->orWhere('etiqueta', 'like', "%{$search}%")
-                  ->orWhereHas('proceso', function ($pq) use ($search) {
-                      $pq->where('nombre', 'like', "%{$search}%");
-                  });
-            });
-        }
-
-        // Ordenamiento
-        $sortBy = $request->get('sort_by', 'fecha');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        // Paginación
-        $perPage = $request->get('per_page', 99999999999999999999);
-        $agendas = $query->paginate($perPage);
-
-        return response()->json([
-            'success' => true,
-            'data' => $agendas,
-            'message' => 'Agendas obtenidas exitosamente'
-        ]);
+    // Filtros
+    if ($request->filled('sede_id')) {
+        $query->where('sede_id', $request->sede_id);
     }
+
+    if ($request->filled('fecha_desde')) {
+        $query->whereDate('fecha', '>=', $request->fecha_desde);
+    }
+
+    if ($request->filled('fecha_hasta')) {
+        $query->whereDate('fecha', '<=', $request->fecha_hasta);
+    }
+
+    if ($request->filled('estado')) {
+        $query->where('estado', $request->estado);
+    }
+
+    if ($request->filled('modalidad')) {
+        $query->where('modalidad', $request->modalidad);
+    }
+
+    if ($request->filled('proceso_id')) {
+        $query->where('proceso_id', $request->proceso_id);
+    }
+
+    if ($request->filled('brigada_id')) {
+        $query->where('brigada_id', $request->brigada_id);
+    }
+
+    if ($request->filled('consultorio')) {
+        $query->where('consultorio', 'like', '%' . $request->consultorio . '%');
+    }
+
+    // Búsqueda
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->where('consultorio', 'like', "%{$search}%")
+              ->orWhere('etiqueta', 'like', "%{$search}%")
+              ->orWhereHas('proceso', function ($pq) use ($search) {
+                  $pq->where('nombre', 'like', "%{$search}%");
+                                });
+        });
+    }
+
+    // ✅ ORDENAMIENTO MEJORADO
+    $sortBy = $request->get('sort_by', 'fecha');
+    $sortOrder = $request->get('sort_order', 'desc'); // ✅ DESC por defecto (más nuevas primero)
+    
+    // ✅ VALIDAR CAMPOS DE ORDENAMIENTO
+    $allowedSortFields = ['fecha', 'hora_inicio', 'consultorio', 'modalidad', 'estado', 'created_at'];
+    if (!in_array($sortBy, $allowedSortFields)) {
+        $sortBy = 'fecha';
+    }
+    
+    // ✅ VALIDAR DIRECCIÓN DE ORDENAMIENTO
+    $sortOrder = in_array(strtolower($sortOrder), ['asc', 'desc']) ? strtolower($sortOrder) : 'desc';
+    
+    // ✅ APLICAR ORDENAMIENTO MÚLTIPLE
+    if ($sortBy === 'fecha') {
+        $query->orderBy('fecha', $sortOrder)
+              ->orderBy('hora_inicio', $sortOrder === 'desc' ? 'desc' : 'asc');
+    } else {
+        $query->orderBy($sortBy, $sortOrder)
+              ->orderBy('fecha', 'desc') // Secundario por fecha
+              ->orderBy('hora_inicio', 'asc'); // Terciario por hora
+    }
+
+    // ✅ PAGINACIÓN MEJORADA
+    $perPage = $request->get('per_page', 15);
+    $perPage = max(5, min(100, (int) $perPage)); // Entre 5 y 100
+    
+    $agendas = $query->paginate($perPage);
+
+    // ✅ ENRIQUECER DATOS DE RESPUESTA
+    $agendas->getCollection()->transform(function ($agenda) {
+        // Calcular cupos disponibles
+        $inicio = \Carbon\Carbon::parse($agenda->hora_inicio);
+        $fin = \Carbon\Carbon::parse($agenda->hora_fin);
+        $intervalo = (int) ($agenda->intervalo ?? 15);
+        
+        $duracionMinutos = $fin->diffInMinutes($inicio);
+        $totalCupos = floor($duracionMinutos / $intervalo);
+        
+        // Contar citas activas
+        $citasCount = $agenda->citas()
+            ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+            ->count();
+        
+        $agenda->total_cupos = $totalCupos;
+        $agenda->citas_count = $citasCount;
+        $agenda->cupos_disponibles = max(0, $totalCupos - $citasCount);
+        
+        return $agenda;
+    });
+
+    return response()->json([
+        'success' => true,
+        'data' => $agendas,
+        'message' => 'Agendas obtenidas exitosamente'
+    ]);
+}
+
 
 public function store(Request $request): JsonResponse
 {
