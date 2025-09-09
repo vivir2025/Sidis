@@ -280,4 +280,39 @@ class CupsContratadoController extends Controller
                 : "No se pudo crear ningún CUPS contratado"
         ], count($creados) > 0 ? 201 : 422);
     }
+
+    public function porCupsUuid(string $cupsUuid): JsonResponse
+{
+    try {
+        $cupsContratado = CupsContratado::with(['contrato', 'categoriaCups', 'cups'])
+            ->whereHas('cups', function ($q) use ($cupsUuid) {
+                $q->where('uuid', $cupsUuid);
+            })
+            ->activos()
+            ->whereHas('contrato', function ($q) {
+                $q->vigentes()->activos();
+            })
+            ->first();
+
+        if (!$cupsContratado) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró un CUPS contratado vigente para este CUPS'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $cupsContratado,
+            'message' => 'CUPS contratado encontrado'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }
