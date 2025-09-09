@@ -22,9 +22,9 @@ class StoreCitaRequest extends FormRequest
             'nota' => 'nullable|string|max:1000',
             'estado' => 'required|in:PROGRAMADA,EN_CURSO,FINALIZADA,CANCELADA,NO_ASISTIO',
             'patologia' => 'nullable|string|max:200',
-            'paciente_id' => 'required|exists:pacientes,id',
-            'agenda_id' => 'required|exists:agendas,id',
-            'cups_contratado_id' => 'required|exists:cups_contratados,id'
+            'paciente_uuid' => 'required|string|exists:pacientes,uuid',
+            'agenda_uuid' => 'required|string|exists:agendas,uuid',
+            'cups_contratado_uuid' => 'nullable|string|exists:cups_contratados,uuid',
         ];
     }
 
@@ -37,9 +37,11 @@ class StoreCitaRequest extends FormRequest
             'fecha_final.after' => 'La fecha final debe ser posterior a la fecha de inicio.',
             'motivo.required' => 'El motivo es obligatorio.',
             'estado.required' => 'El estado es obligatorio.',
-            'paciente_id.required' => 'El paciente es obligatorio.',
-            'agenda_id.required' => 'La agenda es obligatoria.',
-            'cups_contratado_id.required' => 'El CUPS contratado es obligatorio.'
+            'paciente_uuid.required' => 'El paciente es obligatorio',
+            'paciente_uuid.exists' => 'El paciente seleccionado no existe',
+             'agenda_uuid.required' => 'La agenda es obligatoria',
+            'agenda_uuid.exists' => 'La agenda seleccionada no existe',
+            'cups_contratado_uuid.exists' => 'El CUPS seleccionado no existe',
         ];
     }
 }

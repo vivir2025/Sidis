@@ -19,6 +19,10 @@ class CitaResource extends JsonResource
             'nota' => $this->nota,
             'estado' => $this->estado,
             'patologia' => $this->patologia,
+               // ✅ UUIDs de relaciones
+            'paciente_uuid' => $this->paciente_uuid,
+            'agenda_uuid' => $this->agenda_uuid,
+            'cups_contratado_uuid' => $this->cups_contratado_uuid,
             
             // Paciente
             'paciente' => $this->whenLoaded('paciente', function () {
@@ -40,6 +44,7 @@ class CitaResource extends JsonResource
                     'consultorio' => $this->agenda->consultorio,
                     'hora_inicio' => $this->agenda->hora_inicio,
                     'hora_fin' => $this->agenda->hora_fin,
+                    'fecha' => $this->agenda->fecha,
                     'usuario' => $this->whenLoaded('agenda.usuario', function () {
                         return [
                             'uuid' => $this->agenda->usuario->uuid,

@@ -24,10 +24,10 @@ class Cita extends Model
         'nota',
         'estado',
         'patologia',
-        'paciente_id',
-        'agenda_id',
-        'cups_contratado_id',
-        'usuario_creo_cita_id'
+        'paciente_uuid',     
+        'agenda_uuid',         
+        'cups_contratado_uuid', 
+        'usuario_creo_cita_id'  
     ];
 
     protected $casts = [
@@ -48,7 +48,7 @@ class Cita extends Model
         });
     }
 
-    // ✅ RELACIONES CORREGIDAS
+    // ✅ RELACIONES USANDO UUIDs
     public function sede(): BelongsTo
     {
         return $this->belongsTo(Sede::class);
@@ -56,32 +56,30 @@ class Cita extends Model
 
     public function paciente(): BelongsTo
     {
-        return $this->belongsTo(Paciente::class);
+        return $this->belongsTo(Paciente::class, 'paciente_uuid', 'uuid');
     }
 
     public function agenda(): BelongsTo
     {
-        return $this->belongsTo(Agenda::class);
+        return $this->belongsTo(Agenda::class, 'agenda_uuid', 'uuid');
     }
 
     public function cupsContratado(): BelongsTo
     {
-        return $this->belongsTo(CupsContratado::class);
+        return $this->belongsTo(CupsContratado::class, 'cups_contratado_uuid', 'uuid');
     }
 
-    // ✅ CAMBIAR ESTA RELACIÓN - Debe coincidir con el nombre usado en el controlador
     public function usuarioCreador(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'usuario_creo_cita_id');
     }
 
-    // ✅ AGREGAR SCOPE PARA SEDE
+    // Scopes
     public function scopeBySede($query, $sedeId)
     {
         return $query->where('sede_id', $sedeId);
     }
 
-    // Scopes adicionales
     public function scopePorFecha($query, $fecha)
     {
         return $query->whereDate('fecha', $fecha);
@@ -92,9 +90,9 @@ class Cita extends Model
         return $query->where('estado', $estado);
     }
 
-    public function scopePorPaciente($query, $pacienteId)
+    public function scopePorPacienteUuid($query, $pacienteUuid)
     {
-        return $query->where('paciente_id', $pacienteId);
+        return $query->where('paciente_uuid', $pacienteUuid);
     }
 
     public function scopeDelDia($query)
