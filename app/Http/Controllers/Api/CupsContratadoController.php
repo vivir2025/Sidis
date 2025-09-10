@@ -9,6 +9,7 @@ use App\Models\Cups;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class CupsContratadoController extends Controller
 {

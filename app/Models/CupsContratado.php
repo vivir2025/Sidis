@@ -129,6 +129,15 @@ class CupsContratado extends Model
         });
 }
 
+// En el modelo CupsContratado, agregar este método si no existe:
+public function scopePorCupsUuid($query, $cupsUuid)
+{
+    return $query->whereHas('cups', function ($q) use ($cupsUuid) {
+        $q->where('uuid', $cupsUuid);
+    });
+}
+
+
     // Validar disponibilidad
     public function estaDisponible()
     {
