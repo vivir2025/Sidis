@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\{
 // Rutas públicas (sin autenticación)
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::get('/cups-contratados/por-cups/{cupsUuid}', [CupsContratadoController::class, 'porCupsUuid']);
     Route::get('/health', function () {
         return response()->json([
             'success' => true,
@@ -45,7 +46,7 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 });
-
+ 
 // Rutas protegidas (requieren autenticación)
 Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function () {
     
@@ -186,7 +187,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     Route::prefix('cups-contratados')->group(function () {
         Route::get('/', [CupsContratadoController::class, 'index']);
         Route::post('/', [CupsContratadoController::class, 'store']);
-        Route::get('/por-cups/{cupsUuid}', [CupsContratadoController::class, 'porCupsUuid']);
+       
         Route::get('/contrato/{contratoId}', [CupsContratadoController::class, 'porContrato']);
         Route::get('/disponibles', [CupsContratadoController::class, 'disponibles']);
         Route::post('/masivos', [CupsContratadoController::class, 'masivos']);
