@@ -284,20 +284,75 @@ class CupsContratadoController extends Controller
     public function porCupsUuid(string $cupsUuid): JsonResponse
 {
     try {
-        $cupsContratado = CupsContratado::with(['contrato', 'categoriaCups', 'cups'])
+        Log::info('🔍 Buscando CUPS contratado', [
+            'cups_uuid' => $cupsUuid
+        ]);
+
+        // ✅ BUSCAR CON LOGGING DETALLADO
+        $cupsContratado = CupsContratado::with(['contrato.empresa', 'categoriaCups', 'cups'])
             ->whereHas('cups', function ($q) use ($cupsUuid) {
                 $q->where('uuid', $cupsUuid);
             })
-            ->activos()
+            ->where('estado', 'ACTIVO')
             ->whereHas('contrato', function ($q) {
-                $q->vigentes()->activos();
+                $q->where('estado', 'ACTIVO')
+                  ->where('fecha_inicio', '<=', now())
+                  ->where('fecha_fin', '>=', now());
             })
             ->first();
 
+        Log::info('📊 Resultado búsqueda CUPS contratado', [
+            'cups_uuid' => $cupsUuid,
+            'encontrado' => $cupsContratado ? true : false,
+            'cups_contratado_uuid' => $cupsContratado?->uuid
+        ]);
+
         if (!$cupsContratado) {
+            // ✅ DIAGNÓSTICO: Buscar qué existe realmente
+            $cups = \App\Models\Cups::where('uuid', $cupsUuid)->first();
+            
+            if (!$cups) {
+                Log::warning('❌ CUPS no encontrado', ['cups_uuid' => $cupsUuid]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'CUPS no encontrado'
+                ], 404);
+            }
+
+            // Buscar CUPS contratados sin filtros de vigencia
+            $todosLosContratos = CupsContratado::with(['contrato'])
+                ->whereHas('cups', function ($q) use ($cupsUuid) {
+                    $q->where('uuid', $cupsUuid);
+                })
+                ->get();
+
+            Log::info('🔍 Diagnóstico CUPS contratados', [
+                'cups_uuid' => $cupsUuid,
+                'cups_codigo' => $cups->codigo,
+                'total_contratos' => $todosLosContratos->count(),
+                'contratos_detalle' => $todosLosContratos->map(function($cc) {
+                    return [
+                        'uuid' => $cc->uuid,
+                        'estado' => $cc->estado,
+                        'contrato_estado' => $cc->contrato->estado ?? 'N/A',
+                        'contrato_fecha_inicio' => $cc->contrato->fecha_inicio ?? 'N/A',
+                        'contrato_fecha_fin' => $cc->contrato->fecha_fin ?? 'N/A',
+                        'es_vigente' => $cc->contrato ? 
+                            ($cc->contrato->fecha_inicio <= now() && $cc->contrato->fecha_fin >= now()) : false
+                    ];
+                })
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'No se encontró un CUPS contratado vigente para este CUPS'
+                'message' => 'No se encontró un contrato vigente para este CUPS',
+                'debug' => [
+                    'cups_encontrado' => true,
+                    'cups_codigo' => $cups->codigo,
+                    'total_contratos_cups' => $todosLosContratos->count(),
+                    'contratos_activos' => $todosLosContratos->where('estado', 'ACTIVO')->count(),
+                    'fecha_actual' => now()->format('Y-m-d')
+                ]
             ], 404);
         }
 
@@ -308,6 +363,12 @@ class CupsContratadoController extends Controller
         ]);
 
     } catch (\Exception $e) {
+        Log::error('❌ Error buscando CUPS contratado', [
+            'cups_uuid' => $cupsUuid,
+            'error' => $e->getMessage(),
+            'line' => $e->getLine()
+        ]);
+
         return response()->json([
             'success' => false,
             'message' => 'Error interno del servidor',
