@@ -119,6 +119,15 @@ class CupsContratado extends Model
     {
         return "{$this->cups->codigo} - {$this->cups->nombre} ({$this->tarifa_formateada})";
     }
+    public function scopeVigentes($query)
+{
+    return $query->where('estado', 'ACTIVO')
+        ->whereHas('contrato', function ($q) {
+            $q->where('estado', 'ACTIVO')
+              ->where('fecha_inicio', '<=', now())
+              ->where('fecha_fin', '>=', now());
+        });
+}
 
     // Validar disponibilidad
     public function estaDisponible()
