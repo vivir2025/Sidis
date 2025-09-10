@@ -45,7 +45,7 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 });
-
+ Route::get('/cups-contratados/por-cups/{cupsUuid}', [CupsContratadoController::class, 'porCupsUuid']);
 // Rutas protegidas (requieren autenticación)
 Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function () {
     
@@ -186,7 +186,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     Route::prefix('cups-contratados')->group(function () {
         Route::get('/', [CupsContratadoController::class, 'index']);
         Route::post('/', [CupsContratadoController::class, 'store']);
-        Route::get('/por-cups/{cupsUuid}', [CupsContratadoController::class, 'porCupsUuid']);
+       
         Route::get('/contrato/{contratoId}', [CupsContratadoController::class, 'porContrato']);
         Route::get('/disponibles', [CupsContratadoController::class, 'disponibles']);
         Route::post('/masivos', [CupsContratadoController::class, 'masivos']);
