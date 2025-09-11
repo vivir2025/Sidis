@@ -99,25 +99,26 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     // AGENDAS
     // ================================
-  Route::prefix('agendas')->group(function () {
-    Route::get('/', [AgendaController::class, 'index']);
-    Route::post('/', [AgendaController::class, 'store']);
-    Route::get('/disponibles', [AgendaController::class, 'disponibles']);
-    
-    // ✅ NUEVA RUTA: Contar citas por UUID de agenda
-    Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
-    
+    Route::prefix('agendas')->group(function () {
+        Route::get('/', [AgendaController::class, 'index']);
+        Route::post('/', [AgendaController::class, 'store']);
+        Route::get('/disponibles', [AgendaController::class, 'disponibles']);
+        
+        // ✅ NUEVA RUTA: Contar citas por UUID de agenda
+        Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
+        
 
-    Route::get('/{uuid}/citas', [AgendaController::class, 'getCitas'])
-    ->where('uuid', '[0-9a-f-]{36}');
+        Route::get('/{uuid}/citas', [AgendaController::class, 'getCitas'])
+        ->where('uuid', '[0-9a-f-]{36}');
 
-    Route::get('/{uuid}/citas/count', [AgendaController::class, 'getCitasCount'])
-    ->where('uuid', '[0-9a-f-]{36}');
-    Route::get('/{uuid}', [AgendaController::class, 'show'])->where('uuid', '[0-9a-f-]{36}');
-    Route::put('/{agenda}', [AgendaController::class, 'update']);
-    Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
-    Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);
-});
+        Route::get('/{uuid}/citas/count', [AgendaController::class, 'getCitasCount'])
+        ->where('uuid', '[0-9a-f-]{36}');
+        Route::get('/{uuid}', [AgendaController::class, 'show'])->where('uuid', '[0-9a-f-]{36}');
+        Route::put('/{agenda}', [AgendaController::class, 'update']);
+        Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
+        Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);
+    });
+
     // ================================
     // ESPECIALIDADES
     // ================================
@@ -199,29 +200,154 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     });
 
     // ================================
-    // HISTORIAS CLÍNICAS
+    // HISTORIAS CLÍNICAS - VERSIÓN ACTUALIZADA
     // ================================
     Route::prefix('historias-clinicas')->group(function () {
+        
+        // ================================
+        // RUTAS BÁSICAS CRUD
+        // ================================
         Route::get('/', [HistoriaClinicaController::class, 'index']);
         Route::post('/', [HistoriaClinicaController::class, 'store']);
         Route::get('/{historia}', [HistoriaClinicaController::class, 'show']);
         Route::put('/{historia}', [HistoriaClinicaController::class, 'update']);
         Route::delete('/{historia}', [HistoriaClinicaController::class, 'destroy']);
         
-        // Componentes de historia clínica
-        Route::post('/{historia}/diagnosticos', [HistoriaClinicaController::class, 'agregarDiagnostico']);
-        Route::delete('/{historia}/diagnosticos/{diagnostico}', [HistoriaClinicaController::class, 'eliminarDiagnostico']);
-        Route::post('/{historia}/medicamentos', [HistoriaClinicaController::class, 'agregarMedicamento']);
-        Route::delete('/{historia}/medicamentos/{medicamento}', [HistoriaClinicaController::class, 'eliminarMedicamento']);
-        Route::post('/{historia}/remisiones', [HistoriaClinicaController::class, 'agregarRemision']);
-        Route::delete('/{historia}/remisiones/{remision}', [HistoriaClinicaController::class, 'eliminarRemision']);
-        Route::post('/{historia}/cups', [HistoriaClinicaController::class, 'agregarCups']);
-        Route::delete('/{historia}/cups/{cups}', [HistoriaClinicaController::class, 'eliminarCups']);
+        // ================================
+        // RUTAS DE BÚSQUEDA Y FILTROS
+        // ================================
+        Route::get('/search/paciente', [HistoriaClinicaController::class, 'buscarPorPaciente']);
+        Route::get('/search/documento/{documento}', [HistoriaClinicaController::class, 'porDocumentoPaciente']);
+        Route::get('/search/fecha', [HistoriaClinicaController::class, 'porFecha']);
+        Route::get('/search/especialidad/{especialidad}', [HistoriaClinicaController::class, 'porEspecialidad']);
+        Route::get('/search/medico/{medicoUuid}', [HistoriaClinicaController::class, 'porMedico']);
+        Route::get('/search/diagnostico/{codigo}', [HistoriaClinicaController::class, 'porDiagnostico']);
         
-        // PDFs
-        Route::post('/{historia}/pdfs', [HistoriaClinicaController::class, 'subirPdf']);
-        Route::delete('/{historia}/pdfs/{pdf}', [HistoriaClinicaController::class, 'eliminarPdf']);
-        Route::get('/{historia}/pdfs/{pdf}/download', [HistoriaClinicaController::class, 'descargarPdf']);
+        // ================================
+        // RUTAS DE ESTADÍSTICAS
+        // ================================
+        Route::get('/stats/resumen', [HistoriaClinicaController::class, 'resumenEstadisticas']);
+        Route::get('/stats/por-especialidad', [HistoriaClinicaController::class, 'estadisticasPorEspecialidad']);
+        Route::get('/stats/por-medico', [HistoriaClinicaController::class, 'estadisticasPorMedico']);
+        Route::get('/stats/diagnosticos-frecuentes', [HistoriaClinicaController::class, 'diagnosticosFrecuentes']);
+        
+        // ================================
+        // RUTAS DE TIPOS DE HISTORIA
+        // ================================
+        Route::get('/primera-vez', [HistoriaClinicaController::class, 'primeraVez']);
+        Route::get('/controles', [HistoriaClinicaController::class, 'controles']);
+        Route::get('/urgencias', [HistoriaClinicaController::class, 'urgencias']);
+        
+        // ================================
+        // COMPONENTES DE HISTORIA CLÍNICA
+        // ================================
+        
+        // DIAGNÓSTICOS
+        Route::prefix('{historia}/diagnosticos')->group(function () {
+            Route::get('/', [HistoriaClinicaController::class, 'listarDiagnosticos']);
+            Route::post('/', [HistoriaClinicaController::class, 'agregarDiagnostico']);
+            Route::put('/{diagnostico}', [HistoriaClinicaController::class, 'actualizarDiagnostico']);
+            Route::delete('/{diagnostico}', [HistoriaClinicaController::class, 'eliminarDiagnostico']);
+            Route::patch('/{diagnostico}/tipo', [HistoriaClinicaController::class, 'cambiarTipoDiagnostico']);
+        });
+        
+        // MEDICAMENTOS
+        Route::prefix('{historia}/medicamentos')->group(function () {
+            Route::get('/', [HistoriaClinicaController::class, 'listarMedicamentos']);
+            Route::post('/', [HistoriaClinicaController::class, 'agregarMedicamento']);
+            Route::put('/{medicamento}', [HistoriaClinicaController::class, 'actualizarMedicamento']);
+            Route::delete('/{medicamento}', [HistoriaClinicaController::class, 'eliminarMedicamento']);
+            Route::patch('/{medicamento}/estado', [HistoriaClinicaController::class, 'cambiarEstadoMedicamento']);
+        });
+        
+        // REMISIONES
+        Route::prefix('{historia}/remisiones')->group(function () {
+            Route::get('/', [HistoriaClinicaController::class, 'listarRemisiones']);
+            Route::post('/', [HistoriaClinicaController::class, 'agregarRemision']);
+            Route::put('/{remision}', [HistoriaClinicaController::class, 'actualizarRemision']);
+            Route::delete('/{remision}', [HistoriaClinicaController::class, 'eliminarRemision']);
+            Route::patch('/{remision}/estado', [HistoriaClinicaController::class, 'cambiarEstadoRemision']);
+        });
+        
+        // PROCEDIMIENTOS CUPS
+        Route::prefix('{historia}/cups')->group(function () {
+            Route::get('/', [HistoriaClinicaController::class, 'listarCups']);
+            Route::post('/', [HistoriaClinicaController::class, 'agregarCups']);
+            Route::put('/{cups}', [HistoriaClinicaController::class, 'actualizarCups']);
+            Route::delete('/{cups}', [HistoriaClinicaController::class, 'eliminarCups']);
+            Route::patch('/{cups}/estado', [HistoriaClinicaController::class, 'cambiarEstadoCups']);
+        });
+        
+        // ================================
+        // ARCHIVOS Y DOCUMENTOS
+        // ================================
+        Route::prefix('{historia}/archivos')->group(function () {
+            Route::get('/', [HistoriaClinicaController::class, 'listarArchivos']);
+            Route::post('/pdf', [HistoriaClinicaController::class, 'subirPdf']);
+            Route::post('/imagen', [HistoriaClinicaController::class, 'subirImagen']);
+            Route::post('/documento', [HistoriaClinicaController::class, 'subirDocumento']);
+            Route::get('/{archivo}/download', [HistoriaClinicaController::class, 'descargarArchivo']);
+            Route::delete('/{archivo}', [HistoriaClinicaController::class, 'eliminarArchivo']);
+        });
+        
+        // ================================
+        // GENERACIÓN DE DOCUMENTOS
+        // ================================
+        Route::prefix('{historia}/generar')->group(function () {
+            Route::get('/pdf', [HistoriaClinicaController::class, 'generarPdf']);
+            Route::get('/receta', [HistoriaClinicaController::class, 'generarReceta']);
+            Route::get('/orden-laboratorio', [HistoriaClinicaController::class, 'generarOrdenLaboratorio']);
+            Route::get('/incapacidad', [HistoriaClinicaController::class, 'generarIncapacidad']);
+            Route::get('/remision-pdf', [HistoriaClinicaController::class, 'generarRemisionPdf']);
+        });
+        
+        // ================================
+        // PLANTILLAS Y FORMATOS
+        // ================================
+        Route::prefix('{historia}/plantillas')->group(function () {
+            Route::get('/soap', [HistoriaClinicaController::class, 'plantillaSOAP']);
+            Route::get('/evolucion', [HistoriaClinicaController::class, 'plantillaEvolucion']);
+            Route::get('/interconsulta', [HistoriaClinicaController::class, 'plantillaInterconsulta']);
+            Route::post('/guardar-plantilla', [HistoriaClinicaController::class, 'guardarPlantilla']);
+        });
+        
+        // ================================
+        // VALIDACIONES Y AUDITORÍA
+        // ================================
+        Route::prefix('{historia}/auditoria')->group(function () {
+            Route::get('/historial-cambios', [HistoriaClinicaController::class, 'historialCambios']);
+            Route::get('/validaciones', [HistoriaClinicaController::class, 'validarHistoria']);
+            Route::post('/firmar', [HistoriaClinicaController::class, 'firmarHistoria']);
+            Route::post('/cerrar', [HistoriaClinicaController::class, 'cerrarHistoria']);
+        });
+        
+        // ================================
+        // SINCRONIZACIÓN OFFLINE
+        // ================================
+        Route::prefix('{historia}/sync')->group(function () {
+            Route::get('/status', [HistoriaClinicaController::class, 'estadoSincronizacion']);
+            Route::post('/offline', [HistoriaClinicaController::class, 'marcarOffline']);
+            Route::post('/sincronizar', [HistoriaClinicaController::class, 'sincronizarHistoria']);
+            Route::get('/conflictos', [HistoriaClinicaController::class, 'conflictosSincronizacion']);
+        });
+        
+        // ================================
+        // RUTAS ESPECIALES PARA CITAS
+        // ================================
+        Route::get('/cita/{citaUuid}', [HistoriaClinicaController::class, 'porCita']);
+        Route::post('/cita/{citaUuid}/crear', [HistoriaClinicaController::class, 'crearDesdeCita']);
+        Route::get('/agenda/{agendaUuid}/historias', [HistoriaClinicaController::class, 'porAgenda']);
+        
+        // ================================
+        // REPORTES Y EXPORTACIÓN
+        // ================================
+        Route::prefix('reportes')->group(function () {
+            Route::get('/excel', [HistoriaClinicaController::class, 'exportarExcel']);
+            Route::get('/csv', [HistoriaClinicaController::class, 'exportarCsv']);
+            Route::get('/estadisticas-periodo', [HistoriaClinicaController::class, 'reportePeriodo']);
+            Route::get('/medicamentos-formulados', [HistoriaClinicaController::class, 'reporteMedicamentos']);
+            Route::get('/diagnosticos-periodo', [HistoriaClinicaController::class, 'reporteDiagnosticos']);
+        });
     });
 
     // ================================

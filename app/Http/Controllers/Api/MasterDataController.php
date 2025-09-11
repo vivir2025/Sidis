@@ -206,9 +206,10 @@ class MasterDataController extends Controller
         ]);
     }
 
+    // ✅ ACTUALIZAR MÉTODO DIAGNOSTICOS
     public function diagnosticos(Request $request): JsonResponse
     {
-        $query = Diagnostico::query();
+        $query = Diagnostico::activos(); // ← Usar scope activos
         
         if ($request->filled('search')) {
             $search = $request->search;
@@ -217,6 +218,10 @@ class MasterDataController extends Controller
                   ->orWhere('nombre', 'like', "%{$search}%");
             });
         }
+
+        if ($request->filled('categoria')) {
+            $query->where('categoria', $request->categoria);
+        }
         
         $diagnosticos = $query->orderBy('codigo')->limit(100)->get();
         
@@ -224,22 +229,33 @@ class MasterDataController extends Controller
             'success' => true,
             'data' => $diagnosticos->map(function ($diagnostico) {
                 return [
+                    'id' => $diagnostico->id, // ← ✅ AGREGAR ID
                     'uuid' => $diagnostico->uuid,
                     'codigo' => $diagnostico->codigo,
                     'nombre' => $diagnostico->nombre,
-                    'categoria' => $diagnostico->categoria
+                    'categoria' => $diagnostico->categoria,
+                    'subcategoria' => $diagnostico->subcategoria,
+                    'descripcion' => $diagnostico->descripcion
                 ];
             })
         ]);
     }
 
+   // ✅ ACTUALIZAR MÉTODO MEDICAMENTOS
     public function medicamentos(Request $request): JsonResponse
     {
-        $query = Medicamento::query();
+        $query = Medicamento::activos(); // ← Usar scope activos
         
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('nombre', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'like', "%{$search}%")
+                  ->orWhere('principio_activo', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('pos')) {
+            $query->where('pos', $request->boolean('pos'));
         }
         
         $medicamentos = $query->orderBy('nombre')->limit(100)->get();
@@ -248,24 +264,50 @@ class MasterDataController extends Controller
             'success' => true,
             'data' => $medicamentos->map(function ($medicamento) {
                 return [
+                    'id' => $medicamento->id, // ← ✅ AGREGAR ID
                     'uuid' => $medicamento->uuid,
-                    'nombre' => $medicamento->nombre
+                    'codigo' => $medicamento->codigo,
+                    'nombre' => $medicamento->nombre,
+                    'principio_activo' => $medicamento->principio_activo,
+                    'concentracion' => $medicamento->concentracion,
+                    'forma_farmaceutica' => $medicamento->forma_farmaceutica,
+                    'via_administracion' => $medicamento->via_administracion,
+                    'pos' => $medicamento->pos
                 ];
             })
         ]);
     }
 
-    public function remisiones(): JsonResponse
+   // ✅ ACTUALIZAR MÉTODO REMISIONES
+    public function remisiones(Request $request): JsonResponse
     {
-        $remisiones = Remision::orderBy('nombre')->get();
+        $query = Remision::with('especialidad')->activas(); // ← Usar scope activas
+        
+        if ($request->filled('tipo')) {
+            $query->where('tipo', $request->tipo);
+        }
+
+        if ($request->filled('especialidad_id')) {
+            $query->where('especialidad_id', $request->especialidad_id);
+        }
+        
+        $remisiones = $query->orderBy('nombre')->get();
         
         return response()->json([
             'success' => true,
             'data' => $remisiones->map(function ($remision) {
                 return [
+                    'id' => $remision->id, // ← ✅ AGREGAR ID
                     'uuid' => $remision->uuid,
                     'codigo' => $remision->codigo,
-                    'nombre' => $remision->nombre
+                    'nombre' => $remision->nombre,
+                    'tipo' => $remision->tipo,
+                    'descripcion' => $remision->descripcion,
+                    'especialidad' => $remision->especialidad ? [
+                        'id' => $remision->especialidad->id,
+                        'uuid' => $remision->especialidad->uuid,
+                        'nombre' => $remision->especialidad->nombre
+                    ] : null
                 ];
             })
         ]);
@@ -423,10 +465,79 @@ class MasterDataController extends Controller
             'brigadas' => $this->getBrigadasData(),
             'procesos' => $this->getProcesosData(),
             'usuarios_con_especialidad' => $this->getUsuariosConEspecialidadData(), 
+            'last_updated' => now()->toISOString(),
+            'diagnosticos' => $this->getDiagnosticosData(),
+            'medicamentos' => $this->getMedicamentosData(),
+            'remisiones' => $this->getRemisionesData(),
             'last_updated' => now()->toISOString()
         ]
     ]);
     }
+
+     // ✅ NUEVOS MÉTODOS PRIVADOS
+    private function getDiagnosticosData()
+    {
+        return Diagnostico::activos()
+            ->orderBy('codigo')
+            ->limit(500) // Más diagnósticos para offline
+            ->get()
+            ->map(function ($diagnostico) {
+                return [
+                    'id' => $diagnostico->id,
+                    'uuid' => $diagnostico->uuid,
+                    'codigo' => $diagnostico->codigo,
+                    'nombre' => $diagnostico->nombre,
+                    'categoria' => $diagnostico->categoria,
+                    'subcategoria' => $diagnostico->subcategoria,
+                    'descripcion' => $diagnostico->descripcion
+                ];
+            });
+    }
+
+    private function getMedicamentosData()
+    {
+        return Medicamento::activos()
+            ->orderBy('nombre')
+            ->limit(500) // Más medicamentos para offline
+            ->get()
+            ->map(function ($medicamento) {
+                return [
+                    'id' => $medicamento->id,
+                    'uuid' => $medicamento->uuid,
+                    'codigo' => $medicamento->codigo,
+                    'nombre' => $medicamento->nombre,
+                    'principio_activo' => $medicamento->principio_activo,
+                    'concentracion' => $medicamento->concentracion,
+                    'forma_farmaceutica' => $medicamento->forma_farmaceutica,
+                    'via_administracion' => $medicamento->via_administracion,
+                    'pos' => $medicamento->pos
+                ];
+            });
+    }
+
+    private function getRemisionesData()
+    {
+        return Remision::with('especialidad')
+            ->activas()
+            ->orderBy('nombre')
+            ->get()
+            ->map(function ($remision) {
+                return [
+                    'id' => $remision->id,
+                    'uuid' => $remision->uuid,
+                    'codigo' => $remision->codigo,
+                    'nombre' => $remision->nombre,
+                    'tipo' => $remision->tipo,
+                    'descripcion' => $remision->descripcion,
+                    'especialidad' => $remision->especialidad ? [
+                        'id' => $remision->especialidad->id,
+                        'uuid' => $remision->especialidad->uuid,
+                        'nombre' => $remision->especialidad->nombre
+                    ] : null
+                ];
+            });
+    }
+
 
     // Métodos privados para obtener datos
     private function getDepartamentosData()
