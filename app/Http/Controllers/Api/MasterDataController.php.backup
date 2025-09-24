@@ -209,7 +209,7 @@ class MasterDataController extends Controller
     // ✅ ACTUALIZAR MÉTODO DIAGNOSTICOS
     public function diagnosticos(Request $request): JsonResponse
     {
-        $query = Diagnostico::query(); // ← Usar scope activos
+        $query = Diagnostico::activos(); // ← Usar scope activos
         
         if ($request->filled('search')) {
             $search = $request->search;
@@ -244,7 +244,7 @@ class MasterDataController extends Controller
    // ✅ ACTUALIZAR MÉTODO MEDICAMENTOS
     public function medicamentos(Request $request): JsonResponse
     {
-        $query = Medicamento::query(); // ← Usar scope activos
+        $query = Medicamento::activos(); // ← Usar scope activos
         
         if ($request->filled('search')) {
             $search = $request->search;
@@ -281,7 +281,7 @@ class MasterDataController extends Controller
    // ✅ ACTUALIZAR MÉTODO REMISIONES
     public function remisiones(Request $request): JsonResponse
     {
-        $query = Remision::with('especialidad'); // ← Usar scope activas
+        $query = Remision::with('especialidad')->activas(); // ← Usar scope activas
         
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->tipo);
@@ -477,7 +477,7 @@ class MasterDataController extends Controller
      // ✅ NUEVOS MÉTODOS PRIVADOS
     private function getDiagnosticosData()
     {
-        return Diagnostico::query()
+        return Diagnostico::activos()
             ->orderBy('codigo')
             ->limit(500) // Más diagnósticos para offline
             ->get()
@@ -496,7 +496,7 @@ class MasterDataController extends Controller
 
     private function getMedicamentosData()
     {
-        return Medicamento::query()
+        return Medicamento::activos()
             ->orderBy('nombre')
             ->limit(500) // Más medicamentos para offline
             ->get()
@@ -518,7 +518,7 @@ class MasterDataController extends Controller
     private function getRemisionesData()
     {
         return Remision::with('especialidad')
-            
+            ->activas()
             ->orderBy('nombre')
             ->get()
             ->map(function ($remision) {

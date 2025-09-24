@@ -298,72 +298,240 @@ private function convertUuidToId(?string $uuid, string $table): ?int
 }
 
 
-    public function show(string $uuid): JsonResponse
-    {
-        try {
-            $query = Paciente::where('uuid', $uuid);
-            
-            // ✅ Filtro por sede si hay usuario autenticado
-            if (auth()->check()) {
-                $query->where('sede_id', auth()->user()->sede_id);
-            }
+  public function show(string $uuid): JsonResponse
+{
+    try {
+        Log::info('🔍 PacienteController@show - Debug', [
+            'uuid' => $uuid,
+            'user_authenticated' => auth()->check(),
+            'user_id' => auth()->id(),
+            'user_sede' => auth()->user()->sede_id ?? 'NO_SEDE',
+        ]);
 
-            $paciente = $query->with([
-                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
-                'departamentoNacimiento', 'departamentoResidencia',
-                'municipioNacimiento', 'municipioResidencia', 'raza',
-                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion',
-                'citas.agenda', 'historiasClinicas'
-            ])->firstOrFail();
+        $query = Paciente::where('uuid', $uuid);
+        
+        if (auth()->check()) {
+            $userSedeId = auth()->user()->sede_id;
+            $query->where('sede_id', $userSedeId);
+        }
 
-            return response()->json([
-                'success' => true,
-                'data' => new PacienteResource($paciente)
+        // ✅ CARGAR SOLO RELACIONES QUE EXISTEN
+        $paciente = $query->with([
+            'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+            'departamentoNacimiento', 'departamentoResidencia',
+            'municipioNacimiento', 'municipioResidencia', 'raza',
+            'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion','novedad','auxiliar','brigada'
+            // ❌ TEMPORALMENTE REMOVIDAS: 'citas.agenda', 'historiasClinicas'
+        ])->first();
+
+        if (!$paciente) {
+            Log::warning('❌ Paciente no encontrado con filtros aplicados', [
+                'uuid' => $uuid,
+                'user_sede' => auth()->user()->sede_id ?? 'NO_SEDE'
             ]);
-
-        } catch (\Exception $e) {
+            
             return response()->json([
                 'success' => false,
                 'error' => 'Paciente no encontrado'
             ], 404);
         }
+
+        Log::info('✅ Paciente encontrado exitosamente', [
+            'uuid' => $uuid,
+            'documento' => $paciente->documento
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => new PacienteResource($paciente)
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error en show()', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error interno: ' . $e->getMessage()
+        ], 500);
     }
+}
 
-    public function update(UpdatePacienteRequest $request, string $uuid): JsonResponse
-    {
-        try {
-            $query = Paciente::where('uuid', $uuid);
-            
-            if ($request->user()) {
-                $query->where('sede_id', $request->user()->sede_id);
-            }
 
-            $paciente = $query->firstOrFail();
-            
-            $data = $request->validated();
-            $data['fecha_actualizacion'] = now();
-            
-            $paciente->update($data);
-            $paciente->load([
-                'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
-                'departamentoNacimiento', 'departamentoResidencia',
-                'municipioNacimiento', 'municipioResidencia', 'raza',
-                'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+   // En PacienteController.php - MÉTODO UPDATE MEJORADO
+public function update(UpdatePacienteRequest $request, string $uuid): JsonResponse
+{
+    try {
+        Log::info('🔄 PacienteController@update - Iniciando', [
+            'uuid' => $uuid,
+            'data_received' => $request->all(),
+            'user_id' => auth()->id()
+        ]);
+
+        $query = Paciente::where('uuid', $uuid);
+        
+        if ($request->user()) {
+            $query->where('sede_id', $request->user()->sede_id);
+        }
+
+        $paciente = $query->first();
+        
+        if (!$paciente) {
+            Log::warning('❌ Paciente no encontrado para actualizar', [
+                'uuid' => $uuid,
+                'user_sede' => $request->user()->sede_id ?? 'NO_SEDE'
             ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => new PacienteResource($paciente),
-                'message' => 'Paciente actualizado exitosamente'
-            ]);
-
-        } catch (\Exception $e) {
+            
             return response()->json([
                 'success' => false,
-                'error' => 'Error actualizando paciente: ' . $e->getMessage()
-            ], 500);
+                'error' => 'Paciente no encontrado'
+            ], 404);
+        }
+        
+        // ✅ USAR EL MISMO MÉTODO QUE EN STORE
+        $validatedData = $request->validated();
+        $processedData = $this->procesarDatosParaActualizar($validatedData, $request);
+        
+        Log::info('📝 Datos procesados para actualizar', [
+            'uuid' => $uuid,
+            'original_data_sample' => [
+                'primer_nombre' => $paciente->primer_nombre,
+                'documento' => $paciente->documento
+            ],
+            'processed_data_sample' => [
+                'primer_nombre' => $processedData['primer_nombre'] ?? 'no-change',
+                'documento' => $processedData['documento'] ?? 'no-change'
+            ]
+        ]);
+        
+        $paciente->update($processedData);
+        
+        $paciente->load([
+            'empresa', 'regimen', 'tipoAfiliacion', 'zonaResidencia',
+            'departamentoNacimiento', 'departamentoResidencia',
+            'municipioNacimiento', 'municipioResidencia', 'raza',
+            'escolaridad', 'tipoParentesco', 'tipoDocumento', 'ocupacion'
+        ]);
+
+        Log::info('✅ Paciente actualizado exitosamente', [
+            'uuid' => $uuid,
+            'id' => $paciente->id,
+            'documento' => $paciente->documento
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => new PacienteResource($paciente),
+            'message' => 'Paciente actualizado exitosamente'
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('❌ Errores de validación en update', [
+            'uuid' => $uuid,
+            'errors' => $e->errors(),
+            'input' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Datos inválidos',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error actualizando paciente', [
+            'uuid' => $uuid,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Error actualizando paciente: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+private function procesarDatosParaActualizar(array $validatedData, Request $request): array
+{
+    $data = [
+        'fecha_actualizacion' => now(),
+        
+        // ✅ CAMPOS BÁSICOS (solo los que vienen en la request)
+        'primer_nombre' => $validatedData['primer_nombre'] ?? null,
+        'segundo_nombre' => $validatedData['segundo_nombre'] ?? null,
+        'primer_apellido' => $validatedData['primer_apellido'] ?? null,
+        'segundo_apellido' => $validatedData['segundo_apellido'] ?? null,
+        'documento' => $validatedData['documento'] ?? null,
+        'fecha_nacimiento' => $validatedData['fecha_nacimiento'] ?? null,
+        'sexo' => $validatedData['sexo'] ?? null,
+        'direccion' => $validatedData['direccion'] ?? null,
+        'telefono' => $validatedData['telefono'] ?? null,
+        'correo' => $validatedData['correo'] ?? null,
+        'observacion' => $validatedData['observacion'] ?? null,
+        'estado_civil' => $validatedData['estado_civil'] ?? null,
+        'estado' => $validatedData['estado'] ?? null,
+        'registro' => $validatedData['registro'] ?? null,
+        
+        // ✅ CAMPOS ADICIONALES
+        'nombre_acudiente' => $validatedData['nombre_acudiente'] ?? null,
+        'parentesco_acudiente' => $validatedData['parentesco_acudiente'] ?? null,
+        'telefono_acudiente' => $validatedData['telefono_acudiente'] ?? null,
+        'direccion_acudiente' => $validatedData['direccion_acudiente'] ?? null,
+        'acompanante_nombre' => $validatedData['acompanante_nombre'] ?? null,
+        'acompanante_telefono' => $validatedData['acompanante_telefono'] ?? null
+    ];
+
+    // ✅ LIMPIAR CAMPOS NULL
+    $data = array_filter($data, function($value) {
+        return $value !== null;
+    });
+
+    // ✅ CONVERTIR UUIDs A IDs (IGUAL QUE EN STORE)
+    $relationMappings = [
+        'tipo_documento_id' => 'tipos_documento',
+        'empresa_id' => 'empresas',
+        'regimen_id' => 'regimenes',
+        'tipo_afiliacion_id' => 'tipos_afiliacion',
+        'zona_residencia_id' => 'zonas_residenciales',
+        'depto_nacimiento_id' => 'departamentos',
+        'depto_residencia_id' => 'departamentos',
+        'municipio_nacimiento_id' => 'municipios',
+        'municipio_residencia_id' => 'municipios',
+        'raza_id' => 'razas',
+        'escolaridad_id' => 'escolaridades',
+        'parentesco_id' => 'tipos_parentesco',
+        'ocupacion_id' => 'ocupaciones',
+        'novedad_id' => 'novedades',
+        'auxiliar_id' => 'auxiliares',
+        'brigada_id' => 'brigadas'
+    ];
+
+    foreach ($relationMappings as $field => $table) {
+        if (isset($validatedData[$field]) && !empty($validatedData[$field])) {
+            $id = $this->convertUuidToId($validatedData[$field], $table);
+            if ($id !== null) {
+                $data[$field] = $id;
+                
+                Log::info("🔄 Conversión UUID->ID (update)", [
+                    'field' => $field,
+                    'uuid' => $validatedData[$field],
+                    'id' => $id,
+                    'table' => $table
+                ]);
+            }
         }
     }
+
+    return $data;
+}
+
 
     public function destroy(string $uuid): JsonResponse
     {
