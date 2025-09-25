@@ -14,15 +14,21 @@ class CitaController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        // ✅ CAMBIO PRINCIPAL: Igual que AgendaController - SIN filtro automático de sede
         $query = Cita::with([
             'paciente', 
             'agenda', 
             'cupsContratado',
             'usuarioCreador',
             'sede'
-        ])->bySede($request->user()->sede_id);
+        ]);
 
-        // Filtros
+        // ✅ FILTRO DE SEDE OPCIONAL (igual que en AgendaController)
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        // Filtros existentes
         if ($request->filled('fecha')) {
             $query->whereDate('fecha', $request->fecha);
         }
@@ -49,8 +55,45 @@ class CitaController extends Controller
             $query->whereBetween('fecha', [$request->fecha_inicio, $request->fecha_fin]);
         }
 
-        $citas = $query->orderBy('fecha_inicio', 'desc')
-            ->paginate($request->get('per_page', 15));
+        // ✅ BÚSQUEDA MEJORADA (similar a AgendaController)
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('motivo', 'like', "%{$search}%")
+                  ->orWhere('nota', 'like', "%{$search}%")
+                  ->orWhere('patologia', 'like', "%{$search}%")
+                  ->orWhereHas('paciente', function ($pq) use ($search) {
+                      $pq->where('documento', 'like', "%{$search}%")
+                         ->orWhere('primer_nombre', 'like', "%{$search}%")
+                         ->orWhere('primer_apellido', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // ✅ ORDENAMIENTO MEJORADO (similar a AgendaController)
+        $sortBy = $request->get('sort_by', 'fecha_inicio');
+        $sortOrder = $request->get('sort_order', 'desc');
+        
+        $allowedSortFields = ['fecha', 'fecha_inicio', 'estado', 'created_at'];
+        if (!in_array($sortBy, $allowedSortFields)) {
+            $sortBy = 'fecha_inicio';
+        }
+        
+        $sortOrder = in_array(strtolower($sortOrder), ['asc', 'desc']) ? strtolower($sortOrder) : 'desc';
+        
+        if ($sortBy === 'fecha_inicio') {
+            $query->orderBy('fecha_inicio', $sortOrder)
+                  ->orderBy('fecha', $sortOrder === 'desc' ? 'desc' : 'asc');
+        } else {
+            $query->orderBy($sortBy, $sortOrder)
+                  ->orderBy('fecha_inicio', 'desc');
+        }
+
+        // ✅ PAGINACIÓN MEJORADA
+        $perPage = $request->get('per_page', 15);
+        $perPage = max(5, min(100, (int) $perPage));
+        
+        $citas = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -60,7 +103,8 @@ class CitaController extends Controller
                 'last_page' => $citas->lastPage(),
                 'per_page' => $citas->perPage(),
                 'total' => $citas->total()
-            ]
+            ],
+            'message' => 'Citas obtenidas exitosamente'
         ]);
     }
 
@@ -72,8 +116,9 @@ class CitaController extends Controller
                 'user_id' => $request->user()->id
             ]);
 
-            // ✅ VALIDACIÓN USANDO UUIDs
+            // ✅ VALIDACIÓN MEJORADA - Permitir sede_id opcional
             $validatedData = $request->validate([
+                'sede_id' => 'nullable|exists:sedes,id', // ✅ NUEVO: Permitir especificar sede
                 'fecha' => 'required|date',
                 'fecha_inicio' => 'required|date',
                 'fecha_final' => 'required|date|after:fecha_inicio',
@@ -87,12 +132,14 @@ class CitaController extends Controller
                 'cups_contratado_uuid' => 'nullable|string|exists:cups_contratados,uuid',
             ]);
 
-            $validatedData['sede_id'] = $request->user()->sede_id;
+            // ✅ CAMBIO: Usar sede del request o del usuario como fallback
+            $validatedData['sede_id'] = $validatedData['sede_id'] ?? $request->user()->sede_id;
             $validatedData['usuario_creo_cita_id'] = $request->user()->id;
             $validatedData['estado'] = $validatedData['estado'] ?? 'PROGRAMADA';
 
             Log::info('📝 Datos validados para crear cita', [
-                'data' => $validatedData
+                'data' => $validatedData,
+                'sede_id_final' => $validatedData['sede_id']
             ]);
 
             $cita = Cita::create($validatedData);
@@ -107,7 +154,8 @@ class CitaController extends Controller
 
             Log::info('✅ Cita creada exitosamente en API', [
                 'cita_uuid' => $cita->uuid,
-                'paciente_uuid' => $cita->paciente_uuid
+                'paciente_uuid' => $cita->paciente_uuid,
+                'sede_id' => $cita->sede_id
             ]);
 
             return response()->json([
@@ -159,13 +207,14 @@ class CitaController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => new CitaResource($cita)
+                'data' => new CitaResource($cita),
+                'message' => 'Cita obtenida exitosamente'
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Cita no encontrada'
+                'message' => 'Cita no encontrada'
             ], 404);
         }
     }
@@ -176,6 +225,7 @@ class CitaController extends Controller
             $cita = Cita::where('uuid', $uuid)->firstOrFail();
             
             $validatedData = $request->validate([
+                'sede_id' => 'sometimes|exists:sedes,id', // ✅ NUEVO: Permitir cambiar sede
                 'fecha' => 'sometimes|date',
                 'fecha_inicio' => 'sometimes|date',
                 'fecha_final' => 'sometimes|date|after:fecha_inicio',
@@ -238,16 +288,22 @@ class CitaController extends Controller
     {
         $fecha = $request->get('fecha', now()->format('Y-m-d'));
         
-        $citas = Cita::with([
+        // ✅ CAMBIO: Sin filtro automático de sede
+        $query = Cita::with([
             'paciente', 
             'agenda', 
             'cupsContratado',
             'usuarioCreador'
-        ])
-        ->bySede($request->user()->sede_id)
-        ->whereDate('fecha', $fecha)
-        ->orderBy('fecha_inicio')
-        ->get();
+        ]);
+
+        // ✅ FILTRO OPCIONAL DE SEDE
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        $citas = $query->whereDate('fecha', $fecha)
+            ->orderBy('fecha_inicio')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -255,7 +311,55 @@ class CitaController extends Controller
             'meta' => [
                 'fecha' => $fecha,
                 'total_citas' => $citas->count()
-            ]
+            ],
+            'message' => 'Citas del día obtenidas exitosamente'
+        ]);
+    }
+
+    // ✅ NUEVOS MÉTODOS SIMILARES A AgendaController
+    public function citasPorPaciente(Request $request, string $pacienteUuid): JsonResponse
+    {
+        $query = Cita::with([
+            'paciente', 
+            'agenda', 
+            'cupsContratado',
+            'usuarioCreador',
+            'sede'
+        ])->where('paciente_uuid', $pacienteUuid);
+
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        $citas = $query->orderBy('fecha_inicio', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => CitaResource::collection($citas),
+            'message' => 'Citas del paciente obtenidas exitosamente'
+        ]);
+    }
+
+    public function citasPorAgenda(Request $request, string $agendaUuid): JsonResponse
+    {
+        $query = Cita::with([
+            'paciente', 
+            'agenda', 
+            'cupsContratado',
+            'usuarioCreador',
+            'sede'
+        ])->where('agenda_uuid', $agendaUuid);
+
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        $citas = $query->orderBy('fecha_inicio')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => CitaResource::collection($citas),
+            'message' => 'Citas de la agenda obtenidas exitosamente'
         ]);
     }
 }
