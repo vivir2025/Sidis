@@ -394,6 +394,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     Route::prefix('master-data')->group(function () {
         Route::get('/all', [MasterDataController::class, 'allMasterData']);
+        Route::get('/sedes', [MasterDataController::class, 'sedes']);
         Route::get('/departamentos', [MasterDataController::class, 'departamentos']);
         Route::get('/municipios/{departamento}', [MasterDataController::class, 'municipios']);
         Route::get('/empresas', [MasterDataController::class, 'empresas']);

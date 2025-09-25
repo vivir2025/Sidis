@@ -67,6 +67,33 @@ class MasterDataController extends Controller
             })
         ]);
     }
+    public function sedes(): JsonResponse
+{
+    try {
+        $sedes = \App\Models\Sede::where('activo', true)
+            ->orderBy('nombre')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $sedes->map(function ($sede) {
+                return [
+                    'id' => $sede->id,
+                    'uuid' => $sede->uuid,
+                    'nombre' => $sede->nombre,
+                    'codigo' => $sede->codigo,
+                    'activo' => $sede->activo
+                ];
+            })
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error obteniendo sedes: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     public function regimenes(): JsonResponse
     {
@@ -448,6 +475,7 @@ class MasterDataController extends Controller
          return response()->json([
         'success' => true,
         'data' => [
+            'sedes' => $this->getSedesData(),
             'departamentos' => $this->getDepartamentosData(),
             'empresas' => $this->getEmpresasData(),
             'regimenes' => $this->getRegimenesData(),
@@ -514,7 +542,22 @@ class MasterDataController extends Controller
                 ];
             });
     }
-
+// ✅ AGREGAR ESTE MÉTODO PRIVADO
+private function getSedesData()
+{
+    return \App\Models\Sede::where('activo', true)
+        ->orderBy('nombre')
+        ->get()
+        ->map(function ($sede) {
+            return [
+                'id' => $sede->id,
+                'uuid' => $sede->uuid,
+                'nombre' => $sede->nombre,
+                'codigo' => $sede->codigo,
+                'activo' => $sede->activo
+            ];
+        });
+}
     private function getRemisionesData()
     {
         return Remision::with('especialidad')
