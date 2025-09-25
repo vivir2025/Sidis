@@ -1,5 +1,5 @@
 <?php
-// app/Http/Middleware/SedeAccessMiddleware.php
+// app/Http/Middleware/SedeAccessMiddleware.php - MODIFICADO
 namespace App\Http\Middleware;
 
 use Closure;
@@ -21,39 +21,46 @@ class SedeAccessMiddleware
                 ], 401);
             }
 
-            if (!$usuario->sede_id) {
+            // ✅ CAMBIO: Verificar sede de la sesión, no del usuario
+            $sedeId = session('sede_id') ?? $usuario->sede_id;
+            
+            if (!$sedeId) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario sin sede asignada'
+                    'message' => 'No hay sede seleccionada'
                 ], 403);
             }
 
             // Cargar relaciones
             $usuario->load('sede', 'estado');
 
-            // Verificar sede existe
-            if (!$usuario->sede) {
+            // ✅ VERIFICAR LA SEDE SELECCIONADA EN LA SESIÓN
+            $sede = \App\Models\Sede::find($sedeId);
+            
+            if (!$sede) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Sede no encontrada'
                 ], 403);
             }
 
-            // ✅ CAMBIO PRINCIPAL: usar 'activa' en lugar de 'activo'
-            if (!$usuario->sede->activo) {
+            if (!$sede->activo) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Sede inactiva'
                 ], 403);
             }
 
-            // Verificar usuario activo usando el método del modelo
+            // Verificar usuario activo
             if (!$usuario->estaActivo()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Usuario inactivo'
                 ], 403);
             }
+
+            // ✅ AGREGAR SEDE ACTUAL AL REQUEST
+            $request->merge(['sede_actual' => $sede]);
 
             return $next($request);
 
