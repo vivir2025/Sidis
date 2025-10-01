@@ -98,12 +98,15 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::put('/{cita}', [CitaController::class, 'update']);
         Route::delete('/{cita}', [CitaController::class, 'destroy']);
          // ✅ AGREGAR ESTAS TRES LÍNEAS PARA CAMBIAR ESTADO
-    Route::put('/{cita}/estado', [CitaController::class, 'cambiarEstado']);     // ← AGREGAR ESTA
-    Route::patch('/{cita}/estado', [CitaController::class, 'cambiarEstado']);   // ← YA LA TIENES
-    Route::post('/{cita}/estado', [CitaController::class, 'cambiarEstado']);    // ← AGREGAR ESTA
+   
     });
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
  Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+
+ // ✅ Y ASEGÚRATE que estas líneas estén FUERA de cualquier grupo:
+Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+Route::patch('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
     // ================================
     // AGENDAS
     // ================================
