@@ -362,4 +362,77 @@ class CitaController extends Controller
             'message' => 'Citas de la agenda obtenidas exitosamente'
         ]);
     }
+
+    /**
+ * ✅ OBTENER CITAS DE UNA AGENDA ESPECÍFICA
+ */
+public function citasDeAgenda(string $agendaUuid, Request $request): JsonResponse
+{
+    try {
+        Log::info('🔍 API CitasDeAgenda solicitadas', [
+            'agenda_uuid' => $agendaUuid,
+            'filtros' => $request->all()
+        ]);
+
+        $query = Cita::with([
+            'paciente', 
+            'agenda', 
+            'cupsContratado',
+            'usuarioCreador',
+            'sede'
+        ])->where('agenda_uuid', $agendaUuid);
+
+        // ✅ FILTRO DE FECHA (CRÍTICO)
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha', $request->fecha);
+            Log::info('🔍 Filtro fecha aplicado', [
+                'fecha' => $request->fecha
+            ]);
+        }
+
+        // ✅ FILTRO DE SEDE OPCIONAL
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        // ✅ FILTRO DE ESTADO
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
+
+        // ✅ ORDENAR POR HORA
+        $citas = $query->orderBy('fecha_inicio')->get();
+
+        Log::info('✅ Citas de agenda obtenidas', [
+            'agenda_uuid' => $agendaUuid,
+            'total_encontradas' => $citas->count(),
+            'fecha_filtro' => $request->fecha
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => CitaResource::collection($citas),
+            'meta' => [
+                'agenda_uuid' => $agendaUuid,
+                'fecha' => $request->fecha,
+                'total' => $citas->count()
+            ],
+            'message' => 'Citas de agenda obtenidas exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo citas de agenda', [
+            'agenda_uuid' => $agendaUuid,
+            'error' => $e->getMessage(),
+            'filtros' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error obteniendo citas de agenda',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

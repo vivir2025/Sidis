@@ -93,12 +93,13 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::post('/', [CitaController::class, 'store']);
         Route::get('/del-dia', [CitaController::class, 'citasDelDia']);
         Route::get('/agenda/{agenda}', [CitaController::class, 'citasPorAgenda']);
+        
         Route::get('/{cita}', [CitaController::class, 'show']);
         Route::put('/{cita}', [CitaController::class, 'update']);
         Route::delete('/{cita}', [CitaController::class, 'destroy']);
         Route::patch('/{cita}/estado', [CitaController::class, 'cambiarEstado']);
     });
-
+Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
     // ================================
     // AGENDAS
     // ================================
