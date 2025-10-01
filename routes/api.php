@@ -103,6 +103,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     Route::post('/{cita}/estado', [CitaController::class, 'cambiarEstado']);    // ← AGREGAR ESTA
     });
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
+ Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
     // ================================
     // AGENDAS
     // ================================
