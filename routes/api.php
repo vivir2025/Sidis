@@ -97,7 +97,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/{cita}', [CitaController::class, 'show']);
         Route::put('/{cita}', [CitaController::class, 'update']);
         Route::delete('/{cita}', [CitaController::class, 'destroy']);
-        Route::patch('/{cita}/estado', [CitaController::class, 'cambiarEstado']);
+         // ✅ AGREGAR ESTAS TRES LÍNEAS PARA CAMBIAR ESTADO
+    Route::put('/{cita}/estado', [CitaController::class, 'cambiarEstado']);     // ← AGREGAR ESTA
+    Route::patch('/{cita}/estado', [CitaController::class, 'cambiarEstado']);   // ← YA LA TIENES
+    Route::post('/{cita}/estado', [CitaController::class, 'cambiarEstado']);    // ← AGREGAR ESTA
     });
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
     // ================================

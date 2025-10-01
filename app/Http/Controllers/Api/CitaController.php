@@ -434,5 +434,102 @@ public function citasDeAgenda(string $agendaUuid, Request $request): JsonRespons
         ], 500);
     }
 }
+public function cambiarEstado(Request $request, string $uuid): JsonResponse
+{
+    try {
+        Log::info('🔄 API CitaController@cambiarEstado - Solicitud recibida', [
+            'cita_uuid' => $uuid,
+            'nuevo_estado' => $request->estado,
+            'method' => $request->method(),
+            'all_data' => $request->all()
+        ]);
 
+        // ✅ BUSCAR LA CITA
+        $cita = Cita::where('uuid', $uuid)->firstOrFail();
+
+        Log::info('📋 Cita encontrada para cambio de estado', [
+            'cita_uuid' => $cita->uuid,
+            'estado_actual' => $cita->estado,
+            'paciente' => $cita->paciente->primer_nombre ?? 'N/A'
+        ]);
+
+        // ✅ VALIDAR EL NUEVO ESTADO
+        $validatedData = $request->validate([
+            'estado' => 'required|string|in:PROGRAMADA,ATENDIDA,CANCELADA,NO_ASISTIO,REPROGRAMADA'
+        ]);
+
+        $estadoAnterior = $cita->estado;
+        $nuevoEstado = $validatedData['estado'];
+
+        // ✅ ACTUALIZAR EL ESTADO
+        $cita->update([
+            'estado' => $nuevoEstado
+        ]);
+
+        // ✅ RECARGAR LA CITA CON RELACIONES
+        $cita->load([
+            'paciente', 
+            'agenda', 
+            'cupsContratado',
+            'usuarioCreador',
+            'sede'
+        ]);
+
+        Log::info('✅ Estado de cita cambiado exitosamente', [
+            'cita_uuid' => $cita->uuid,
+            'estado_anterior' => $estadoAnterior,
+            'estado_nuevo' => $nuevoEstado,
+            'usuario_id' => $request->user()->id ?? 'N/A'
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => new CitaResource($cita),
+            'message' => "Estado cambiado de '{$estadoAnterior}' a '{$nuevoEstado}' exitosamente",
+            'meta' => [
+                'estado_anterior' => $estadoAnterior,
+                'estado_nuevo' => $nuevoEstado,
+                'fecha_cambio' => now()->toISOString()
+            ]
+        ]);
+
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        Log::warning('❌ Cita no encontrada para cambio de estado', [
+            'cita_uuid' => $uuid
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Cita no encontrada'
+        ], 404);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::warning('❌ Datos inválidos para cambio de estado', [
+            'cita_uuid' => $uuid,
+            'errors' => $e->errors(),
+            'input' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Estado inválido',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error cambiando estado de cita', [
+            'cita_uuid' => $uuid,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'input' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }
