@@ -44,4 +44,9 @@ class Remision extends Model
     {
         return $query->where('activo', true);
     }
+
+    public function scopePorTipo($query, $tipo)
+    {
+        return $query->where('tipo', $tipo);
+    }
 }

@@ -44,6 +44,7 @@ class Medicamento extends Model
 
     public function scopeBuscar($query, $termino)
     {
-        return $query->where('nombre', 'like', "%{$termino}%");
+        return $query->where('nombre', 'like', "%{$termino}%")
+                    ->orWhere('principio_activo', 'like', "%{$termino}%");
     }
 }

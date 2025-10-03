@@ -81,6 +81,15 @@ class HistoriaClinicaController extends Controller
                 'enfermedad_actual' => 'required|string',
                 'peso' => 'nullable|numeric|min:0|max:999.99',
                 'talla' => 'nullable|numeric|min:0|max:9.99',
+                'frecuencia' => 'nullable|string',
+                'duracion' => 'nullable|string', 
+                'via_administracion' => 'nullable|string',
+                'observaciones' => 'nullable|string',
+                'prioridad' => 'nullable|in:ALTA,MEDIA,BAJA',
+                'estado' => 'nullable|string',
+                'fecha_remision' => 'nullable|date',
+                'cantidad' => 'nullable|integer|min:1',
+                'observacion' => 'nullable|string|max:500', // Para CUPS y remisiones
                 
                 // ✅ DIAGNÓSTICOS OBLIGATORIOS
                 'diagnosticos' => 'required|array|min:1',
@@ -110,6 +119,8 @@ class HistoriaClinicaController extends Controller
                 
                 // ✅ HISTORIA COMPLEMENTARIA
                 'historia_complementaria' => 'nullable|array'
+
+
             ]);
 
             if ($validator->fails()) {
@@ -164,19 +175,19 @@ class HistoriaClinicaController extends Controller
                 ]);
             }
 
-            // ✅ CREAR MEDICAMENTOS
-            if ($request->filled('medicamentos')) {
-                foreach ($request->medicamentos as $medicamentoData) {
-                    $historia->historiaMedicamentos()->create([
-                        'medicamento_id' => $medicamentoData['medicamento_id'],
-                        'cantidad' => $medicamentoData['cantidad'],
-                        'dosis' => $medicamentoData['dosis'],
-                        'frecuencia' => $medicamentoData['frecuencia'] ?? null,
-                        'duracion' => $medicamentoData['duracion'] ?? null,
-                        'observaciones' => $medicamentoData['observaciones'] ?? null
-                    ]);
-                }
-            }
+          if ($request->filled('medicamentos')) {
+    foreach ($request->medicamentos as $medicamentoData) {
+        $historia->historiaMedicamentos()->create([
+            'medicamento_id' => $medicamentoData['medicamento_id'],
+            'cantidad' => $medicamentoData['cantidad'],
+            'dosis' => $medicamentoData['dosis'],
+            'frecuencia' => $medicamentoData['frecuencia'] ?? null,
+            'duracion' => $medicamentoData['duracion'] ?? null,
+            'via_administracion' => $medicamentoData['via_administracion'] ?? null,
+            'observaciones' => $medicamentoData['observaciones'] ?? null
+        ]);
+    }
+}
 
             // ✅ CREAR REMISIONES
             if ($request->filled('remisiones')) {
@@ -191,17 +202,17 @@ class HistoriaClinicaController extends Controller
                 }
             }
 
-            // ✅ CREAR CUPS
-            if ($request->filled('cups')) {
-                foreach ($request->cups as $cupsData) {
-                    $historia->historiaCups()->create([
-                        'cups_id' => $cupsData['cups_id'],
-                        'observacion' => $cupsData['observacion'] ?? null,
-                        'cantidad' => $cupsData['cantidad'] ?? 1,
-                        'estado' => 'PENDIENTE'
-                    ]);
-                }
-            }
+         // ✅ CREAR CUPS - Versión mejorada
+if ($request->filled('cups')) {
+    foreach ($request->cups as $cupsData) {
+        $historia->historiaCups()->create([
+            'cups_id' => $cupsData['cups_id'],
+            'observacion' => $cupsData['observacion'] ?? null,
+            'cantidad' => $cupsData['cantidad'] ?? 1,
+            'estado' => $cupsData['estado'] ?? 'PENDIENTE'
+        ]);
+    }
+}
 
             // ✅ CREAR HISTORIA COMPLEMENTARIA
             if ($request->filled('historia_complementaria')) {
