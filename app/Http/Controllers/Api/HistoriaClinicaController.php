@@ -82,155 +82,286 @@ class HistoriaClinicaController extends Controller
         }
     }
 
-    /**
-     * Crear nueva historia clínica
-     */
-    public function store(Request $request)
-    {
-        // ✅ VALIDACIÓN CORREGIDA
-        $request->validate([
-            'paciente_uuid' => 'required|string',
-            'usuario_id' => 'required|integer',
-            'sede_id' => 'required|integer',
-            'cita_uuid' => 'required|string',
-            'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
-            'motivo_consulta' => 'required|string',
-            'enfermedad_actual' => 'required|string'
+   /**
+ * ✅ MÉTODO STORE COMPLETAMENTE CORREGIDO
+ */
+public function store(Request $request)
+{
+    // ✅ VALIDACIÓN CORREGIDA
+    $request->validate([
+        'paciente_uuid' => 'required|string',
+        'usuario_id' => 'required|integer',
+        'sede_id' => 'required|integer',
+        'cita_uuid' => 'required|string',
+        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
+        'motivo_consulta' => 'required|string',
+        'enfermedad_actual' => 'required|string'
+    ]);
+
+    DB::beginTransaction();
+    try {
+        // ✅ OBTENER CITA_ID DESDE UUID
+        $cita = \App\Models\Cita::where('uuid', $request->cita_uuid)->first();
+        if (!$cita) {
+            throw new \Exception('Cita no encontrada con UUID: ' . $request->cita_uuid);
+        }
+
+        // ✅ GENERAR NÚMERO SECUENCIAL SIMPLE
+        $ultimaHistoria = HistoriaClinica::orderBy('id', 'desc')->first();
+        $numeroHistoria = $ultimaHistoria ? ($ultimaHistoria->id + 1) : 1;
+
+        // ✅ CREAR HISTORIA CON CAMPOS CORREGIDOS SEGÚN TU MIGRACIÓN
+        $historia = HistoriaClinica::create([
+            'uuid' => Str::uuid(),
+            'sede_id' => $request->sede_id,
+            'cita_id' => $cita->id,
+            
+            // ✅ INFORMACIÓN BÁSICA
+            'finalidad' => $request->finalidad ?? 'CONSULTA',
+            'acompanante' => $request->acompanante,
+            'acu_telefono' => $request->acu_telefono,
+            'acu_parentesco' => $request->acu_parentesco,
+            'causa_externa' => $request->causa_externa,
+            'motivo_consulta' => $request->motivo_consulta,
+            'enfermedad_actual' => $request->enfermedad_actual,
+            
+            // ✅ DISCAPACIDADES
+            'discapacidad_fisica' => $request->discapacidad_fisica ?? 'NO',
+            'discapacidad_visual' => $request->discapacidad_visual ?? 'NO',
+            'discapacidad_mental' => $request->discapacidad_mental ?? 'NO',
+            'discapacidad_auditiva' => $request->discapacidad_auditiva ?? 'NO',
+            'discapacidad_intelectual' => $request->discapacidad_intelectual ?? 'NO',
+            
+            // ✅ DROGODEPENDENCIA
+            'drogo_dependiente' => $request->drogo_dependiente ?? 'NO',
+            'drogo_dependiente_cual' => $request->drogo_dependiente_cual,
+            
+            // ✅ MEDIDAS ANTROPOMÉTRICAS
+            'peso' => $request->peso,
+            'talla' => $request->talla,
+            'imc' => $request->imc,
+            'clasificacion' => $request->clasificacion,
+            'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
+            'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+            
+            // ✅ ANTECEDENTES FAMILIARES
+            'hipertension_arterial' => $request->hipertension_arterial ?? 'NO',
+            'parentesco_hipertension' => $request->parentesco_hipertension,
+            'diabetes_mellitus' => $request->diabetes_mellitus ?? 'NO',
+            'parentesco_mellitus' => $request->parentesco_mellitus,
+            'artritis' => $request->artritis ?? 'NO',
+            'parentesco_artritis' => $request->parentesco_artritis,
+            'enfermedad_cardiovascular' => $request->enfermedad_cardiovascular ?? 'NO',
+            'parentesco_cardiovascular' => $request->parentesco_cardiovascular,
+            'antecedente_metabolico' => $request->antecedente_metabolico ?? 'NO',
+            'parentesco_metabolico' => $request->parentesco_metabolico,
+            'cancer_mama_estomago_prostata_colon' => $request->cancer_mama_estomago_prostata_colon ?? 'NO',
+            'parentesco_cancer' => $request->parentesco_cancer,
+            'leucemia' => $request->leucemia ?? 'NO',
+            'parentesco_leucemia' => $request->parentesco_leucemia,
+            'vih' => $request->vih ?? 'NO',
+            'parentesco_vih' => $request->parentesco_vih,
+            'otro' => $request->otro ?? 'NO',
+            'parentesco_otro' => $request->parentesco_otro,
+            
+            // ✅ ANTECEDENTES PERSONALES
+            'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
+            'obs_personal_hipertension_arterial' => $request->obs_personal_hipertension_arterial,
+            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
+            'obs_personal_mellitus' => $request->obs_personal_mellitus,
+            'enfermedad_cardiovascular_personal' => $request->enfermedad_cardiovascular_personal ?? 'NO',
+            'obs_personal_enfermedad_cardiovascular' => $request->obs_personal_enfermedad_cardiovascular,
+            'arterial_periferica_personal' => $request->arterial_periferica_personal ?? 'NO',
+            'obs_personal_arterial_periferica' => $request->obs_personal_arterial_periferica,
+            'carotidea_personal' => $request->carotidea_personal ?? 'NO',
+            'obs_personal_carotidea' => $request->obs_personal_carotidea,
+            'aneurisma_aorta_personal' => $request->aneurisma_aorta_personal ?? 'NO',
+            'obs_personal_aneurisma_aorta' => $request->obs_personal_aneurisma_aorta,
+            'sindrome_coronario_agudo_angina_personal' => $request->sindrome_coronario_agudo_angina_personal ?? 'NO',
+            'obs_personal_sindrome_coronario' => $request->obs_personal_sindrome_coronario,
+            'artritis_personal' => $request->artritis_personal ?? 'NO',
+            'obs_personal_artritis' => $request->obs_personal_artritis,
+            'iam_personal' => $request->iam_personal ?? 'NO',
+            'obs_personal_iam' => $request->obs_personal_iam,
+            'revascul_coronaria_personal' => $request->revascul_coronaria_personal ?? 'NO',
+            'obs_personal_revascul_coronaria' => $request->obs_personal_revascul_coronaria,
+            'insuficiencia_cardiaca_personal' => $request->insuficiencia_cardiaca_personal ?? 'NO',
+            'obs_personal_insuficiencia_cardiaca' => $request->obs_personal_insuficiencia_cardiaca,
+            'amputacion_pie_diabetico_personal' => $request->amputacion_pie_diabetico_personal ?? 'NO',
+            'obs_personal_amputacion_pie_diabetico' => $request->obs_personal_amputacion_pie_diabetico,
+            'enfermedad_pulmonar_personal' => $request->enfermedad_pulmonar_personal ?? 'NO',
+            'obs_personal_enfermedad_pulmonar' => $request->obs_personal_enfermedad_pulmonar,
+            'victima_maltrato_personal' => $request->victima_maltrato_personal ?? 'NO',
+            'obs_personal_maltrato_personal' => $request->obs_personal_maltrato_personal,
+            'antecedentes_quirurgicos' => $request->antecedentes_quirurgicos ?? 'NO',
+            'obs_personal_antecedentes_quirurgicos' => $request->obs_personal_antecedentes_quirurgicos,
+            'acontosis_personal' => $request->acontosis_personal ?? 'NO',
+            'obs_personal_acontosis' => $request->obs_personal_acontosis,
+            'otro_personal' => $request->otro_personal ?? 'NO',
+            'obs_personal_otro' => $request->obs_personal_otro,
+            'insulina_requiriente' => $request->insulina_requiriente,
+            
+            // ✅ TEST MORISKY (ADHERENCIA AL TRATAMIENTO)
+            'olvida_tomar_medicamentos' => $request->olvida_tomar_medicamentos ?? 'NO',
+            'toma_medicamentos_hora_indicada' => $request->toma_medicamentos_hora_indicada ?? 'SI',
+            'cuando_esta_bien_deja_tomar_medicamentos' => $request->cuando_esta_bien_deja_tomar_medicamentos ?? 'NO',
+            'siente_mal_deja_tomarlos' => $request->siente_mal_deja_tomarlos ?? 'NO',
+            'valoracion_psicologia' => $request->valoracion_psicologia ?? 'NO',
+            
+            // ✅ REVISIÓN POR SISTEMAS
+            'cabeza' => $request->cabeza ?? 'NORMAL',
+            'orl' => $request->orl ?? 'NORMAL',
+            'cardiovascular' => $request->cardiovascular ?? 'NORMAL',
+            'gastrointestinal' => $request->gastrointestinal ?? 'NORMAL',
+            'osteoatromuscular' => $request->osteoatromuscular ?? 'NORMAL',
+            'snc' => $request->snc ?? 'NORMAL',
+            'revision_sistemas' => $request->revision_sistemas,
+            
+            // ✅ SIGNOS VITALES
+            'presion_arterial_sistolica_sentado_pie' => $request->presion_arterial_sistolica_sentado_pie,
+            'presion_arterial_distolica_sentado_pie' => $request->presion_arterial_distolica_sentado_pie,
+            'presion_arterial_sistolica_acostado' => $request->presion_arterial_sistolica_acostado,
+            'presion_arterial_distolica_acostado' => $request->presion_arterial_distolica_acostado,
+            'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
+            'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
+            
+            // ✅ EXAMEN FÍSICO
+            'ef_cabeza' => $request->ef_cabeza ?? 'NORMAL',
+            'obs_cabeza' => $request->obs_cabeza,
+            'agudeza_visual' => $request->agudeza_visual ?? 'NORMAL',
+            'obs_agudeza_visual' => $request->obs_agudeza_visual,
+            'fundoscopia' => $request->fundoscopia ?? 'NORMAL',
+            'obs_fundoscopia' => $request->obs_fundoscopia,
+            'cuello' => $request->cuello ?? 'NORMAL',
+            'obs_cuello' => $request->obs_cuello,
+            'torax' => $request->torax ?? 'NORMAL',
+            'obs_torax' => $request->obs_torax,
+            'mamas' => $request->mamas ?? 'NORMAL',
+            'obs_mamas' => $request->obs_mamas,
+            'abdomen' => $request->abdomen ?? 'NORMAL',
+            'obs_abdomen' => $request->obs_abdomen,
+            'genito_urinario' => $request->genito_urinario ?? 'NORMAL',
+            'obs_genito_urinario' => $request->obs_genito_urinario,
+            'extremidades' => $request->extremidades ?? 'NORMAL',
+            'obs_extremidades' => $request->obs_extremidades,
+            'piel_anexos_pulsos' => $request->piel_anexos_pulsos ?? 'NORMAL',
+            'obs_piel_anexos_pulsos' => $request->obs_piel_anexos_pulsos,
+            'sistema_nervioso' => $request->sistema_nervioso ?? 'NORMAL',
+            'obs_sistema_nervioso' => $request->obs_sistema_nervioso,
+            'capacidad_cognitiva' => $request->capacidad_cognitiva ?? 'NORMAL',
+            'obs_capacidad_cognitiva' => $request->obs_capacidad_cognitiva,
+            'orientacion' => $request->orientacion ?? 'NORMAL',
+            'obs_orientacion' => $request->obs_orientacion,
+            'reflejo_aquiliar' => $request->reflejo_aquiliar ?? 'NORMAL',
+            'obs_reflejo_aquiliar' => $request->obs_reflejo_aquiliar,
+            'reflejo_patelar' => $request->reflejo_patelar ?? 'NORMAL',
+            'obs_reflejo_patelar' => $request->obs_reflejo_patelar,
+            'hallazgo_positivo_examen_fisico' => $request->hallazgo_positivo_examen_fisico,
+            
+            // ✅ FACTORES DE RIESGO
+            'tabaquismo' => $request->tabaquismo ?? 'NO',
+            'obs_tabaquismo' => $request->obs_tabaquismo,
+            'dislipidemia' => $request->dislipidemia ?? 'NO',
+            'obs_dislipidemia' => $request->obs_dislipidemia,
+            'menor_cierta_edad' => $request->menor_cierta_edad ?? 'NO',
+            'obs_menor_cierta_edad' => $request->obs_menor_cierta_edad,
+            'perimetro_abdominal' => $request->perimetro_abdominal,
+            'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
+            'condicion_clinica_asociada' => $request->condicion_clinica_asociada ?? 'NO',
+            'obs_condicion_clinica_asociada' => $request->obs_condicion_clinica_asociada,
+            'lesion_organo_blanco' => $request->lesion_organo_blanco ?? 'NO',
+            'descripcion_lesion_organo_blanco' => $request->descripcion_lesion_organo_blanco,
+            'obs_lesion_organo_blanco' => $request->obs_lesion_organo_blanco,
+            
+            // ✅ CLASIFICACIONES
+            'clasificacion_hta' => $request->clasificacion_hta,
+            'clasificacion_dm' => $request->clasificacion_dm,
+            'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
+            'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+            'clasificacion_rcv' => $request->clasificacion_rcv,
+            
+            // ✅ EDUCACIÓN
+            'alimentacion' => $request->alimentacion ?? 'NO',
+            'disminucion_consumo_sal_azucar' => $request->disminucion_consumo_sal_azucar ?? 'NO',
+            'fomento_actividad_fisica' => $request->fomento_actividad_fisica ?? 'NO',
+            'importancia_adherencia_tratamiento' => $request->importancia_adherencia_tratamiento ?? 'NO',
+            'consumo_frutas_verduras' => $request->consumo_frutas_verduras ?? 'NO',
+            'manejo_estres' => $request->manejo_estres ?? 'NO',
+            'disminucion_consumo_cigarrillo' => $request->disminucion_consumo_cigarrillo ?? 'NO',
+            'disminucion_peso' => $request->disminucion_peso ?? 'NO',
+            
+            // ✅ OBSERVACIONES GENERALES
+            'observaciones_generales' => $request->observaciones_generales,
+            
+            // ✅ EXAMEN FÍSICO ADICIONAL
+            'oidos' => $request->oidos ?? 'NORMAL',
+            'nariz_senos_paranasales' => $request->nariz_senos_paranasales ?? 'NORMAL',
+            'cavidad_oral' => $request->cavidad_oral ?? 'NORMAL',
+            'cardio_respiratorio' => $request->cardio_respiratorio ?? 'NORMAL',
+            'musculo_esqueletico' => $request->musculo_esqueletico ?? 'NORMAL',
+            'inspeccion_sensibilidad_pies' => $request->inspeccion_sensibilidad_pies ?? 'NORMAL',
+            'capacidad_cognitiva_orientacion' => $request->capacidad_cognitiva_orientacion ?? 'NORMAL',
+            
+            // ✅ MEDICINA TRADICIONAL
+            'recibe_tratamiento_alternativo' => $request->recibe_tratamiento_alternativo ?? 'NO',
+            'recibe_tratamiento_con_plantas_medicinales' => $request->recibe_tratamiento_con_plantas_medicinales ?? 'NO',
+            'recibe_ritual_medicina_tradicional' => $request->recibe_ritual_medicina_tradicional ?? 'NO',
+            
+            // ✅ ALIMENTACIÓN
+            'numero_frutas_diarias' => $request->numero_frutas_diarias ?? 0,
+            'elevado_consumo_grasa_saturada' => $request->elevado_consumo_grasa_saturada ?? 'NO',
+            'adiciona_sal_despues_preparar_comida' => $request->adiciona_sal_despues_preparar_comida ?? 'NO',
+            
+            // ✅ CAMPOS ADICIONALES
+            'general' => $request->general,
+            'respiratorio' => $request->respiratorio,
+            'adherente' => $request->adherente,
+            
+            // ✅ EXÁMENES COMPLEMENTARIOS
+            'ecografia_renal' => $request->ecografia_renal,
+            'razon_reformulacion' => $request->razon_reformulacion,
+            'motivo_reformulacion' => $request->motivo_reformulacion,
+            'reformulacion_quien_reclama' => $request->reformulacion_quien_reclama,
+            'reformulacion_nombre_reclama' => $request->reformulacion_nombre_reclama,
+            'electrocardiograma' => $request->electrocardiograma,
+            'ecocardiograma' => $request->ecocardiograma,
+            'adicional' => $request->adicional,
+            
+            // ✅ CLASIFICACIÓN ESTADO METABÓLICO
+            'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
+            'fex_es' => $request->fex_es,
+            'fex_es1' => $request->fex_es1,
+            'fex_es2' => $request->fex_es2,
         ]);
 
-        DB::beginTransaction();
-        try {
-            // Generar número de historia
-            $ultimaHistoria = HistoriaClinica::whereYear('created_at', date('Y'))
-                ->orderBy('numero_historia', 'desc')
-                ->first();
-            
-            $numeroHistoria = $ultimaHistoria 
-                ? $ultimaHistoria->numero_historia + 1 
-                : date('Y') . '0001';
+        DB::commit();
 
-            // ✅ CREACIÓN CORREGIDA
-            $historia = HistoriaClinica::create([
-                'uuid' => Str::uuid(),
-                'numero_historia' => $numeroHistoria,
-                'cita_id' => $this->getCitaIdFromUuid($request->cita_uuid),
-                'sede_id' => $request->sede_id,
-                'fecha_atencion' => now(),
-                'tipo_consulta' => $request->tipo_consulta,
-                'motivo_consulta' => $request->motivo_consulta,
-                'enfermedad_actual' => $request->enfermedad_actual,
-                
-                // Signos vitales
-                'peso' => $request->peso,
-                'talla' => $request->talla,
-                'imc' => $request->imc,
-                'temperatura' => $request->temperatura,
-                'presion_arterial' => $request->presion_arterial,
-                'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
-                'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
-                'saturacion_oxigeno' => $request->saturacion_oxigeno,
-                'perimetro_abdominal' => $request->perimetro_abdominal,
-                
-                // Antecedentes familiares
-                'af_hta_padre' => $request->af_hta_padre ?? 'NO',
-                'af_hta_madre' => $request->af_hta_madre ?? 'NO',
-                'af_hta_hermanos' => $request->af_hta_hermanos ?? 'NO',
-                'af_hta_abuelos' => $request->af_hta_abuelos ?? 'NO',
-                'af_hta_otros' => $request->af_hta_otros ?? 'NO',
-                'af_dm_padre' => $request->af_dm_padre ?? 'NO',
-                'af_dm_madre' => $request->af_dm_madre ?? 'NO',
-                'af_dm_hermanos' => $request->af_dm_hermanos ?? 'NO',
-                'af_dm_abuelos' => $request->af_dm_abuelos ?? 'NO',
-                'af_dm_otros' => $request->af_dm_otros ?? 'NO',
-                // ... más antecedentes familiares
-                'obs_antecedentes_familiares' => $request->obs_antecedentes_familiares ?? 'NO REFIERE',
-                
-                // Antecedentes personales
-                'ap_hta' => $request->ap_hta ?? 'NO',
-                'obs_ap_hta' => $request->obs_ap_hta,
-                'ap_dm' => $request->ap_dm ?? 'NO',
-                'obs_ap_dm' => $request->obs_ap_dm,
-                'ap_erc' => $request->ap_erc ?? 'NO',
-                'obs_ap_erc' => $request->obs_ap_erc,
-                // ... más antecedentes personales
-                'ap_tabaquismo' => $request->ap_tabaquismo ?? 'NO',
-                'obs_ap_tabaquismo' => $request->obs_ap_tabaquismo,
-                'ap_alcoholismo' => $request->ap_alcoholismo ?? 'NO',
-                'obs_ap_alcoholismo' => $request->obs_ap_alcoholismo,
-                'ap_actividad_fisica' => $request->ap_actividad_fisica ?? 'SEDENTARIO',
-                'obs_ap_actividad_fisica' => $request->obs_ap_actividad_fisica,
-                'ap_quirurgicos' => $request->ap_quirurgicos ?? 'NO REFIERE',
-                'ap_traumaticos' => $request->ap_traumaticos ?? 'NO REFIERE',
-                'ap_alergicos' => $request->ap_alergicos ?? 'NO REFIERE',
-                'obs_antecedentes_personales' => $request->obs_antecedentes_personales ?? 'NO REFIERE',
-                
-                // Revisión por sistemas
-                'rs_general' => $request->rs_general ?? 'NORMAL',
-                'obs_rs_general' => $request->obs_rs_general,
-                'rs_piel_faneras' => $request->rs_piel_faneras ?? 'NORMAL',
-                'obs_rs_piel_faneras' => $request->obs_rs_piel_faneras,
-                // ... más sistemas
-                'obs_revision_sistemas' => $request->obs_revision_sistemas ?? 'NO REFIERE',
-                
-                // Examen físico
-                'examen_fisico_general' => $request->examen_fisico_general,
-                'examen_fisico_cabeza' => $request->examen_fisico_cabeza,
-                'examen_fisico_cuello' => $request->examen_fisico_cuello,
-                'examen_fisico_torax' => $request->examen_fisico_torax,
-                'examen_fisico_abdomen' => $request->examen_fisico_abdomen,
-                'examen_fisico_extremidades' => $request->examen_fisico_extremidades,
-                'examen_fisico_neurologico' => $request->examen_fisico_neurologico,
-                'obs_examen_fisico' => $request->obs_examen_fisico,
-                
-                // Clasificación
-                'clasificacion_hta' => $request->clasificacion_hta,
-                'clasificacion_dm' => $request->clasificacion_dm,
-                'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
-                'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
-                'clasificacion_rcv' => $request->clasificacion_rcv,
-                'obs_clasificacion' => $request->obs_clasificacion,
-                
-                // Plan de manejo
-                'analisis_plan' => $request->analisis_plan,
-                'recomendaciones' => $request->recomendaciones,
-                'proximo_control' => $request->proximo_control,
-                'tipo_control' => $request->tipo_control,
-                'observaciones_plan' => $request->observaciones_plan,
-                
-                // Educación
-                'edu_medicamentos' => $request->edu_medicamentos ?? 'NO',
-                'edu_dieta' => $request->edu_dieta ?? 'NO',
-                'edu_ejercicio' => $request->edu_ejercicio ?? 'NO',
-                'edu_signos_alarma' => $request->edu_signos_alarma ?? 'NO',
-                'observaciones_educacion' => $request->observaciones_educacion,
-                
-                // Egreso
-                'estado_egreso' => $request->estado_egreso ?? 'VIVO',
-                'destino_egreso' => $request->destino_egreso ?? 'DOMICILIO',
-                'condicion_egreso' => $request->condicion_egreso ?? 'MEJORADO',
-                'observaciones_egreso' => $request->observaciones_egreso,
-                
-                'estado' => 'ACTIVA',
-                'created_by' => auth()->id()
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Historia clínica creada exitosamente',
+            'data' => $historia->load(['sede', 'cita.paciente'])
+        ], 201);
 
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Historia clínica creada exitosamente',
-                'data' => $historia->load(['paciente', 'medico', 'sede'])
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear historia clínica',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica',
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ], 500);
     }
+}
+
+/**
+ * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
+ */
+private function getCitaIdFromUuid($citaUuid)
+{
+    $cita = \App\Models\Cita::where('uuid', $citaUuid)->first();
+    return $cita ? $cita->id : null;
+}
 
     /**
      * Mostrar historia clínica específica
@@ -1001,12 +1132,5 @@ class HistoriaClinicaController extends Controller
         }
     }
 
-    /**
-     * ✅ MÉTODO HELPER AGREGADO - Obtener ID de cita desde UUID
-     */
-    private function getCitaIdFromUuid($citaUuid)
-    {
-        $cita = \App\Models\Cita::where('uuid', $citaUuid)->first();
-        return $cita ? $cita->id : null;
-    }
+   
 }
