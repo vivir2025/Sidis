@@ -87,10 +87,12 @@ class HistoriaClinicaController extends Controller
      */
     public function store(Request $request)
     {
+        // ✅ VALIDACIÓN CORREGIDA
         $request->validate([
-            'paciente_id' => 'required|exists:pacientes,id',
-            'medico_id' => 'required|exists:users,id',
-            'sede_id' => 'required|exists:sedes,id',
+            'paciente_uuid' => 'required|string',
+            'usuario_id' => 'required|integer',
+            'sede_id' => 'required|integer',
+            'cita_uuid' => 'required|string',
             'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
             'motivo_consulta' => 'required|string',
             'enfermedad_actual' => 'required|string'
@@ -107,11 +109,11 @@ class HistoriaClinicaController extends Controller
                 ? $ultimaHistoria->numero_historia + 1 
                 : date('Y') . '0001';
 
+            // ✅ CREACIÓN CORREGIDA
             $historia = HistoriaClinica::create([
                 'uuid' => Str::uuid(),
                 'numero_historia' => $numeroHistoria,
-                'paciente_id' => $request->paciente_id,
-                'medico_id' => $request->medico_id,
+                'cita_id' => $this->getCitaIdFromUuid($request->cita_uuid),
                 'sede_id' => $request->sede_id,
                 'fecha_atencion' => now(),
                 'tipo_consulta' => $request->tipo_consulta,
@@ -645,7 +647,8 @@ class HistoriaClinicaController extends Controller
                 'estado' => 'PENDIENTE'
             ]);
 
-            returnresponse()->json([
+            // ✅ ERROR CORREGIDO: return response() con espacio
+            return response()->json([
                 'success' => true,
                 'message' => 'Remisión agregada exitosamente',
                 'data' => $remisionHistoria->load('remision')
@@ -799,7 +802,7 @@ class HistoriaClinicaController extends Controller
         }
     }
 
-    /**
+       /**
      * Agregar examen PDF a la historia
      */
     public function addExamenPDF(Request $request, $uuid)
@@ -997,6 +1000,13 @@ class HistoriaClinicaController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * ✅ MÉTODO HELPER AGREGADO - Obtener ID de cita desde UUID
+     */
+    private function getCitaIdFromUuid($citaUuid)
+    {
+        $cita = \App\Models\Cita::where('uuid', $citaUuid)->first();
+        return $cita ? $cita->id : null;
+    }
 }
-
-
