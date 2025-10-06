@@ -20,7 +20,10 @@ use App\Http\Controllers\Api\{
     NovedadController,
     AuxiliarController,
     BrigadaController,
-    ProcesoController
+    ProcesoController,
+    MedicamentoController,
+    DiagnosticoController,
+    RemisionController
 };
 
 /*
@@ -360,6 +363,46 @@ Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
             Route::get('/diagnosticos-periodo', [HistoriaClinicaController::class, 'reporteDiagnosticos']);
         });
     });
+    // ================================
+// MEDICAMENTOS - ✅ AGREGAR ESTA SECCIÓN COMPLETA
+// ================================
+Route::prefix('medicamentos')->group(function () {
+    Route::get('/', [MedicamentoController::class, 'index']);
+    Route::get('/buscar', [MedicamentoController::class, 'buscar']);
+    Route::post('/', [MedicamentoController::class, 'store']);
+    Route::get('/activos', [MedicamentoController::class, 'activos']);
+    Route::get('/{medicamento}', [MedicamentoController::class, 'show']);
+    Route::put('/{medicamento}', [MedicamentoController::class, 'update']);
+    Route::delete('/{medicamento}', [MedicamentoController::class, 'destroy']);
+});
+
+// ================================
+// DIAGNÓSTICOS - ✅ AGREGAR ESTA SECCIÓN COMPLETA
+// ================================
+Route::prefix('diagnosticos')->group(function () {
+    Route::get('/', [DiagnosticoController::class, 'index']);
+    Route::get('/buscar', [DiagnosticoController::class, 'buscar']);
+    Route::post('/', [DiagnosticoController::class, 'store']);
+    Route::get('/activos', [DiagnosticoController::class, 'activos']);
+    Route::get('/categoria/{categoria}', [DiagnosticoController::class, 'porCategoria']);
+    Route::get('/{diagnostico}', [DiagnosticoController::class, 'show']);
+    Route::put('/{diagnostico}', [DiagnosticoController::class, 'update']);
+    Route::delete('/{diagnostico}', [DiagnosticoController::class, 'destroy']);
+});
+
+// ================================
+// REMISIONES - ✅ AGREGAR ESTA SECCIÓN COMPLETA
+// ================================
+Route::prefix('remisiones')->group(function () {
+    Route::get('/', [RemisionController::class, 'index']);
+    Route::get('/buscar', [RemisionController::class, 'buscar']);
+    Route::post('/', [RemisionController::class, 'store']);
+    Route::get('/activas', [RemisionController::class, 'activas']);
+    Route::get('/tipo/{tipo}', [RemisionController::class, 'porTipo']);
+    Route::get('/{remision}', [RemisionController::class, 'show']);
+    Route::put('/{remision}', [RemisionController::class, 'update']);
+    Route::delete('/{remision}', [RemisionController::class, 'destroy']);
+});
 
     // ================================
     // PARACLINICOS
