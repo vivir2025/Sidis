@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Controllers\Api;
 // app/Http/Controllers/Api/DiagnosticoController.php
+namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Diagnostico;
@@ -19,10 +19,8 @@ class DiagnosticoController extends Controller
                 $query->buscar($request->q);
             }
             
-            // Solo activos por defecto
-            if (!$request->filled('incluir_inactivos')) {
-                $query->activos();
-            }
+            // ✅ REMOVER FILTRO DE ACTIVOS
+            $query->whereNull('deleted_at');
             
             $diagnosticos = $query->orderBy('codigo')
                 ->paginate($request->get('per_page', 50));
@@ -52,7 +50,7 @@ class DiagnosticoController extends Controller
         try {
             $termino = $request->get('q', '');
             
-            $diagnosticos = Diagnostico::activos()
+            $diagnosticos = Diagnostico::whereNull('deleted_at')
                 ->buscar($termino)
                 ->orderBy('codigo')
                 ->limit(20)
@@ -66,7 +64,8 @@ class DiagnosticoController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error buscando diagnósticos'
+                'message' => 'Error buscando diagnósticos',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

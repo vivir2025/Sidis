@@ -34,12 +34,7 @@ class Diagnostico extends Model
         return $this->hasMany(HistoriaDiagnostico::class);
     }
 
-    // Scopes
-    public function scopeActivos($query)
-    {
-        return $query->where('activo', true);
-    }
-
+  
     public function scopeBuscar($query, $termino)
     {
         return $query->where(function ($q) use ($termino) {

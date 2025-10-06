@@ -37,10 +37,7 @@ class Medicamento extends Model
         return $this->hasMany(HistoriaMedicamento::class);
     }
 
-    public function scopeActivos($query)
-    {
-        return $query->where('activo', true);
-    }
+  
 
     public function scopeBuscar($query, $termino)
     {

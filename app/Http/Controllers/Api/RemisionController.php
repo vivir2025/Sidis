@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Controllers\Api;
 // app/Http/Controllers/Api/RemisionController.php
+namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Remision;
@@ -22,13 +22,11 @@ class RemisionController extends Controller
             
             // Filtro por tipo
             if ($request->filled('tipo')) {
-                $query->porTipo($request->tipo);
+                $query->where('tipo', $request->tipo);
             }
             
-            // Solo activas por defecto
-            if (!$request->filled('incluir_inactivas')) {
-                $query->activas();
-            }
+            // ✅ REMOVER FILTRO DE ACTIVAS
+            $query->whereNull('deleted_at');
             
             $remisiones = $query->orderBy('nombre')
                 ->paginate($request->get('per_page', 50));
@@ -58,7 +56,7 @@ class RemisionController extends Controller
         try {
             $termino = $request->get('q', '');
             
-            $remisiones = Remision::activas()
+            $remisiones = Remision::whereNull('deleted_at')
                 ->with('especialidad')
                 ->where(function($q) use ($termino) {
                     $q->where('nombre', 'like', "%{$termino}%")
@@ -76,7 +74,8 @@ class RemisionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error buscando remisiones'
+                'message' => 'Error buscando remisiones',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

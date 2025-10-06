@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Controllers\Api;
 // app/Http/Controllers/Api/MedicamentoController.php
+namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Medicamento;
@@ -19,10 +19,9 @@ class MedicamentoController extends Controller
                 $query->buscar($request->q);
             }
             
-            // Solo activos por defecto
-            if (!$request->filled('incluir_inactivos')) {
-                $query->activos();
-            }
+            // ✅ REMOVER FILTRO DE ACTIVOS (no existe la columna)
+            // Solo usar soft deletes si existe
+            $query->whereNull('deleted_at');
             
             $medicamentos = $query->orderBy('nombre')
                 ->paginate($request->get('per_page', 50));
@@ -52,7 +51,7 @@ class MedicamentoController extends Controller
         try {
             $termino = $request->get('q', '');
             
-            $medicamentos = Medicamento::activos()
+            $medicamentos = Medicamento::whereNull('deleted_at')
                 ->buscar($termino)
                 ->orderBy('nombre')
                 ->limit(20)
@@ -66,7 +65,8 @@ class MedicamentoController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error buscando medicamentos'
+                'message' => 'Error buscando medicamentos',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
