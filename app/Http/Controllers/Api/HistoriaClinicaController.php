@@ -82,7 +82,10 @@ class HistoriaClinicaController extends Controller
         }
     }
 
-   public function store(Request $request)
+
+
+
+public function store(Request $request)
 {
     // ✅ VALIDACIÓN (mantener igual)
     $request->validate([
@@ -128,7 +131,7 @@ class HistoriaClinicaController extends Controller
             'sede_id' => $request->sede_id,
             'cita_id' => $cita->id,
             
-            // ✅ TODOS TUS CAMPOS EXISTENTES (mantener igual)
+            // ✅ TODOS TUS CAMPOS EXISTENTES
             'finalidad' => $request->finalidad ?? 'CONSULTA',
             'acompanante' => $request->acompanante,
             'acu_telefono' => $request->acu_telefono,
@@ -306,14 +309,9 @@ class HistoriaClinicaController extends Controller
             'fex_es' => $request->fex_es,
             'fex_es1' => $request->fex_es1,
             'fex_es2' => $request->fex_es2,
-            
-            // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN EN TU MIGRACIÓN:
-            // 'fecha_atencion' => now(),
-            // 'estado' => 'ACTIVA',
-            // 'created_by' => $request->usuario_id,
         ]);
 
-        // ✅ PROCESAR DIAGNÓSTICOS (mantener igual)
+        // ✅ PROCESAR DIAGNÓSTICOS
         $diagnosticosProcesados = [];
         
         if ($request->idDiagnostico && !empty($request->idDiagnostico)) {
@@ -352,8 +350,6 @@ class HistoriaClinicaController extends Controller
                             'diagnostico_id' => $diagnostico->id,
                             'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
                             'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
-                            // ❌ REMOVER ESTE CAMPO QUE NO EXISTE:
-                            // 'observaciones' => $diag['observacion'] ?? null,
                         ]);
                         $diagnosticosProcesados[] = $diagnostico->id;
                         \Log::info('✅ Diagnóstico del array guardado', [
@@ -365,7 +361,7 @@ class HistoriaClinicaController extends Controller
             }
         }
 
-        // ✅ PROCESAR MEDICAMENTOS - SOLO CAMPOS QUE EXISTEN
+        // ✅ PROCESAR MEDICAMENTOS
         if ($request->has('medicamentos') && is_array($request->medicamentos)) {
             \Log::info('🔍 Procesando medicamentos', ['count' => count($request->medicamentos)]);
             
@@ -384,12 +380,6 @@ class HistoriaClinicaController extends Controller
                             'medicamento_id' => $medicamento->id,
                             'cantidad' => $med['cantidad'] ?? '1',
                             'dosis' => $med['dosis'] ?? 'Según indicación médica',
-                            // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
-                            // 'frecuencia' => $med['frecuencia'] ?? null,
-                            // 'duracion' => $med['duracion'] ?? null,
-                            // 'via_administracion' => $med['via_administracion'] ?? null,
-                            // 'observaciones' => $med['observaciones'] ?? null,
-                            // 'estado' => 'ACTIVO'
                         ]);
                         \Log::info('✅ Medicamento guardado', ['medicamento_id' => $medicamento->id]);
                     }
@@ -397,7 +387,7 @@ class HistoriaClinicaController extends Controller
             }
         }
 
-        // ✅ PROCESAR REMISIONES - SOLO CAMPOS QUE EXISTEN
+        // ✅ PROCESAR REMISIONES
         if ($request->has('remisiones') && is_array($request->remisiones)) {
             \Log::info('🔍 Procesando remisiones', ['count' => count($request->remisiones)]);
             
@@ -415,10 +405,6 @@ class HistoriaClinicaController extends Controller
                             'historia_clinica_id' => $historia->id,
                             'remision_id' => $remision->id,
                             'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
-                            // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
-                            // 'prioridad' => $rem['prioridad'] ?? 'MEDIA',
-                            // 'estado' => $rem['estado'] ?? 'PENDIENTE',
-                            // 'fecha_remision' => $rem['fecha_remision'] ?? now()->format('Y-m-d')
                         ]);
                         \Log::info('✅ Remisión guardada', ['remision_id' => $remision->id]);
                     }
@@ -426,7 +412,7 @@ class HistoriaClinicaController extends Controller
             }
         }
 
-        // ✅ PROCESAR CUPS - SOLO CAMPOS QUE EXISTEN
+        // ✅ PROCESAR CUPS
         if ($request->has('cups') && is_array($request->cups)) {
             \Log::info('🔍 Procesando CUPS', ['count' => count($request->cups)]);
             
@@ -444,9 +430,6 @@ class HistoriaClinicaController extends Controller
                             'historia_clinica_id' => $historia->id,
                             'cups_id' => $cupsModel->id,
                             'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
-                            // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
-                            // 'cantidad' => $cup['cantidad'] ?? 1,
-                            // 'estado' => $cup['estado'] ?? 'PENDIENTE'
                         ]);
                         \Log::info('✅ CUPS guardado', ['cups_id' => $cupsModel->id]);
                     }
@@ -474,11 +457,11 @@ class HistoriaClinicaController extends Controller
             'cups_count' => $historia->historiaCups->count()
         ]);
 
+        // ✅ RESPUESTA PARA API SIN REDIRECT_URL
         return response()->json([
             'success' => true,
             'message' => 'Historia clínica creada exitosamente con todos sus componentes',
-            'data' => $historia,
-            'redirect_url' => route('historia-clinica.index')
+            'data' => $historia
         ], 201);
 
     } catch (\Exception $e) {
@@ -499,8 +482,7 @@ class HistoriaClinicaController extends Controller
             'line' => $e->getLine(),
             'file' => basename($e->getFile())
         ], 500);
-}
-
+    }
 }
 
 /**
