@@ -15,7 +15,7 @@ class HistoriaDiagnostico extends Model
 
     protected $fillable = [
         'uuid', 'historia_clinica_id', 'diagnostico_id', 
-        'tipo', 'tipo_diagnostico', 'observacion'
+        'tipo', 'tipo_diagnostico'
     ];
 
     protected static function boot()

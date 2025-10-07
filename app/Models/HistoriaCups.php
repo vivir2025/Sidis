@@ -13,9 +13,14 @@ class HistoriaCups extends Model
 
     protected $table = 'historia_cups';
 
+    // ✅ SOLO CAMPOS QUE EXISTEN EN TU MIGRACIÓN
     protected $fillable = [
-        'uuid', 'historia_clinica_id', 'cups_id', 
-        'observacion', 'cantidad', 'estado'
+        'uuid', 
+        'historia_clinica_id', 
+        'cups_id', 
+        'observacion'
+        // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
+        // 'cantidad', 'estado'
     ];
 
     protected static function boot()

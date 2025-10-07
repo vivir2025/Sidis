@@ -13,9 +13,15 @@ class HistoriaMedicamento extends Model
 
     protected $table = 'historia_medicamentos';
 
+    // ✅ SOLO CAMPOS QUE EXISTEN EN TU MIGRACIÓN
     protected $fillable = [
-        'uuid', 'medicamento_id', 'historia_clinica_id', 'cantidad', 
-        'dosis', 'frecuencia', 'duracion', 'via_administracion', 'observaciones'
+        'uuid', 
+        'medicamento_id', 
+        'historia_clinica_id', 
+        'cantidad', 
+        'dosis'
+        // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
+        // 'frecuencia', 'duracion', 'via_administracion', 'observaciones'
     ];
 
     protected static function boot()

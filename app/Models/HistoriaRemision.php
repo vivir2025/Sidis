@@ -13,12 +13,18 @@ class HistoriaRemision extends Model
 
     protected $table = 'historia_remisiones';
 
+    // ✅ SOLO CAMPOS QUE EXISTEN EN TU MIGRACIÓN
     protected $fillable = [
-        'uuid', 'remision_id', 'historia_clinica_id', 'observacion', 
-        'prioridad', 'estado', 'fecha_remision'
+        'uuid', 
+        'remision_id', 
+        'historia_clinica_id', 
+        'observacion'
+        // ❌ REMOVER ESTOS CAMPOS QUE NO EXISTEN:
+        // 'prioridad', 'estado', 'fecha_remision'
     ];
 
-    protected $casts = ['fecha_remision' => 'date'];
+    // ❌ REMOVER ESTE CAST QUE NO APLICA:
+    // protected $casts = ['fecha_remision' => 'date'];
 
     protected static function boot()
     {
