@@ -82,9 +82,12 @@ class HistoriaClinicaController extends Controller
         }
     }
 
- public function store(Request $request)
+    /**
+     * Almacenar una nueva historia clínica
+     */
+public function store(Request $request)
 {
-    // ✅ VALIDACIÓN CORREGIDA CON NOMBRES CORRECTOS
+    // ✅ VALIDACIÓN ACTUALIZADA PARA MANEJAR AMBAS ESTRUCTURAS
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
@@ -93,7 +96,36 @@ class HistoriaClinicaController extends Controller
         'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
         'motivo_consulta' => 'required|string',
         'enfermedad_actual' => 'required|string',
-        'idDiagnostico' => 'required|string', // ✅ NOMBRE CORRECTO
+        
+        // ✅ HACER OPCIONAL - PUEDE VENIR EN ARRAY O INDIVIDUAL
+        'idDiagnostico' => 'nullable|string',
+        
+        // ✅ VALIDAR ARRAYS COMO VIENEN DEL FRONTEND
+        'diagnosticos' => 'nullable|array',
+        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+        
+        'medicamentos' => 'nullable|array',
+        'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+        
+        'remisiones' => 'nullable|array',
+        'remisiones.*.remision_id' => 'required_with:remisiones|string',
+        
+        'cups' => 'nullable|array',
+        'cups.*.cups_id' => 'required_with:cups|string',
+    ]);
+
+    // ✅ AGREGAR LOG PARA DEBUG
+    \Log::info('🔍 DEBUG: Datos recibidos en store', [
+        'has_idDiagnostico' => $request->has('idDiagnostico'),
+        'idDiagnostico_value' => $request->idDiagnostico,
+        'has_diagnosticos_array' => $request->has('diagnosticos'),
+        'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
+        'diagnosticos_data' => $request->diagnosticos,
+        'medicamentos_count' => $request->medicamentos ? count($request->medicamentos) : 0,
+        'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
+        'cups_count' => $request->cups ? count($request->cups) : 0,
     ]);
 
     DB::beginTransaction();
@@ -104,9 +136,9 @@ class HistoriaClinicaController extends Controller
             throw new \Exception('Cita no encontrada con UUID: ' . $request->cita_uuid);
         }
 
-        // ✅ TU CÓDIGO ACTUAL DE CREAR HISTORIA ESTÁ PERFECTO - NO CAMBIAR
+        // ✅ TU CÓDIGO DE CREAR HISTORIA ESTÁ PERFECTO - MANTENERLO
         $historia = HistoriaClinica::create([
-            'uuid' => Str::uuid(),
+            'uuid' => $request->uuid ?? Str::uuid(), // ✅ USAR UUID DEL REQUEST SI VIENE
             'sede_id' => $request->sede_id,
             'cita_id' => $cita->id,
             
@@ -288,10 +320,18 @@ class HistoriaClinicaController extends Controller
             'fex_es' => $request->fex_es,
             'fex_es1' => $request->fex_es1,
             'fex_es2' => $request->fex_es2,
+            'fecha_atencion' => now(), // ✅ AGREGAR FECHA
+            'estado' => 'ACTIVA', // ✅ AGREGAR ESTADO
+            'created_by' => $request->usuario_id, // ✅ AGREGAR CREADOR
         ]);
 
-        // 🚀 ✅ PROCESAR DIAGNÓSTICO PRINCIPAL
-        if ($request->idDiagnostico) {
+        // ✅ PROCESAR DIAGNÓSTICOS - MANEJAR AMBAS ESTRUCTURAS
+        $diagnosticosProcesados = [];
+        
+        // Opción 1: Campo individual idDiagnostico (compatibilidad hacia atrás)
+        if ($request->idDiagnostico && !empty($request->idDiagnostico)) {
+            \Log::info('🔍 Procesando diagnóstico individual', ['idDiagnostico' => $request->idDiagnostico]);
+            
             $diagnostico = \App\Models\Diagnostico::where('uuid', $request->idDiagnostico)
                 ->orWhere('id', $request->idDiagnostico)
                 ->first();
@@ -304,10 +344,42 @@ class HistoriaClinicaController extends Controller
                     'tipo' => 'PRINCIPAL',
                     'tipo_diagnostico' => $request->tipo_diagnostico ?? 'CONFIRMADO_NUEVO',
                 ]);
+                $diagnosticosProcesados[] = $diagnostico->id;
+                \Log::info('✅ Diagnóstico individual guardado', ['diagnostico_id' => $diagnostico->id]);
+            }
+        }
+        
+        // Opción 2: Array de diagnósticos (nueva estructura del frontend)
+        if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
+            \Log::info('🔍 Procesando array diagnosticos', ['count' => count($request->diagnosticos)]);
+            
+            foreach ($request->diagnosticos as $index => $diag) {
+                if (!empty($diag['diagnostico_id'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
+                        ->orWhere('id', $diag['diagnostico_id'])
+                        ->first();
+                    
+                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
+                        \App\Models\HistoriaDiagnostico::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'diagnostico_id' => $diagnostico->id,
+                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                            'observaciones' => $diag['observacion'] ?? null,
+                        ]);
+                        $diagnosticosProcesados[] = $diagnostico->id;
+                        \Log::info('✅ Diagnóstico del array guardado', [
+                            'index' => $index,
+                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                            'diagnostico_id' => $diagnostico->id
+                        ]);
+                    }
+                }
             }
         }
 
-        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES
+        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES (estructura antigua)
         if ($request->has('diagnosticos_adicionales') && is_array($request->diagnosticos_adicionales)) {
             foreach ($request->diagnosticos_adicionales as $diagAdicional) {
                 if (!empty($diagAdicional['idDiagnostico'])) {
@@ -315,7 +387,7 @@ class HistoriaClinicaController extends Controller
                         ->orWhere('id', $diagAdicional['idDiagnostico'])
                         ->first();
                     
-                    if ($diagnostico) {
+                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
                         \App\Models\HistoriaDiagnostico::create([
                             'uuid' => Str::uuid(),
                             'historia_clinica_id' => $historia->id,
@@ -323,17 +395,22 @@ class HistoriaClinicaController extends Controller
                             'tipo' => 'SECUNDARIO',
                             'tipo_diagnostico' => $diagAdicional['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
                         ]);
+                        $diagnosticosProcesados[] = $diagnostico->id;
                     }
                 }
             }
         }
 
-        // ✅ PROCESAR MEDICAMENTOS
+        // ✅ PROCESAR MEDICAMENTOS - MANEJAR AMBAS ESTRUCTURAS
         if ($request->has('medicamentos') && is_array($request->medicamentos)) {
+            \Log::info('🔍 Procesando medicamentos', ['count' => count($request->medicamentos)]);
+            
             foreach ($request->medicamentos as $med) {
-                if (!empty($med['idMedicamento'])) {
-                    $medicamento = \App\Models\Medicamento::where('uuid', $med['idMedicamento'])
-                        ->orWhere('id', $med['idMedicamento'])
+                $medicamentoId = $med['medicamento_id'] ?? $med['idMedicamento'] ?? null;
+                
+                if (!empty($medicamentoId)) {
+                    $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
+                        ->orWhere('id', $medicamentoId)
                         ->first();
                     
                     if ($medicamento) {
@@ -343,18 +420,28 @@ class HistoriaClinicaController extends Controller
                             'medicamento_id' => $medicamento->id,
                             'cantidad' => $med['cantidad'] ?? '1',
                             'dosis' => $med['dosis'] ?? 'Según indicación médica',
+                            'frecuencia' => $med['frecuencia'] ?? null,
+                            'duracion' => $med['duracion'] ?? null,
+                            'via_administracion' => $med['via_administracion'] ?? null,
+                            'observaciones' => $med['observaciones'] ?? null,
+                            'estado' => 'ACTIVO'
                         ]);
+                        \Log::info('✅ Medicamento guardado', ['medicamento_id' => $medicamento->id]);
                     }
                 }
             }
         }
 
-        // ✅ PROCESAR REMISIONES
+        // ✅ PROCESAR REMISIONES - MANEJAR AMBAS ESTRUCTURAS
         if ($request->has('remisiones') && is_array($request->remisiones)) {
+            \Log::info('🔍 Procesando remisiones', ['count' => count($request->remisiones)]);
+            
             foreach ($request->remisiones as $rem) {
-                if (!empty($rem['idRemision'])) {
-                    $remision = \App\Models\Remision::where('uuid', $rem['idRemision'])
-                        ->orWhere('id', $rem['idRemision'])
+                $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
+                
+                if (!empty($remisionId)) {
+                    $remision = \App\Models\Remision::where('uuid', $remisionId)
+                        ->orWhere('id', $remisionId)
                         ->first();
                     
                     if ($remision) {
@@ -362,19 +449,27 @@ class HistoriaClinicaController extends Controller
                             'uuid' => Str::uuid(),
                             'historia_clinica_id' => $historia->id,
                             'remision_id' => $remision->id,
-                            'observacion' => $rem['remObservacion'] ?? null,
+                            'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
+                            'prioridad' => $rem['prioridad'] ?? 'MEDIA',
+                            'estado' => $rem['estado'] ?? 'PENDIENTE',
+                            'fecha_remision' => $rem['fecha_remision'] ?? now()->format('Y-m-d')
                         ]);
+                        \Log::info('✅ Remisión guardada', ['remision_id' => $remision->id]);
                     }
                 }
             }
         }
 
-        // ✅ PROCESAR CUPS
+        // ✅ PROCESAR CUPS - MANEJAR AMBAS ESTRUCTURAS
         if ($request->has('cups') && is_array($request->cups)) {
+            \Log::info('🔍 Procesando CUPS', ['count' => count($request->cups)]);
+            
             foreach ($request->cups as $cup) {
-                if (!empty($cup['idCups'])) {
-                    $cupsModel = \App\Models\Cups::where('uuid', $cup['idCups'])
-                        ->orWhere('id', $cup['idCups'])
+                $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
+                
+                if (!empty($cupsId)) {
+                    $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
+                        ->orWhere('id', $cupsId)
                         ->first();
                     
                     if ($cupsModel) {
@@ -382,8 +477,11 @@ class HistoriaClinicaController extends Controller
                             'uuid' => Str::uuid(),
                             'historia_clinica_id' => $historia->id,
                             'cups_id' => $cupsModel->id,
-                            'observacion' => $cup['cupObservacion'] ?? null,
+                            'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
+                            'cantidad' => $cup['cantidad'] ?? 1,
+                            'estado' => $cup['estado'] ?? 'PENDIENTE'
                         ]);
+                        \Log::info('✅ CUPS guardado', ['cups_id' => $cupsModel->id]);
                     }
                 }
             }
@@ -395,25 +493,35 @@ class HistoriaClinicaController extends Controller
         $historia->load([
             'sede', 
             'cita.paciente', 
-            'diagnosticos.diagnostico',
-            'medicamentos.medicamento',
-            'remisiones.remision',
-            'cups.cups'
+            'historiaDiagnosticos.diagnostico', // ✅ NOMBRE CORRECTO DE LA RELACIÓN
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ]);
+
+        \Log::info('✅ Historia clínica creada exitosamente', [
+            'historia_uuid' => $historia->uuid,
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'medicamentos_count' => $historia->historiaMedicamentos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count(),
+            'cups_count' => $historia->historiaCups->count()
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Historia clínica creada exitosamente con todos sus componentes',
-            'data' => $historia
+            'data' => $historia,
+            'redirect_url' => route('historia-clinica.index') // ✅ AGREGAR URL DE REDIRECCIÓN
         ], 201);
 
-    } catch (\Exception $e) {
+       } catch (\Exception $e) {
         DB::rollBack();
         
         \Log::error('❌ Error creando historia clínica completa', [
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
             'file' => $e->getFile(),
+            'trace' => $e->getTraceAsString(),
             'request_data' => $request->all()
         ]);
         
@@ -422,10 +530,11 @@ class HistoriaClinicaController extends Controller
             'message' => 'Error al crear historia clínica',
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
-            'file' => $e->getFile()
+            'file' => basename($e->getFile())
         ], 500);
     }
 }
+
 /**
  * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
  */

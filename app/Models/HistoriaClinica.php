@@ -181,4 +181,24 @@ class HistoriaClinica extends Model
     {
         return $query->where('sede_id', $sedeId);
     }
+
+    public function historiaDiagnosticos()
+{
+    return $this->hasMany(HistoriaDiagnostico::class);
+}
+
+public function historiaMedicamentos()
+{
+    return $this->hasMany(HistoriaMedicamento::class);
+}
+
+public function historiaRemisiones()
+{
+    return $this->hasMany(HistoriaRemision::class);
+}
+
+public function historiaCups()
+{
+    return $this->hasMany(HistoriaCups::class);
+}
 }
