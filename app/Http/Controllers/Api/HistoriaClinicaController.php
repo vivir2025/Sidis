@@ -82,12 +82,9 @@ class HistoriaClinicaController extends Controller
         }
     }
 
- /**
- * ✅ MÉTODO STORE COMPLETAMENTE CORREGIDO CON TABLAS RELACIONADAS
- */
-public function store(Request $request)
+ public function store(Request $request)
 {
-    // ✅ VALIDACIÓN CORREGIDA
+    // ✅ VALIDACIÓN CORREGIDA CON NOMBRES CORRECTOS
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
@@ -96,7 +93,7 @@ public function store(Request $request)
         'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
         'motivo_consulta' => 'required|string',
         'enfermedad_actual' => 'required|string',
-        'idDiagnostico' => 'required|string', // ✅ Diagnóstico principal obligatorio
+        'idDiagnostico' => 'required|string', // ✅ NOMBRE CORRECTO
     ]);
 
     DB::beginTransaction();
@@ -293,9 +290,7 @@ public function store(Request $request)
             'fex_es2' => $request->fex_es2,
         ]);
 
-        // 🚀 ✅ AQUÍ AGREGAR EL CÓDIGO NUEVO PARA PROCESAR LAS TABLAS RELACIONADAS:
-
-        // ✅ PROCESAR DIAGNÓSTICO PRINCIPAL
+        // 🚀 ✅ PROCESAR DIAGNÓSTICO PRINCIPAL
         if ($request->idDiagnostico) {
             $diagnostico = \App\Models\Diagnostico::where('uuid', $request->idDiagnostico)
                 ->orWhere('id', $request->idDiagnostico)
@@ -431,7 +426,6 @@ public function store(Request $request)
         ], 500);
     }
 }
-
 /**
  * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
  */
@@ -1209,6 +1203,47 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
+/**
+ * ✅ MÉTODO FALTANTE: Obtener historias de un paciente
+ */
+public function historiasPaciente($pacienteUuid)
+{
+    try {
+        // Buscar paciente por UUID
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paciente no encontrado'
+            ], 404);
+        }
 
+        // Obtener historias del paciente
+        $historias = HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
+            $query->where('paciente_id', $paciente->id);
+        })
+        ->with([
+            'sede',
+            'cita.paciente',
+            'diagnosticos.diagnostico',
+            'medicamentos.medicamento'
+        ])
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $historias
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener historias del paciente',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
    
 }

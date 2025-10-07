@@ -291,7 +291,8 @@ Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
             Route::delete('/{cups}', [HistoriaClinicaController::class, 'eliminarCups']);
             Route::patch('/{cups}/estado', [HistoriaClinicaController::class, 'cambiarEstadoCups']);
         });
-        
+          // ✅ AGREGAR ESTA RUTA FALTANTE
+    Route::get('/pacientes/{uuid}/historias-clinicas', [HistoriaClinicaController::class, 'historiasPaciente']);
         // ================================
         // ARCHIVOS Y DOCUMENTOS
         // ================================
