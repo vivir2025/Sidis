@@ -860,4 +860,19 @@ public function procesos(): JsonResponse
     ]);
 
 }
+    public function roles(): JsonResponse
+    {
+        $roles = \App\Models\Rol::orderBy('nombre')->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $roles->map(function ($rol) {
+                return [
+                    'id' => $rol->id,
+                    'uuid' => $rol->uuid,
+                    'nombre' => $rol->nombre
+                ];
+            })
+        ]);
+    }
 }

@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\{
     ProcesoController,
     MedicamentoController,
     DiagnosticoController,
+    UsuarioController,
     RemisionController
 };
 
@@ -86,6 +87,23 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         // Rutas relacionadas
         Route::get('/{uuid}/historias', [HistoriaClinicaController::class, 'historiasPaciente']);
         Route::get('/{uuid}/citas', [CitaController::class, 'citasPaciente']);
+    });
+
+    Route::prefix('usuarios')->group(function () {
+        Route::get('/', [UsuarioController::class, 'index']);
+        Route::post('/', [UsuarioController::class, 'store']);
+        Route::get('/medicos', [UsuarioController::class, 'index'])->defaults('solo_medicos', true);
+        Route::get('/activos', [UsuarioController::class, 'index'])->defaults('solo_activos', true);
+        
+        Route::get('/{uuid}', [UsuarioController::class, 'show']);
+        Route::put('/{uuid}', [UsuarioController::class, 'update']);
+        Route::delete('/{uuid}', [UsuarioController::class, 'destroy']);
+        Route::patch('/{uuid}/estado', [UsuarioController::class, 'cambiarEstado']);
+        
+        // ✅ RUTAS PARA FIRMA DE MÉDICO
+        Route::post('/{uuid}/firma', [UsuarioController::class, 'subirFirma']);
+        Route::get('/{uuid}/firma', [UsuarioController::class, 'obtenerFirma']);
+        Route::delete('/{uuid}/firma', [UsuarioController::class, 'eliminarFirma']);
     });
 
     // ================================
@@ -460,6 +478,7 @@ Route::prefix('remisiones')->group(function () {
         Route::get('/ocupaciones', [MasterDataController::class, 'ocupaciones']);
         Route::get('/especialidades', [MasterDataController::class, 'especialidades']);
         Route::get('/diagnosticos', [MasterDataController::class, 'diagnosticos']);
+        Route::get('/master-data/roles', [MasterDataController::class, 'roles']);
         Route::get('/medicamentos', [MasterDataController::class, 'medicamentos']);
         Route::get('/remisiones', [MasterDataController::class, 'remisiones']);
         Route::get('/cups', [MasterDataController::class, 'cups']);
