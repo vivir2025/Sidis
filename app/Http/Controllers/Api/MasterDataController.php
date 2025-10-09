@@ -932,7 +932,7 @@ public function procesos(): JsonResponse
 }
 private function getRoles(): array
 {
-    return \App\Models\Rol::select('id', 'uuid', 'nombre')
+    return \App\Models\Roles::select('id', 'uuid', 'nombre')
         ->orderBy('nombre')
         ->get()
         ->toArray();

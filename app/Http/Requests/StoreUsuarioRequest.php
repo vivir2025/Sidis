@@ -25,7 +25,15 @@ class StoreUsuarioRequest extends FormRequest
             'password' => 'required|string|min:6|confirmed',
             'rol_id' => 'required|exists:roles,id',
             'estado_id' => 'required|exists:estados,id',
-            'especialidad_id' => 'nullable|required_if:es_medico,true|exists:especialidades,id',
+            
+            // ✅ CAMBIO: Aceptar UUID en lugar de ID
+            'especialidad_id' => [
+                'nullable',
+                'required_if:es_medico,true',
+                'string',
+                Rule::exists('especialidades', 'uuid'), // ✅ Validar UUID
+            ],
+            
             'registro_profesional' => 'nullable|required_if:es_medico,true|string|max:50',
             'firma' => 'nullable|string',
             'firma_file' => 'nullable|file|mimes:png,jpg,jpeg|max:2048',
@@ -40,7 +48,26 @@ class StoreUsuarioRequest extends FormRequest
             'login.unique' => 'El login ya está en uso',
             'password.confirmed' => 'Las contraseñas no coinciden',
             'especialidad_id.required_if' => 'La especialidad es obligatoria para médicos',
+            'especialidad_id.exists' => 'La especialidad seleccionada no es válida', // ✅ Nuevo mensaje
             'registro_profesional.required_if' => 'El registro profesional es obligatorio para médicos',
         ];
+    }
+
+    /**
+     * ✅ NUEVO: Preparar datos antes de validar
+     * Esto permite que el controlador reciba el UUID pero lo convierta a ID
+     */
+    protected function prepareForValidation(): void
+    {
+        // Si viene especialidad_id como UUID, lo dejamos tal cual
+        // El controlador se encargará de convertirlo
+        
+        // Opcional: Detectar si es_medico basado en el rol_id
+        if ($this->filled('rol_id')) {
+            $rol = \App\Models\Rol::find($this->rol_id);
+            if ($rol && strtoupper($rol->nombre) === 'MEDICO') {
+                $this->merge(['es_medico' => true]);
+            }
+        }
     }
 }

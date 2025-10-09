@@ -14,7 +14,7 @@ class UsuarioController extends Controller
     /**
      * Listar usuarios con filtros
      */
-    public function index(Request $request): JsonResponse
+   public function index(Request $request): JsonResponse
     {
         try {
             $query = Usuario::with(['sede', 'rol', 'especialidad', 'estado']);
@@ -34,9 +34,16 @@ class UsuarioController extends Controller
                 $query->where('estado_id', $request->estado_id);
             }
 
-            // Filtro por especialidad
+            // ✅ Filtro por especialidad (aceptar UUID)
             if ($request->filled('especialidad_id')) {
-                $query->where('especialidad_id', $request->especialidad_id);
+                $especialidadId = $this->obtenerIdDesdeUuid(
+                    'especialidades', 
+                    $request->especialidad_id
+                );
+                
+                if ($especialidadId) {
+                    $query->where('especialidad_id', $especialidadId);
+                }
             }
 
             // Búsqueda por nombre, documento o login
@@ -87,13 +94,14 @@ class UsuarioController extends Controller
         }
     }
 
+
     /**
      * Crear nuevo usuario
      */
     public function store(Request $request): JsonResponse
     {
         try {
-            // Validación
+            // ✅ VALIDACIÓN ACTUALIZADA PARA ACEPTAR UUID
             $validator = Validator::make($request->all(), [
                 'sede_id' => 'required|exists:sedes,id',
                 'documento' => 'required|string|max:15|unique:usuarios,documento',
@@ -105,12 +113,13 @@ class UsuarioController extends Controller
                 'password' => 'required|string|min:6|confirmed',
                 'rol_id' => 'required|exists:roles,id',
                 'estado_id' => 'required|exists:estados,id',
-                'especialidad_id' => 'nullable|exists:especialidades,id',
-                'registro_profesional' => 'nullable|string|max:50',
                 
-                // ✅ VALIDACIÓN PARA FIRMA (base64 o archivo)
-                'firma' => 'nullable|string', // Base64 de la imagen
-                'firma_file' => 'nullable|file|mimes:png,jpg,jpeg|max:2048', // O archivo directo
+                // ✅ CAMBIO: Aceptar UUID en lugar de ID
+                'especialidad_id' => 'nullable|string|exists:especialidades,uuid',
+                
+                'registro_profesional' => 'nullable|string|max:50',
+                'firma' => 'nullable|string',
+                'firma_file' => 'nullable|file|mimes:png,jpg,jpeg|max:2048',
             ]);
 
             if ($validator->fails()) {
@@ -122,6 +131,22 @@ class UsuarioController extends Controller
             }
 
             DB::beginTransaction();
+
+            // ✅ CONVERTIR UUID A ID SI SE PROPORCIONA ESPECIALIDAD
+            $especialidadId = null;
+            if ($request->filled('especialidad_id')) {
+                $especialidadId = $this->obtenerIdDesdeUuid(
+                    'especialidades', 
+                    $request->especialidad_id
+                );
+                
+                if (!$especialidadId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Especialidad no encontrada'
+                    ], 404);
+                }
+            }
 
             // Preparar datos del usuario
             $userData = [
@@ -135,11 +160,11 @@ class UsuarioController extends Controller
                 'password' => Hash::make($request->password),
                 'rol_id' => $request->rol_id,
                 'estado_id' => $request->estado_id,
-                'especialidad_id' => $request->especialidad_id,
+                'especialidad_id' => $especialidadId, // ✅ Usar el ID convertido
                 'registro_profesional' => $request->registro_profesional,
             ];
 
-            // ✅ PROCESAR FIRMA SI ES MÉDICO
+            // Procesar firma si es médico
             if ($this->esMedico($request->rol_id)) {
                 $firmaData = $this->procesarFirma($request);
                 if ($firmaData) {
@@ -175,7 +200,7 @@ class UsuarioController extends Controller
     /**
      * Mostrar un usuario específico
      */
-    public function show(string $uuid): JsonResponse
+     public function show(string $uuid): JsonResponse
     {
         try {
             $usuario = Usuario::with(['sede', 'rol', 'especialidad', 'estado'])
@@ -184,7 +209,7 @@ class UsuarioController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $this->formatUsuario($usuario, true) // true = incluir firma
+                'data' => $this->formatUsuario($usuario, true)
             ]);
 
         } catch (\Exception $e) {
@@ -198,12 +223,12 @@ class UsuarioController extends Controller
     /**
      * Actualizar usuario
      */
-    public function update(Request $request, string $uuid): JsonResponse
+       public function update(Request $request, string $uuid): JsonResponse
     {
         try {
             $usuario = Usuario::where('uuid', $uuid)->firstOrFail();
 
-            // Validación
+            // ✅ VALIDACIÓN ACTUALIZADA PARA ACEPTAR UUID
             $validator = Validator::make($request->all(), [
                 'sede_id' => 'sometimes|required|exists:sedes,id',
                 'documento' => [
@@ -233,10 +258,11 @@ class UsuarioController extends Controller
                 'password' => 'sometimes|nullable|string|min:6|confirmed',
                 'rol_id' => 'sometimes|required|exists:roles,id',
                 'estado_id' => 'sometimes|required|exists:estados,id',
-                'especialidad_id' => 'nullable|exists:especialidades,id',
-                'registro_profesional' => 'nullable|string|max:50',
                 
-                // ✅ VALIDACIÓN PARA FIRMA
+                // ✅ CAMBIO: Aceptar UUID en lugar de ID
+                'especialidad_id' => 'nullable|string|exists:especialidades,uuid',
+                
+                'registro_profesional' => 'nullable|string|max:50',
                 'firma' => 'nullable|string',
                 'firma_file' => 'nullable|file|mimes:png,jpg,jpeg|max:2048',
                 'eliminar_firma' => 'sometimes|boolean',
@@ -262,17 +288,33 @@ class UsuarioController extends Controller
             if ($request->filled('login')) $usuario->login = $request->login;
             if ($request->filled('rol_id')) $usuario->rol_id = $request->rol_id;
             if ($request->filled('estado_id')) $usuario->estado_id = $request->estado_id;
-            if ($request->filled('especialidad_id')) $usuario->especialidad_id = $request->especialidad_id;
             if ($request->filled('registro_profesional')) $usuario->registro_profesional = $request->registro_profesional;
+
+            // ✅ CONVERTIR UUID A ID SI SE ACTUALIZA ESPECIALIDAD
+            if ($request->filled('especialidad_id')) {
+                $especialidadId = $this->obtenerIdDesdeUuid(
+                    'especialidades', 
+                    $request->especialidad_id
+                );
+                
+                if (!$especialidadId) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Especialidad no encontrada'
+                    ], 404);
+                }
+                
+                $usuario->especialidad_id = $especialidadId;
+            }
 
             // Actualizar password si se proporciona
             if ($request->filled('password')) {
                 $usuario->password = Hash::make($request->password);
             }
 
-            // ✅ PROCESAR FIRMA
+            // Procesar firma
             if ($request->boolean('eliminar_firma')) {
-                // Eliminar firma existente
                 $usuario->firma = null;
             } elseif ($this->esMedico($usuario->rol_id)) {
                 $firmaData = $this->procesarFirma($request);
@@ -304,16 +346,36 @@ class UsuarioController extends Controller
             ], 500);
         }
     }
+ /**
+     * ✅ NUEVO MÉTODO: Convertir UUID a ID
+     */
+    private function obtenerIdDesdeUuid(string $tabla, string $uuid): ?int
+    {
+        try {
+            $resultado = DB::table($tabla)
+                ->where('uuid', $uuid)
+                ->first(['id']);
+            
+            return $resultado ? $resultado->id : null;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error convirtiendo UUID a ID en tabla {$tabla}", [
+                'uuid' => $uuid,
+                'error' => $e->getMessage()
+            ]);
+            
+            return null;
+        }
+    }
 
     /**
      * Eliminar usuario (soft delete)
      */
-    public function destroy(string $uuid): JsonResponse
+   public function destroy(string $uuid): JsonResponse
     {
         try {
             $usuario = Usuario::where('uuid', $uuid)->firstOrFail();
 
-            // Verificar si tiene citas o agendas activas
             if ($usuario->agendas()->exists() || $usuario->citasCreadas()->exists()) {
                 return response()->json([
                     'success' => false,
@@ -345,7 +407,6 @@ class UsuarioController extends Controller
         try {
             $usuario = Usuario::where('uuid', $uuid)->firstOrFail();
 
-            // Verificar que sea médico
             if (!$this->esMedico($usuario->rol_id)) {
                 return response()->json([
                     'success' => false,
@@ -354,9 +415,7 @@ class UsuarioController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'firma' => 'required|string', // Base64
-                // O si prefieres archivo:
-                // 'firma_file' => 'required|file|mimes:png,jpg,jpeg|max:2048',
+                'firma' => 'required|string',
             ]);
 
             if ($validator->fails()) {
@@ -398,6 +457,7 @@ class UsuarioController extends Controller
         }
     }
 
+
     /**
      * ✅ ELIMINAR FIRMA DE MÉDICO
      */
@@ -422,10 +482,11 @@ class UsuarioController extends Controller
         }
     }
 
+
     /**
      * ✅ OBTENER FIRMA DE MÉDICO
      */
-    public function obtenerFirma(string $uuid): JsonResponse
+ public function obtenerFirma(string $uuid): JsonResponse
     {
         try {
             $usuario = Usuario::where('uuid', $uuid)->firstOrFail();
@@ -456,7 +517,7 @@ class UsuarioController extends Controller
     /**
      * Cambiar estado del usuario
      */
-    public function cambiarEstado(Request $request, string $uuid): JsonResponse
+ public function cambiarEstado(Request $request, string $uuid): JsonResponse
     {
         try {
             $usuario = Usuario::where('uuid', $uuid)->firstOrFail();
@@ -497,27 +558,24 @@ class UsuarioController extends Controller
         }
     }
 
+
     /**
      * ✅ MÉTODOS PRIVADOS PARA PROCESAR FIRMA
      */
-    private function procesarFirma(Request $request): ?string
+      private function procesarFirma(Request $request): ?string
     {
-        // Opción 1: Firma como base64 (recomendado para canvas)
         if ($request->filled('firma')) {
             $firmaBase64 = $request->firma;
             
-            // Validar que sea base64 válido
             if ($this->esBase64Valido($firmaBase64)) {
                 return $firmaBase64;
             }
         }
 
-        // Opción 2: Firma como archivo subido
         if ($request->hasFile('firma_file')) {
             $file = $request->file('firma_file');
             
             if ($file->isValid()) {
-                // Leer el archivo y convertir a base64
                 $imageData = file_get_contents($file->getRealPath());
                 $base64 = base64_encode($imageData);
                 $mimeType = $file->getMimeType();
@@ -529,14 +587,13 @@ class UsuarioController extends Controller
         return null;
     }
 
-    private function esBase64Valido(string $data): bool
+
+   private function esBase64Valido(string $data): bool
     {
-        // Verificar si tiene el formato data:image/...;base64,...
         if (preg_match('/^data:image\/(png|jpg|jpeg);base64,/', $data)) {
             return true;
         }
 
-        // Verificar si es base64 puro
         if (base64_encode(base64_decode($data, true)) === $data) {
             return true;
         }
@@ -544,7 +601,7 @@ class UsuarioController extends Controller
         return false;
     }
 
-    private function detectarTipoFirma(string $firma): string
+ private function detectarTipoFirma(string $firma): string
     {
         if (strpos($firma, 'data:image/png') !== false) {
             return 'image/png';
@@ -557,7 +614,6 @@ class UsuarioController extends Controller
 
     private function getFirmaPreview(string $firma): string
     {
-        // Retornar los primeros 100 caracteres para preview
         return substr($firma, 0, 100) . '...';
     }
 
@@ -570,7 +626,7 @@ class UsuarioController extends Controller
     /**
      * Formatear datos del usuario para respuesta
      */
-    private function formatUsuario(Usuario $usuario, bool $incluirFirma = false): array
+   private function formatUsuario(Usuario $usuario, bool $incluirFirma = false): array
     {
         $data = [
             'id' => $usuario->id,
@@ -616,11 +672,11 @@ class UsuarioController extends Controller
             'updated_at' => $usuario->updated_at?->toISOString()
         ];
 
-        // ✅ Incluir firma completa solo si se solicita explícitamente
         if ($incluirFirma && !empty($usuario->firma)) {
             $data['firma'] = $usuario->firma;
         }
 
         return $data;
     }
+
 }
