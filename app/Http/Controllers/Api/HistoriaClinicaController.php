@@ -1383,14 +1383,13 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         ], 500);
     }
 }
-
 /**
- * ✅ VERIFICAR HISTORIAS ANTERIORES POR ESPECIALIDAD - CORREGIDO
+ * ✅ VERIFICAR HISTORIAS ANTERIORES - VERSIÓN CORREGIDA PARA UUID
  */
 private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUuid, string $especialidad): bool
 {
     try {
-        Log::info('🔍 Verificando historias anteriores - MÉTODO CORREGIDO', [
+        Log::info('🔍 Verificando historias anteriores - VERSIÓN UUID CORREGIDA', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad
         ]);
@@ -1409,18 +1408,22 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
             'paciente_nombre' => $paciente->nombre_completo
         ]);
 
-        // ✅ PASO 2: Buscar TODAS las citas del paciente (por ID, no UUID)
-        $citasDelPaciente = \App\Models\Cita::where('paciente_id', $paciente->id)->get();
+        // ✅ PASO 2: CORREGIDO - Buscar citas usando PACIENTE_UUID (no paciente_id)
+        $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
+            ->where('estado', '!=', 'CANCELADA') // Excluir canceladas
+            ->get();
 
-        Log::info('🔍 Citas del paciente encontradas', [
+        Log::info('🔍 Citas del paciente encontradas (UUID CORREGIDO)', [
             'paciente_id' => $paciente->id,
+            'paciente_uuid' => $paciente->uuid,
             'total_citas' => $citasDelPaciente->count(),
-            'citas_ids' => $citasDelPaciente->pluck('id')->toArray()
+            'citas_ids' => $citasDelPaciente->pluck('id')->toArray(),
+            'metodo_busqueda' => 'paciente_uuid (CORREGIDO)'
         ]);
 
         if ($citasDelPaciente->isEmpty()) {
             Log::info('ℹ️ Paciente no tiene citas - PRIMERA VEZ', [
-                'paciente_id' => $paciente->id
+                'paciente_uuid' => $paciente->uuid
             ]);
             return false;
         }
@@ -1430,8 +1433,8 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
         
         $historiasDelPaciente = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)->get();
 
-        Log::info('🔍 Historias del paciente encontradas', [
-            'paciente_id' => $paciente->id,
+        Log::info('🔍 Historias del paciente encontradas (UUID CORREGIDO)', [
+            'paciente_uuid' => $paciente->uuid,
             'citas_ids' => $citasIds,
             'total_historias' => $historiasDelPaciente->count(),
             'historias_ids' => $historiasDelPaciente->pluck('id')->toArray()
@@ -1441,19 +1444,21 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
         $tieneHistorias = $historiasDelPaciente->count() > 0;
         $tipoConsulta = $tieneHistorias ? 'CONTROL' : 'PRIMERA VEZ';
 
-        Log::info('✅ RESULTADO FINAL', [
+        Log::info('✅ RESULTADO FINAL (UUID CORREGIDO)', [
             'paciente_uuid' => $pacienteUuid,
             'paciente_id' => $paciente->id,
             'total_citas' => $citasDelPaciente->count(),
             'total_historias' => $historiasDelPaciente->count(),
             'tiene_historias' => $tieneHistorias,
-            'tipo_consulta' => $tipoConsulta
+            'tipo_consulta' => $tipoConsulta,
+            'especialidad' => $especialidad,
+            'metodo_usado' => 'paciente_uuid (CORREGIDO)'
         ]);
 
         return $tieneHistorias;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error verificando historias por especialidad - MÉTODO CORREGIDO', [
+        Log::error('❌ Error verificando historias por especialidad - UUID CORREGIDO', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
@@ -1465,12 +1470,12 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
     }
 }
 /**
- * ✅ OBTENER ÚLTIMA HISTORIA POR ESPECIALIDAD - CORREGIDO
+ * ✅ OBTENER ÚLTIMA HISTORIA - VERSIÓN UUID CORREGIDA
  */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
     try {
-        Log::info('🔍 Obteniendo última historia - MÉTODO CORREGIDO', [
+        Log::info('🔍 Obteniendo última historia - UUID CORREGIDA', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad
         ]);
@@ -1485,12 +1490,14 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return null;
         }
 
-        // ✅ PASO 2: Buscar citas del paciente
-        $citasDelPaciente = \App\Models\Cita::where('paciente_id', $paciente->id)->get();
+        // ✅ PASO 2: CORREGIDO - Buscar citas usando PACIENTE_UUID
+        $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
+            ->where('estado', '!=', 'CANCELADA')
+            ->get();
 
         if ($citasDelPaciente->isEmpty()) {
             Log::info('ℹ️ Paciente no tiene citas para historia', [
-                'paciente_id' => $paciente->id
+                'paciente_uuid' => $paciente->uuid
             ]);
             return null;
         }
@@ -1509,8 +1516,8 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         ->first();
 
         if ($ultimaHistoria) {
-            Log::info('✅ Última historia encontrada', [
-                'paciente_id' => $paciente->id,
+            Log::info('✅ Última historia encontrada (UUID CORREGIDA)', [
+                'paciente_uuid' => $paciente->uuid,
                 'historia_id' => $ultimaHistoria->id,
                 'historia_uuid' => $ultimaHistoria->uuid,
                 'fecha_creacion' => $ultimaHistoria->created_at
@@ -1519,15 +1526,15 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return $ultimaHistoria->toArray();
         }
 
-        Log::info('ℹ️ No se encontró historia previa', [
-            'paciente_id' => $paciente->id,
+        Log::info('ℹ️ No se encontró historia previa (UUID CORREGIDA)', [
+            'paciente_uuid' => $paciente->uuid,
             'total_citas' => $citasDelPaciente->count()
         ]);
 
         return null;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error obteniendo última historia - MÉTODO CORREGIDO', [
+        Log::error('❌ Error obteniendo última historia - UUID CORREGIDA', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
