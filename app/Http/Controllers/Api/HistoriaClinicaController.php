@@ -1385,17 +1385,17 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
 }
 
 /**
- * ✅ VERIFICAR HISTORIAS ANTERIORES POR ESPECIALIDAD
+ * ✅ VERIFICAR HISTORIAS ANTERIORES POR ESPECIALIDAD - CORREGIDO
  */
 private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUuid, string $especialidad): bool
 {
     try {
-        Log::info('🔍 Verificando historias anteriores', [
+        Log::info('🔍 Verificando historias anteriores - MÉTODO CORREGIDO', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad
         ]);
 
-        // ✅ MÉTODO 1: Buscar por paciente UUID directamente
+        // ✅ PASO 1: Buscar paciente por UUID
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
         
         if (!$paciente) {
@@ -1405,81 +1405,134 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
 
         Log::info('✅ Paciente encontrado', [
             'paciente_id' => $paciente->id,
+            'paciente_uuid' => $paciente->uuid,
             'paciente_nombre' => $paciente->nombre_completo
         ]);
 
-        // ✅ MÉTODO 2: Buscar historias del paciente (SIN FILTRAR POR ESPECIALIDAD PRIMERO)
-        $totalHistorias = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
-            $query->where('paciente_id', $paciente->id);
-        })->count();
+        // ✅ PASO 2: Buscar TODAS las citas del paciente (por ID, no UUID)
+        $citasDelPaciente = \App\Models\Cita::where('paciente_id', $paciente->id)->get();
 
-        Log::info('🔍 Total historias del paciente', [
+        Log::info('🔍 Citas del paciente encontradas', [
             'paciente_id' => $paciente->id,
-            'total_historias' => $totalHistorias
+            'total_citas' => $citasDelPaciente->count(),
+            'citas_ids' => $citasDelPaciente->pluck('id')->toArray()
         ]);
 
-        // ✅ Si tiene cualquier historia anterior, es CONTROL
-        if ($totalHistorias > 0) {
-            Log::info('✅ Paciente tiene historias anteriores - CONTROL', [
-                'paciente_uuid' => $pacienteUuid,
-                'total_historias' => $totalHistorias,
-                'resultado' => 'CONTROL'
+        if ($citasDelPaciente->isEmpty()) {
+            Log::info('ℹ️ Paciente no tiene citas - PRIMERA VEZ', [
+                'paciente_id' => $paciente->id
             ]);
-            return true;
+            return false;
         }
 
-        // ✅ Si no tiene historias, es PRIMERA VEZ
-        Log::info('✅ Paciente NO tiene historias anteriores - PRIMERA VEZ', [
-            'paciente_uuid' => $pacienteUuid,
-            'total_historias' => $totalHistorias,
-            'resultado' => 'PRIMERA VEZ'
+        // ✅ PASO 3: Buscar historias clínicas de esas citas
+        $citasIds = $citasDelPaciente->pluck('id')->toArray();
+        
+        $historiasDelPaciente = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)->get();
+
+        Log::info('🔍 Historias del paciente encontradas', [
+            'paciente_id' => $paciente->id,
+            'citas_ids' => $citasIds,
+            'total_historias' => $historiasDelPaciente->count(),
+            'historias_ids' => $historiasDelPaciente->pluck('id')->toArray()
         ]);
 
-        return false;
+        // ✅ PASO 4: Determinar tipo de consulta
+        $tieneHistorias = $historiasDelPaciente->count() > 0;
+        $tipoConsulta = $tieneHistorias ? 'CONTROL' : 'PRIMERA VEZ';
+
+        Log::info('✅ RESULTADO FINAL', [
+            'paciente_uuid' => $pacienteUuid,
+            'paciente_id' => $paciente->id,
+            'total_citas' => $citasDelPaciente->count(),
+            'total_historias' => $historiasDelPaciente->count(),
+            'tiene_historias' => $tieneHistorias,
+            'tipo_consulta' => $tipoConsulta
+        ]);
+
+        return $tieneHistorias;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error verificando historias por especialidad', [
+        Log::error('❌ Error verificando historias por especialidad - MÉTODO CORREGIDO', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
             'line' => $e->getLine(),
-            'file' => $e->getFile()
+            'file' => basename($e->getFile())
         ]);
         
         return false;
     }
 }
 /**
- * ✅ OBTENER ÚLTIMA HISTORIA POR ESPECIALIDAD
+ * ✅ OBTENER ÚLTIMA HISTORIA POR ESPECIALIDAD - CORREGIDO
  */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
     try {
+        Log::info('🔍 Obteniendo última historia - MÉTODO CORREGIDO', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
+        ]);
+
+        // ✅ PASO 1: Buscar paciente por UUID
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
         
         if (!$paciente) {
+            Log::warning('⚠️ Paciente no encontrado para última historia', [
+                'paciente_uuid' => $pacienteUuid
+            ]);
             return null;
         }
 
-        $historia = \App\Models\HistoriaClinica::with([
+        // ✅ PASO 2: Buscar citas del paciente
+        $citasDelPaciente = \App\Models\Cita::where('paciente_id', $paciente->id)->get();
+
+        if ($citasDelPaciente->isEmpty()) {
+            Log::info('ℹ️ Paciente no tiene citas para historia', [
+                'paciente_id' => $paciente->id
+            ]);
+            return null;
+        }
+
+        // ✅ PASO 3: Buscar la última historia clínica
+        $citasIds = $citasDelPaciente->pluck('id')->toArray();
+        
+        $ultimaHistoria = \App\Models\HistoriaClinica::with([
             'sede',
             'cita.paciente',
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento'
         ])
-        ->whereHas('cita', function($query) use ($paciente) {
-            $query->where('paciente_id', $paciente->id);
-        })
+        ->whereIn('cita_id', $citasIds)
         ->orderBy('created_at', 'desc')
         ->first();
 
-        return $historia ? $historia->toArray() : null;
+        if ($ultimaHistoria) {
+            Log::info('✅ Última historia encontrada', [
+                'paciente_id' => $paciente->id,
+                'historia_id' => $ultimaHistoria->id,
+                'historia_uuid' => $ultimaHistoria->uuid,
+                'fecha_creacion' => $ultimaHistoria->created_at
+            ]);
+
+            return $ultimaHistoria->toArray();
+        }
+
+        Log::info('ℹ️ No se encontró historia previa', [
+            'paciente_id' => $paciente->id,
+            'total_citas' => $citasDelPaciente->count()
+        ]);
+
+        return null;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error obteniendo última historia por especialidad', [
+        Log::error('❌ Error obteniendo última historia - MÉTODO CORREGIDO', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
-            'especialidad' => $especialidad
+            'especialidad' => $especialidad,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
         ]);
         
         return null;
@@ -1544,15 +1597,16 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
     ];
 }
 /**
- * ✅ MÉTODO DE DEBUG - VERIFICAR DATOS DEL PACIENTE
+ * ✅ MÉTODO DE DEBUG - VERIFICAR DATOS DEL PACIENTE - CORREGIDO
  */
 public function debugPacienteHistorias(Request $request, string $pacienteUuid)
 {
     try {
-        Log::info('🔍 DEBUG: Iniciando verificación de paciente', [
+        Log::info('🔍 DEBUG: Iniciando verificación de paciente - MÉTODO CORREGIDO', [
             'paciente_uuid' => $pacienteUuid
         ]);
 
+        // ✅ PASO 1: Buscar paciente por UUID
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
         
         if (!$paciente) {
@@ -1568,34 +1622,38 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
             'paciente_nombre' => $paciente->nombre_completo
         ]);
 
-        // Obtener todas las citas del paciente
+        // ✅ PASO 2: Buscar citas del paciente (por ID)
         $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
             ->with(['agenda.usuarioMedico.especialidad'])
             ->get();
 
         Log::info('🔍 Citas encontradas', [
+            'paciente_id' => $paciente->id,
             'total_citas' => $citas->count()
         ]);
 
-        // Obtener todas las historias del paciente
-        $historias = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
-            $query->where('paciente_id', $paciente->id);
-        })
-        ->with(['cita.agenda.usuarioMedico.especialidad'])
-        ->get();
+        // ✅ PASO 3: Buscar historias de esas citas
+        $citasIds = $citas->pluck('id')->toArray();
+        
+        $historias = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)
+            ->with(['cita'])
+            ->get();
 
         Log::info('🔍 Historias encontradas', [
+            'paciente_id' => $paciente->id,
+            'citas_ids' => $citasIds,
             'total_historias' => $historias->count()
         ]);
 
-        // Verificar directamente en base de datos
+        // ✅ PASO 4: Verificar directamente en base de datos
         $historiasDirectas = \DB::table('historias_clinicas as hc')
             ->join('citas as c', 'hc.cita_id', '=', 'c.id')
             ->where('c.paciente_id', $paciente->id)
-            ->select('hc.id', 'hc.uuid', 'hc.created_at', 'c.paciente_id')
+            ->select('hc.id', 'hc.uuid', 'hc.created_at', 'c.paciente_id', 'hc.cita_id')
             ->get();
 
         Log::info('🔍 Historias directas desde DB', [
+            'paciente_id' => $paciente->id,
             'total_historias_directas' => $historiasDirectas->count()
         ]);
 
@@ -1617,13 +1675,14 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
                 'debug_info' => [
                     'deberia_ser_control' => $historias->count() > 0,
                     'tipo_consulta_esperado' => $historias->count() > 0 ? 'CONTROL' : 'PRIMERA VEZ',
-                    'metodo_usado' => 'whereHas con cita.paciente_id'
+                    'metodo_usado' => 'whereIn con citas_ids del paciente',
+                    'flujo_correcto' => 'Paciente UUID → Paciente ID → Citas IDs → Historias'
                 ]
             ]
         ]);
 
     } catch (\Exception $e) {
-        Log::error('❌ Error en debug de paciente', [
+        Log::error('❌ Error en debug de paciente - MÉTODO CORREGIDO', [
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
             'file' => basename($e->getFile())
@@ -1637,5 +1696,4 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
         ], 500);
     }
 }
-
 }
