@@ -24,6 +24,7 @@ class Cita extends Model
         'nota',
         'estado',
         'patologia',
+        'paciente_id', 
         'paciente_uuid',     
         'agenda_uuid',         
         'cups_contratado_uuid', 
@@ -72,6 +73,27 @@ class Cita extends Model
     public function usuarioCreador(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'usuario_creo_cita_id');
+    }
+      public function pacientePorId(): BelongsTo
+    {
+        return $this->belongsTo(Paciente::class, 'paciente_id', 'id');
+    }
+       public function obtenerPaciente()
+    {
+        // Primero intentar por UUID (sistema nuevo)
+        if (!empty($this->paciente_uuid)) {
+            $pacientePorUuid = $this->paciente()->first();
+            if ($pacientePorUuid) {
+                return $pacientePorUuid;
+            }
+        }
+
+        // Si no funciona, intentar por ID (sistema legacy)
+        if (!empty($this->paciente_id)) {
+            return $this->pacientePorId()->first();
+        }
+
+        return null;
     }
 
     // Scopes
