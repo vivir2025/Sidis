@@ -234,6 +234,7 @@ Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
       Route::get('/historias-clinicas/determinar-vista/{citaUuid}', 
         [HistoriaClinicaController::class, 'determinarVistaHistoriaClinica'])
         ->name('api.historias-clinicas.determinar-vista');
+        Route::get('/historias-clinicas/debug/paciente/{paciente}/historias', [HistoriaClinicaController::class, 'debugPacienteHistorias']); // ✅ ESTA LÍNEA
 
     // ================================
     // HISTORIAS CLÍNICAS - VERSIÓN ACTUALIZADA

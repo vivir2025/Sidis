@@ -1543,4 +1543,99 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
         'tipo_consulta' => $tipoConsulta
     ];
 }
+/**
+ * ✅ MÉTODO DE DEBUG - VERIFICAR DATOS DEL PACIENTE
+ */
+public function debugPacienteHistorias(Request $request, string $pacienteUuid)
+{
+    try {
+        Log::info('🔍 DEBUG: Iniciando verificación de paciente', [
+            'paciente_uuid' => $pacienteUuid
+        ]);
+
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paciente no encontrado',
+                'paciente_uuid' => $pacienteUuid
+            ]);
+        }
+
+        Log::info('✅ Paciente encontrado', [
+            'paciente_id' => $paciente->id,
+            'paciente_nombre' => $paciente->nombre_completo
+        ]);
+
+        // Obtener todas las citas del paciente
+        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+            ->with(['agenda.usuarioMedico.especialidad'])
+            ->get();
+
+        Log::info('🔍 Citas encontradas', [
+            'total_citas' => $citas->count()
+        ]);
+
+        // Obtener todas las historias del paciente
+        $historias = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
+            $query->where('paciente_id', $paciente->id);
+        })
+        ->with(['cita.agenda.usuarioMedico.especialidad'])
+        ->get();
+
+        Log::info('🔍 Historias encontradas', [
+            'total_historias' => $historias->count()
+        ]);
+
+        // Verificar directamente en base de datos
+        $historiasDirectas = \DB::table('historias_clinicas as hc')
+            ->join('citas as c', 'hc.cita_id', '=', 'c.id')
+            ->where('c.paciente_id', $paciente->id)
+            ->select('hc.id', 'hc.uuid', 'hc.created_at', 'c.paciente_id')
+            ->get();
+
+        Log::info('🔍 Historias directas desde DB', [
+            'total_historias_directas' => $historiasDirectas->count()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'paciente' => [
+                    'id' => $paciente->id,
+                    'uuid' => $paciente->uuid,
+                    'nombre_completo' => $paciente->nombre_completo,
+                    'documento' => $paciente->documento
+                ],
+                'total_citas' => $citas->count(),
+                'total_historias' => $historias->count(),
+                'total_historias_directas' => $historiasDirectas->count(),
+                'citas' => $citas,
+                'historias' => $historias,
+                'historias_directas' => $historiasDirectas,
+                'debug_info' => [
+                    'deberia_ser_control' => $historias->count() > 0,
+                    'tipo_consulta_esperado' => $historias->count() > 0 ? 'CONTROL' : 'PRIMERA VEZ',
+                    'metodo_usado' => 'whereHas con cita.paciente_id'
+                ]
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error en debug de paciente', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ], 500);
+    }
+}
+
 }
