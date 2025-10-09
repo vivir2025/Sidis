@@ -455,7 +455,7 @@ public function cambiarEstado(Request $request, string $uuid): JsonResponse
 
         // ✅ VALIDAR EL NUEVO ESTADO
         $validatedData = $request->validate([
-            'estado' => 'required|string|in:PROGRAMADA,ATENDIDA,CANCELADA,NO_ASISTIO,REPROGRAMADA'
+            'estado' => 'required|string|in:PROGRAMADA,ATENDIDA,CANCELADA,NO_ASISTIO,REPROGRAMADA,EN_ATENCION'
         ]);
 
         $estadoAnterior = $cita->estado;
