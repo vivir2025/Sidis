@@ -282,7 +282,10 @@ Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
             Route::delete('/{diagnostico}', [HistoriaClinicaController::class, 'eliminarDiagnostico']);
             Route::patch('/{diagnostico}/tipo', [HistoriaClinicaController::class, 'cambiarTipoDiagnostico']);
         });
-        
+           // ✅ NUEVA RUTA PARA DETERMINAR VISTA
+    Route::get('/historias-clinicas/determinar-vista/{citaUuid}', 
+        [HistoriaClinicaController::class, 'determinarVistaHistoriaClinica'])
+        ->name('api.historias-clinicas.determinar-vista');
         // MEDICAMENTOS
         Route::prefix('{historia}/medicamentos')->group(function () {
             Route::get('/', [HistoriaClinicaController::class, 'listarMedicamentos']);

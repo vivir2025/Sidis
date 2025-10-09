@@ -1304,5 +1304,203 @@ public function historiasPaciente($pacienteUuid)
         ], 500);
     }
 }
-   
+   /**
+ * ✅ NUEVO MÉTODO: Determinar qué vista mostrar según especialidad
+ */
+public function determinarVistaHistoriaClinica(Request $request, string $citaUuid)
+{
+    try {
+        Log::info('🔍 API: Determinando vista de historia clínica', [
+            'cita_uuid' => $citaUuid
+        ]);
+
+        // ✅ OBTENER DATOS DE LA CITA
+        $cita = \App\Models\Cita::with([
+            'paciente',
+            'agenda.medico.especialidad'
+        ])->where('uuid', $citaUuid)->first();
+
+        if (!$cita) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cita no encontrada'
+            ], 404);
+        }
+
+        // ✅ OBTENER ESPECIALIDAD DEL MÉDICO
+        $especialidad = $cita->agenda->medico->especialidad->nombre ?? 'MEDICINA GENERAL';
+        
+        Log::info('🔍 Especialidad detectada', [
+            'especialidad' => $especialidad,
+            'medico' => $cita->agenda->medico->nombre_completo ?? 'N/A'
+        ]);
+
+        // ✅ VERIFICAR SI EL PACIENTE TIENE HISTORIAS PREVIAS EN ESTA ESPECIALIDAD
+        $tieneHistoriasAnteriores = $this->verificarHistoriasAnterioresPorEspecialidad(
+            $cita->paciente->uuid, 
+            $especialidad
+        );
+
+        $tipoConsulta = $tieneHistoriasAnteriores ? 'CONTROL' : 'PRIMERA VEZ';
+
+        // ✅ OBTENER HISTORIA PREVIA SI ES CONTROL
+        $historiaPrevia = null;
+        if ($tipoConsulta === 'CONTROL') {
+            $historiaPrevia = $this->obtenerUltimaHistoriaPorEspecialidad(
+                $cita->paciente->uuid, 
+                $especialidad
+            );
+        }
+
+        // ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD
+        $vistaInfo = $this->determinarVistaSegunEspecialidad($especialidad, $tipoConsulta);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cita' => $cita,
+                'especialidad' => $especialidad,
+                'tipo_consulta' => $tipoConsulta,
+                'vista_recomendada' => $vistaInfo,
+                'historia_previa' => $historiaPrevia,
+                'tiene_historias_anteriores' => $tieneHistoriasAnteriores
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error determinando vista de historia clínica', [
+            'error' => $e->getMessage(),
+            'cita_uuid' => $citaUuid
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error determinando vista de historia clínica',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * ✅ VERIFICAR HISTORIAS ANTERIORES POR ESPECIALIDAD
+ */
+private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUuid, string $especialidad): bool
+{
+    try {
+        $count = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($pacienteUuid) {
+            $query->whereHas('paciente', function($q) use ($pacienteUuid) {
+                $q->where('uuid', $pacienteUuid);
+            });
+        })
+        ->whereHas('cita.agenda.medico.especialidad', function($query) use ($especialidad) {
+            $query->where('nombre', $especialidad);
+        })
+        ->count();
+
+        return $count > 0;
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error verificando historias por especialidad', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
+        ]);
+        
+        return false;
+    }
+}
+
+/**
+ * ✅ OBTENER ÚLTIMA HISTORIA POR ESPECIALIDAD
+ */
+private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
+{
+    try {
+        $historia = \App\Models\HistoriaClinica::with([
+            'sede',
+            'cita.paciente',
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento'
+        ])
+        ->whereHas('cita', function($query) use ($pacienteUuid) {
+            $query->whereHas('paciente', function($q) use ($pacienteUuid) {
+                $q->where('uuid', $pacienteUuid);
+            });
+        })
+        ->whereHas('cita.agenda.medico.especialidad', function($query) use ($especialidad) {
+            $query->where('nombre', $especialidad);
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
+
+        return $historia ? $historia->toArray() : null;
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo última historia por especialidad', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
+        ]);
+        
+        return null;
+    }
+}
+
+/**
+ * ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD
+ */
+private function determinarVistaSegunEspecialidad(string $especialidad, string $tipoConsulta): array
+{
+    $especialidadesConComplementaria = [
+        'CARDIOLOGÍA', 'PEDIATRÍA', 'GINECOLOGÍA', 'NEUROLOGÍA', 
+        'DERMATOLOGÍA', 'ORTOPEDIA', 'PSIQUIATRÍA'
+    ];
+
+    $usaComplementaria = in_array($especialidad, $especialidadesConComplementaria);
+
+    // ✅ MAPEO DE VISTAS
+    $vistas = [
+        'MEDICINA GENERAL' => [
+            'PRIMERA VEZ' => 'medicina-general.primera-vez',
+            'CONTROL' => 'medicina-general.control'
+        ],
+        'CARDIOLOGÍA' => [
+            'PRIMERA VEZ' => 'cardiologia.primera-vez',
+            'CONTROL' => 'cardiologia.control'
+        ],
+        'PEDIATRÍA' => [
+            'PRIMERA VEZ' => 'pediatria.primera-vez',
+            'CONTROL' => 'pediatria.control'
+        ],
+        'GINECOLOGÍA' => [
+            'PRIMERA VEZ' => 'ginecologia.primera-vez',
+            'CONTROL' => 'ginecologia.control'
+        ],
+        'NEUROLOGÍA' => [
+            'PRIMERA VEZ' => 'neurologia.primera-vez',
+            'CONTROL' => 'neurologia.control'
+        ],
+        'DERMATOLOGÍA' => [
+            'PRIMERA VEZ' => 'dermatologia.primera-vez',
+            'CONTROL' => 'dermatologia.control'
+        ],
+        'ORTOPEDIA' => [
+            'PRIMERA VEZ' => 'ortopedia.primera-vez',
+            'CONTROL' => 'ortopedia.control'
+        ],
+        'PSIQUIATRÍA' => [
+            'PRIMERA VEZ' => 'psiquiatria.primera-vez',
+            'CONTROL' => 'psiquiatria.control'
+        ]
+    ];
+
+    $vistaEspecifica = $vistas[$especialidad][$tipoConsulta] ?? $vistas['MEDICINA GENERAL'][$tipoConsulta];
+
+    return [
+        'vista' => $vistaEspecifica,
+        'usa_complementaria' => $usaComplementaria,
+        'especialidad' => $especialidad,
+        'tipo_consulta' => $tipoConsulta
+    ];
+}
 }
