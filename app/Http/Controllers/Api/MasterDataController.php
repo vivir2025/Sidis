@@ -875,4 +875,89 @@ public function procesos(): JsonResponse
             })
         ]);
     }
+    public function all(Request $request): JsonResponse
+    {
+    try {
+        $data = [
+            'departamentos' => $this->getDepartamentosConMunicipios(),
+            'empresas' => $this->getEmpresas(),
+            'regimenes' => $this->getRegimenes(),
+            'tipos_afiliacion' => $this->getTiposAfiliacion(),
+            'zonas_residenciales' => $this->getZonasResidenciales(),
+            'razas' => $this->getRazas(),
+            'escolaridades' => $this->getEscolaridades(),
+            'tipos_parentesco' => $this->getTiposParentesco(),
+            'tipos_documento' => $this->getTiposDocumento(),
+            'ocupaciones' => $this->getOcupaciones(),
+            'novedades' => $this->getNovedades(),
+            'auxiliares' => $this->getAuxiliares(),
+            'brigadas' => $this->getBrigadas(),
+            'procesos' => $this->getProcesos(),
+            'usuarios_con_especialidad' => $this->getUsuariosConEspecialidad(),
+            'sedes' => $this->getSedes(),
+            'roles' => $this->getRoles(), // ✅ AGREGAR ROLES
+            'especialidades' => $this->getEspecialidades(), // ✅ AGREGAR ESPECIALIDADES
+            'estados' => $this->getEstados(), // ✅ AGREGAR ESTADOS
+            
+            // Datos estáticos
+            'estados_civiles' => [
+                'SOLTERO' => 'Soltero(a)',
+                'CASADO' => 'Casado(a)',
+                'UNION_LIBRE' => 'Unión Libre',
+                'DIVORCIADO' => 'Divorciado(a)',
+                'VIUDO' => 'Viudo(a)'
+            ],
+            'sexos' => [
+                'M' => 'Masculino',
+                'F' => 'Femenino'
+            ]
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+            'timestamp' => now()->toISOString()
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo todos los datos maestros', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Error obteniendo datos maestros'
+        ], 500);
+    }
+}
+private function getRoles(): array
+{
+    return \App\Models\Rol::select('id', 'uuid', 'nombre')
+        ->orderBy('nombre')
+        ->get()
+        ->toArray();
+}
+private function getEspecialidades(): array
+{
+    return \App\Models\Especialidad::select('id', 'uuid', 'nombre')
+        ->orderBy('nombre')
+        ->get()
+        ->toArray();
+}
+
+private function getEstados(): array
+{
+    return \App\Models\Estado::select('id', 'uuid', 'nombre')
+        ->orderBy('nombre')
+        ->get()
+        ->toArray();
+}
+
+private function getSedes(): array
+{
+    return \App\Models\Sede::select('id', 'uuid', 'nombre', 'direccion', 'telefono')
+        ->orderBy('nombre')
+        ->get()
+        ->toArray();
+}
 }
