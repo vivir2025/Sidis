@@ -103,7 +103,17 @@ class Agenda extends Model
     }
 
    
-
+public function especialidad()
+{
+    return $this->hasOneThrough(
+        Especialidad::class,
+        Usuario::class,
+        'id', // Foreign key on usuarios table
+        'id', // Foreign key on especialidades table
+        'usuario_medico_id', // Local key on agendas table
+        'especialidad_id' // Local key on usuarios table
+    );
+}
     public function getEstaLlenaAttribute()
     {
         return $this->cupos_disponibles <= 0;

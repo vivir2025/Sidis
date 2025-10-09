@@ -1315,10 +1315,10 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'cita_uuid' => $citaUuid
         ]);
 
-        // ✅ OBTENER DATOS DE LA CITA
+        // ✅ OBTENER DATOS DE LA CITA CON RELACIONES CORRECTAS
         $cita = \App\Models\Cita::with([
             'paciente',
-            'agenda.medico.especialidad'
+            'agenda.usuarioMedico.especialidad' // ✅ USAR usuarioMedico
         ])->where('uuid', $citaUuid)->first();
 
         if (!$cita) {
@@ -1328,12 +1328,12 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             ], 404);
         }
 
-        // ✅ OBTENER ESPECIALIDAD DEL MÉDICO
-        $especialidad = $cita->agenda->medico->especialidad->nombre ?? 'MEDICINA GENERAL';
+        // ✅ OBTENER ESPECIALIDAD DEL MÉDICO - CORREGIDO
+        $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? 'MEDICINA GENERAL';
         
         Log::info('🔍 Especialidad detectada', [
             'especialidad' => $especialidad,
-            'medico' => $cita->agenda->medico->nombre_completo ?? 'N/A'
+            'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
         ]);
 
         // ✅ VERIFICAR SI EL PACIENTE TIENE HISTORIAS PREVIAS EN ESTA ESPECIALIDAD
@@ -1371,7 +1371,9 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
     } catch (\Exception $e) {
         Log::error('❌ Error determinando vista de historia clínica', [
             'error' => $e->getMessage(),
-            'cita_uuid' => $citaUuid
+            'cita_uuid' => $citaUuid,
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
         ]);
 
         return response()->json([
