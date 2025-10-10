@@ -95,8 +95,8 @@ public function store(Request $request)
         'sede_id' => 'required|integer',
         'cita_uuid' => 'required|string',
         'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
-        'motivo_consulta' => 'required|string',
-        'enfermedad_actual' => 'required|string',
+        'motivo_consulta' => 'nullable|string',
+        'enfermedad_actual' => 'nullable|string',
         'idDiagnostico' => 'nullable|string',
         'diagnosticos' => 'nullable|array',
         'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
@@ -138,8 +138,8 @@ public function store(Request $request)
             'acu_telefono' => $request->acu_telefono,
             'acu_parentesco' => $request->acu_parentesco,
             'causa_externa' => $request->causa_externa,
-            'motivo_consulta' => $request->motivo_consulta,
-            'enfermedad_actual' => $request->enfermedad_actual,
+            'motivo_consulta' => $request->motivo_consulta?? '',
+            'enfermedad_actual' => $request->enfermedad_actual?? '',
             'discapacidad_fisica' => $request->discapacidad_fisica ?? 'NO',
             'discapacidad_visual' => $request->discapacidad_visual ?? 'NO',
             'discapacidad_mental' => $request->discapacidad_mental ?? 'NO',
@@ -533,8 +533,8 @@ private function getCitaIdFromUuid($citaUuid)
     public function update(Request $request, $uuid)
     {
         $request->validate([
-            'motivo_consulta' => 'required|string',
-            'enfermedad_actual' => 'required|string'
+            'motivo_consulta' => 'nullable|string',
+            'enfermedad_actual' => 'nullable|string'
         ]);
 
         DB::beginTransaction();
