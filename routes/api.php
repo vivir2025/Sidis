@@ -90,21 +90,27 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     });
 
     Route::prefix('usuarios')->group(function () {
-        Route::get('/', [UsuarioController::class, 'index']);
-        Route::post('/', [UsuarioController::class, 'store']);
+        // ✅ Rutas especiales PRIMERO (antes de las rutas con parámetros)
+        Route::get('/all', [UsuarioController::class, 'getAllForSync']);
         Route::get('/medicos', [UsuarioController::class, 'index'])->defaults('solo_medicos', true);
         Route::get('/activos', [UsuarioController::class, 'index'])->defaults('solo_activos', true);
         
+        // ✅ Rutas CRUD básicas
+        Route::get('/', [UsuarioController::class, 'index']);
+        Route::post('/', [UsuarioController::class, 'store']);
+        
+        // ✅ Rutas con parámetros UUID AL FINAL
         Route::get('/{uuid}', [UsuarioController::class, 'show']);
         Route::put('/{uuid}', [UsuarioController::class, 'update']);
         Route::delete('/{uuid}', [UsuarioController::class, 'destroy']);
         Route::patch('/{uuid}/estado', [UsuarioController::class, 'cambiarEstado']);
         
-        // ✅ RUTAS PARA FIRMA DE MÉDICO
+        // ✅ Rutas para firma de médico
         Route::post('/{uuid}/firma', [UsuarioController::class, 'subirFirma']);
         Route::get('/{uuid}/firma', [UsuarioController::class, 'obtenerFirma']);
         Route::delete('/{uuid}/firma', [UsuarioController::class, 'eliminarFirma']);
     });
+
 
     // ================================
     // CITAS
