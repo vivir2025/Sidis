@@ -1703,4 +1703,190 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
         ], 500);
     }
 }
+
+/**
+ * ✅ OBTENER ÚLTIMA HISTORIA PARA MEDICINA GENERAL
+ */
+public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $pacienteUuid)
+{
+    try {
+        Log::info('🔍 Obteniendo última historia para Medicina General', [
+            'paciente_uuid' => $pacienteUuid
+        ]);
+
+        // ✅ BUSCAR PACIENTE POR UUID
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paciente no encontrado'
+            ], 404);
+        }
+
+        // ✅ BUSCAR CITAS DEL PACIENTE
+        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+            ->where('estado', '!=', 'CANCELADA')
+            ->get();
+
+        if ($citas->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay historias previas - Primera vez'
+            ]);
+        }
+
+        // ✅ BUSCAR ÚLTIMA HISTORIA CLÍNICA
+        $citasIds = $citas->pluck('id')->toArray();
+        
+        $ultimaHistoria = \App\Models\HistoriaClinica::with([
+            'sede',
+            'cita.paciente',
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ])
+        ->whereIn('cita_id', $citasIds)
+        ->orderBy('created_at', 'desc')
+        ->first();
+
+        if (!$ultimaHistoria) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay historias previas - Primera vez'
+            ]);
+        }
+
+        // ✅ PROCESAR DATOS PARA EL FRONTEND
+        $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
+
+        Log::info('✅ Historia previa procesada para Medicina General', [
+            'paciente_uuid' => $pacienteUuid,
+            'historia_uuid' => $ultimaHistoria->uuid,
+            'medicamentos_count' => count($historiaPrevia['medicamentos']),
+            'remisiones_count' => count($historiaPrevia['remisiones']),
+            'diagnosticos_count' => count($historiaPrevia['diagnosticos']),
+            'cups_count' => count($historiaPrevia['cups'])
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $historiaPrevia,
+            'message' => 'Historia previa encontrada - Control'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo última historia para Medicina General', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error obteniendo historia previa',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * ✅ PROCESAR HISTORIA PARA EL FRONTEND
+ */
+private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
+{
+    return [
+        // ✅ MEDICAMENTOS
+        'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
+            return [
+                'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
+                'nombre' => $item->medicamento->nombre,
+                'cantidad' => $item->cantidad,
+                'dosis' => $item->dosis,
+                'medicamento' => [
+                    'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
+                    'nombre' => $item->medicamento->nombre,
+                    'principio_activo' => $item->medicamento->principio_activo ?? ''
+                ]
+            ];
+        })->toArray(),
+
+        // ✅ REMISIONES
+        'remisiones' => $historia->historiaRemisiones->map(function($item) {
+            return [
+                'remision_id' => $item->remision->uuid ?? $item->remision->id,
+                'nombre' => $item->remision->nombre,
+                'observacion' => $item->observacion,
+                'remision' => [
+                    'uuid' => $item->remision->uuid ?? $item->remision->id,
+                    'nombre' => $item->remision->nombre,
+                    'tipo' => $item->remision->tipo ?? ''
+                ]
+            ];
+        })->toArray(),
+
+        // ✅ DIAGNÓSTICOS
+        'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
+            return [
+                'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                'codigo' => $item->diagnostico->codigo,
+                'nombre' => $item->diagnostico->nombre,
+                'tipo' => $item->tipo,
+                'tipo_diagnostico' => $item->tipo_diagnostico,
+                'diagnostico' => [
+                    'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                    'codigo' => $item->diagnostico->codigo,
+                    'nombre' => $item->diagnostico->nombre
+                ]
+            ];
+        })->toArray(),
+
+        // ✅ CUPS
+        'cups' => $historia->historiaCups->map(function($item) {
+            return [
+                'cups_id' => $item->cups->uuid ?? $item->cups->id,
+                'codigo' => $item->cups->codigo,
+                'nombre' => $item->cups->nombre,
+                'observacion' => $item->observacion,
+                'cups' => [
+                    'uuid' => $item->cups->uuid ?? $item->cups->id,
+                    'codigo' => $item->cups->codigo,
+                    'nombre' => $item->cups->nombre
+                ]
+            ];
+        })->toArray(),
+
+        // ✅ CLASIFICACIONES
+        'ClasificacionEstadoMetabolico' => $historia->clasificacion_estado_metabolico,
+        'clasificacion_hta' => $historia->clasificacion_hta,
+        'clasificacion_dm' => $historia->clasificacion_dm,
+        'clasificacion_rcv' => $historia->clasificacion_rcv,
+        'clasificacion_erc_estado' => $historia->clasificacion_erc_estado,
+        'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente,
+        'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
+        'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
+
+        // ✅ ANTECEDENTES PERSONALES
+        'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
+        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
+        'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
+        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
+
+        // ✅ TALLA (mantener la anterior)
+        'talla' => $historia->talla,
+
+        // ✅ EXÁMENES
+        'fex_es' => $historia->fex_es,
+        'electrocardiograma' => $historia->electrocardiograma,
+        'fex_es1' => $historia->fex_es1,
+        'ecocardiograma' => $historia->ecocardiograma,
+        'fex_es2' => $historia->fex_es2,
+        'ecografia_renal' => $historia->ecografia_renal,
+    ];
+}
+
 }

@@ -87,7 +87,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         // Rutas relacionadas
         Route::get('/{uuid}/historias', [HistoriaClinicaController::class, 'historiasPaciente']);
         Route::get('/{uuid}/citas', [CitaController::class, 'citasPaciente']);
+        Route::get('/{pacienteUuid}/ultima-historia-medicina-general', [HistoriaClinicaController::class, 'obtenerUltimaHistoriaMedicinaGeneral']);
     });
+
 
     Route::prefix('usuarios')->group(function () {
         // ✅ Rutas especiales PRIMERO (antes de las rutas con parámetros)
