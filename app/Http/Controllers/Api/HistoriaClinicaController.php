@@ -1882,5 +1882,142 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
         'adherente' => $historia->adherente,
     ];
 }
+/**
+ * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO
+ */
+private function formatearHistoriaDesdeAPI(array $historiaAPI): array
+{
+    try {
+        Log::info('🔧 Formateando historia desde API', [
+            'keys_disponibles' => array_keys($historiaAPI),
+            'tiene_medicamentos' => !empty($historiaAPI['medicamentos']),
+            'tiene_diagnosticos' => !empty($historiaAPI['diagnosticos'])
+        ]);
+
+        $historiaFormateada = [
+            // ✅ TEST DE MORISKY
+            'test_morisky_olvida_tomar_medicamentos' => $historiaAPI['olvida_tomar_medicamentos'] ?? 'NO',
+            'test_morisky_toma_medicamentos_hora_indicada' => $historiaAPI['toma_medicamentos_hora_indicada'] ?? 'NO',
+            'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historiaAPI['cuando_esta_bien_deja_tomar_medicamentos'] ?? 'NO',
+            'test_morisky_siente_mal_deja_tomarlos' => $historiaAPI['siente_mal_deja_tomarlos'] ?? 'NO',
+            'test_morisky_valoracio_psicologia' => $historiaAPI['valoracion_psicologia'] ?? 'NO',
+            'adherente' => $historiaAPI['adherente'] ?? 'NO',
+
+            // ✅ ANTECEDENTES PERSONALES
+            'hipertension_arterial_personal' => $historiaAPI['hipertension_arterial_personal'] ?? 'NO',
+            'obs_hipertension_arterial_personal' => $historiaAPI['obs_personal_hipertension_arterial'] ?? '',
+            'diabetes_mellitus_personal' => $historiaAPI['diabetes_mellitus_personal'] ?? 'NO',
+            'obs_diabetes_mellitus_personal' => $historiaAPI['obs_personal_mellitus'] ?? '',
+
+            // ✅ CLASIFICACIONES
+            'clasificacion_estado_metabolico' => $historiaAPI['clasificacion_estado_metabolico'] ?? '',
+            'clasificacion_hta' => $historiaAPI['clasificacion_hta'] ?? '',
+            'clasificacion_dm' => $historiaAPI['clasificacion_dm'] ?? '',
+            'clasificacion_rcv' => $historiaAPI['clasificacion_rcv'] ?? '',
+            'clasificacion_erc_estado' => $historiaAPI['clasificacion_erc_estado'] ?? '',
+            'clasificacion_erc_categoria_ambulatoria_persistente' => $historiaAPI['clasificacion_erc_categoria_ambulatoria_persistente'] ?? '',
+
+            // ✅ TASAS DE FILTRACIÓN
+            'tasa_filtracion_glomerular_ckd_epi' => $historiaAPI['tasa_filtracion_glomerular_ckd_epi'] ?? '',
+            'tasa_filtracion_glomerular_gockcroft_gault' => $historiaAPI['tasa_filtracion_glomerular_gockcroft_gault'] ?? '',
+
+            // ✅ TALLA
+            'talla' => $historiaAPI['talla'] ?? '',
+
+            // ✅ MEDICAMENTOS
+            'medicamentos' => $this->formatearMedicamentosDesdeAPI($historiaAPI['medicamentos'] ?? []),
+
+            // ✅ REMISIONES
+            'remisiones' => $this->formatearRemisionesDesdeAPI($historiaAPI['remisiones'] ?? []),
+
+            // ✅ DIAGNÓSTICOS
+            'diagnosticos' => $this->formatearDiagnosticosDesdeAPI($historiaAPI['diagnosticos'] ?? []),
+
+            // ✅ CUPS
+            'cups' => $this->formatearCupsDesdeAPI($historiaAPI['cups'] ?? []),
+        ];
+
+        Log::info('✅ Historia formateada desde API', [
+            'campos_totales' => count($historiaFormateada),
+            'medicamentos_count' => count($historiaFormateada['medicamentos']),
+            'diagnosticos_count' => count($historiaFormateada['diagnosticos']),
+            'remisiones_count' => count($historiaFormateada['remisiones']),
+            'cups_count' => count($historiaFormateada['cups'])
+        ]);
+
+        return $historiaFormateada;
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error formateando historia desde API', [
+            'error' => $e->getMessage()
+        ]);
+        
+        return [];
+    }
+}
+
+// ✅ MÉTODOS AUXILIARES DE FORMATEO
+private function formatearMedicamentosDesdeAPI(array $medicamentos): array
+{
+    return array_map(function($medicamento) {
+        return [
+            'medicamento_id' => $medicamento['medicamento_id'] ?? $medicamento['medicamento']['uuid'] ?? $medicamento['medicamento']['id'],
+            'cantidad' => $medicamento['cantidad'] ?? '',
+            'dosis' => $medicamento['dosis'] ?? '',
+            'medicamento' => [
+                'uuid' => $medicamento['medicamento']['uuid'] ?? $medicamento['medicamento']['id'],
+                'nombre' => $medicamento['medicamento']['nombre'] ?? '',
+                'principio_activo' => $medicamento['medicamento']['principio_activo'] ?? ''
+            ]
+        ];
+    }, $medicamentos);
+}
+
+private function formatearRemisionesDesdeAPI(array $remisiones): array
+{
+    return array_map(function($remision) {
+        return [
+            'remision_id' => $remision['remision_id'] ?? $remision['remision']['uuid'] ?? $remision['remision']['id'],
+            'observacion' => $remision['observacion'] ?? '',
+            'remision' => [
+                'uuid' => $remision['remision']['uuid'] ?? $remision['remision']['id'],
+                'nombre' => $remision['remision']['nombre'] ?? '',
+                'tipo' => $remision['remision']['tipo'] ?? ''
+            ]
+        ];
+    }, $remisiones);
+}
+
+private function formatearDiagnosticosDesdeAPI(array $diagnosticos): array
+{
+    return array_map(function($diagnostico) {
+        return [
+            'diagnostico_id' => $diagnostico['diagnostico_id'] ?? $diagnostico['diagnostico']['uuid'] ?? $diagnostico['diagnostico']['id'],
+            'tipo' => $diagnostico['tipo'] ?? 'PRINCIPAL',
+            'tipo_diagnostico' => $diagnostico['tipo_diagnostico'] ?? '',
+            'diagnostico' => [
+                'uuid' => $diagnostico['diagnostico']['uuid'] ?? $diagnostico['diagnostico']['id'],
+                'codigo' => $diagnostico['diagnostico']['codigo'] ?? '',
+                'nombre' => $diagnostico['diagnostico']['nombre'] ?? ''
+            ]
+        ];
+    }, $diagnosticos);
+}
+
+private function formatearCupsDesdeAPI(array $cups): array
+{
+    return array_map(function($cup) {
+        return [
+            'cups_id' => $cup['cups_id'] ?? $cup['cups']['uuid'] ?? $cup['cups']['id'],
+            'observacion' => $cup['observacion'] ?? '',
+            'cups' => [
+                'uuid' => $cup['cups']['uuid'] ?? $cup['cups']['id'],
+                'codigo' => $cup['cups']['codigo'] ?? '',
+                'nombre' => $cup['cups']['nombre'] ?? ''
+            ]
+        ];
+    }, $cups);
+}
+
 
 }
