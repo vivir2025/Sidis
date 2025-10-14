@@ -1852,8 +1852,8 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             ];
         })->toArray(),
 
-        // ✅ CLASIFICACIONES - NOMBRES CORREGIDOS
-        'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico, // ✅ CORREGIDO
+        // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
+        'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
         'clasificacion_hta' => $historia->clasificacion_hta,
         'clasificacion_dm' => $historia->clasificacion_dm,
         'clasificacion_rcv' => $historia->clasificacion_rcv,
@@ -1864,17 +1864,16 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
         'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
         'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
 
-        // ✅ ANTECEDENTES PERSONALES - NOMBRES CORREGIDOS
+        // ✅ ANTECEDENTES PERSONALES - NOMBRES CORRECTOS SEGÚN TU MODELO
         'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
-        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial, // ✅ CORREGIDO
+        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
         'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
-        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus, // ✅ CORREGIDO
+        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
 
         // ✅ TALLA
         'talla' => $historia->talla,
 
-
-        // ✅ TEST DE MORISKY - AGREGAR ESTOS CAMPOS
+        // ✅ TEST DE MORISKY - NOMBRES CORRECTOS SEGÚN TU MODELO
         'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
         'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
         'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
