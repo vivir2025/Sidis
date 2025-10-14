@@ -1794,17 +1794,14 @@ public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $p
     }
 }
 
-/**
- * ✅ PROCESAR HISTORIA PARA EL FRONTEND
- */
+// ✅ EN TU API CONTROLLER - MÉTODO CORREGIDO
 private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
 {
     return [
-        // ✅ MEDICAMENTOS
+        // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
         'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
             return [
                 'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
-                'nombre' => $item->medicamento->nombre,
                 'cantidad' => $item->cantidad,
                 'dosis' => $item->dosis,
                 'medicamento' => [
@@ -1815,11 +1812,10 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             ];
         })->toArray(),
 
-        // ✅ REMISIONES
+        // ✅ REMISIONES - ESTRUCTURA CORREGIDA
         'remisiones' => $historia->historiaRemisiones->map(function($item) {
             return [
                 'remision_id' => $item->remision->uuid ?? $item->remision->id,
-                'nombre' => $item->remision->nombre,
                 'observacion' => $item->observacion,
                 'remision' => [
                     'uuid' => $item->remision->uuid ?? $item->remision->id,
@@ -1829,12 +1825,10 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             ];
         })->toArray(),
 
-        // ✅ DIAGNÓSTICOS
+        // ✅ DIAGNÓSTICOS - ESTRUCTURA CORREGIDA
         'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
             return [
                 'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                'codigo' => $item->diagnostico->codigo,
-                'nombre' => $item->diagnostico->nombre,
                 'tipo' => $item->tipo,
                 'tipo_diagnostico' => $item->tipo_diagnostico,
                 'diagnostico' => [
@@ -1845,12 +1839,10 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             ];
         })->toArray(),
 
-        // ✅ CUPS
+        // ✅ CUPS - ESTRUCTURA CORREGIDA
         'cups' => $historia->historiaCups->map(function($item) {
             return [
                 'cups_id' => $item->cups->uuid ?? $item->cups->id,
-                'codigo' => $item->cups->codigo,
-                'nombre' => $item->cups->nombre,
                 'observacion' => $item->observacion,
                 'cups' => [
                     'uuid' => $item->cups->uuid ?? $item->cups->id,
@@ -1860,32 +1852,35 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             ];
         })->toArray(),
 
-        // ✅ CLASIFICACIONES
-        'ClasificacionEstadoMetabolico' => $historia->clasificacion_estado_metabolico,
+        // ✅ CLASIFICACIONES - NOMBRES CORREGIDOS
+        'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico, // ✅ CORREGIDO
         'clasificacion_hta' => $historia->clasificacion_hta,
         'clasificacion_dm' => $historia->clasificacion_dm,
         'clasificacion_rcv' => $historia->clasificacion_rcv,
         'clasificacion_erc_estado' => $historia->clasificacion_erc_estado,
         'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente,
+
+        // ✅ TASAS DE FILTRACIÓN
         'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
         'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
 
-        // ✅ ANTECEDENTES PERSONALES
+        // ✅ ANTECEDENTES PERSONALES - NOMBRES CORREGIDOS
         'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
-        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
+        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial, // ✅ CORREGIDO
         'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
-        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
+        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus, // ✅ CORREGIDO
 
-        // ✅ TALLA (mantener la anterior)
+        // ✅ TALLA
         'talla' => $historia->talla,
 
-        // ✅ EXÁMENES
-        'fex_es' => $historia->fex_es,
-        'electrocardiograma' => $historia->electrocardiograma,
-        'fex_es1' => $historia->fex_es1,
-        'ecocardiograma' => $historia->ecocardiograma,
-        'fex_es2' => $historia->fex_es2,
-        'ecografia_renal' => $historia->ecografia_renal,
+
+        // ✅ TEST DE MORISKY - AGREGAR ESTOS CAMPOS
+        'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
+        'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
+        'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
+        'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos,
+        'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
+        'adherente' => $historia->adherente,
     ];
 }
 
