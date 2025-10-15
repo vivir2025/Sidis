@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\{HasUuidTrait, SyncableTrait};
 
@@ -13,11 +12,9 @@ class HistoriaClinica extends Model
 {
     use SoftDeletes, HasUuidTrait, SyncableTrait;
 
-    // ✅ AGREGAR ESTA LÍNEA PARA ESPECIFICAR LA TABLA CORRECTA
     protected $table = 'historias_clinicas';
 
     protected $fillable = [
-        // ✅ CORREGIR LOS CAMPOS SEGÚN TU MIGRACIÓN
         'uuid', 'sede_id', 'cita_id', 'finalidad', 'acompanante', 'acu_telefono',
         'acu_parentesco', 'causa_externa', 'motivo_consulta', 'enfermedad_actual',
         'discapacidad_fisica', 'discapacidad_visual', 'discapacidad_mental',
@@ -25,7 +22,7 @@ class HistoriaClinica extends Model
         'drogo_dependiente_cual', 'peso', 'talla', 'imc', 'clasificacion',
         'tasa_filtracion_glomerular_ckd_epi', 'tasa_filtracion_glomerular_gockcroft_gault',
         
-        // ✅ AGREGAR TODOS LOS CAMPOS DE TU MIGRACIÓN
+        // Antecedentes familiares
         'hipertension_arterial', 'parentesco_hipertension', 'diabetes_mellitus', 
         'parentesco_mellitus', 'artritis', 'parentesco_artritis',
         'enfermedad_cardiovascular', 'parentesco_cardiovascular',
@@ -115,7 +112,6 @@ class HistoriaClinica extends Model
         'clasificacion_estado_metabolico', 'fex_es', 'fex_es1', 'fex_es2'
     ];
 
-    // ✅ AGREGAR CAMPOS FALTANTES SEGÚN TU MIGRACIÓN
     protected $casts = [
         'peso' => 'decimal:2',
         'talla' => 'decimal:2',
@@ -131,7 +127,7 @@ class HistoriaClinica extends Model
         'numero_frutas_diarias' => 'integer',
     ];
 
-    // Relaciones
+    // ✅ RELACIONES PRINCIPALES
     public function sede(): BelongsTo
     {
         return $this->belongsTo(Sede::class);
@@ -142,38 +138,48 @@ class HistoriaClinica extends Model
         return $this->belongsTo(Cita::class);
     }
 
-    // ✅ AGREGAR RELACIÓN CON PACIENTE A TRAVÉS DE CITA
     public function paciente()
     {
         return $this->hasOneThrough(
             Paciente::class,
             Cita::class,
-            'id', // Foreign key on citas table
-            'id', // Foreign key on pacientes table  
-            'cita_id', // Local key on historias_clinicas table
-            'paciente_id' // Local key on citas table
+            'id', 
+            'id', 
+            'cita_id', 
+            'paciente_id'
         );
     }
 
-    // ✅ RELACIONES CON TABLAS RELACIONADAS
-    public function diagnosticos(): HasMany
+    // ✅ SOLO ESTAS RELACIONES (REMOVER LAS DUPLICADAS)
+    public function historiaDiagnosticos(): HasMany
     {
         return $this->hasMany(HistoriaDiagnostico::class);
     }
 
-    public function medicamentos(): HasMany
+    public function historiaMedicamentos(): HasMany
     {
         return $this->hasMany(HistoriaMedicamento::class);
     }
 
-    public function cups(): HasMany
+    public function historiaRemisiones(): HasMany
+    {
+        return $this->hasMany(HistoriaRemision::class);
+    }
+
+    public function historiaCups(): HasMany
     {
         return $this->hasMany(HistoriaCups::class);
     }
 
-    public function remisiones(): HasMany
+    // ✅ RELACIONES ADICIONALES
+    public function incapacidades(): HasMany
     {
-        return $this->hasMany(HistoriaRemision::class);
+        return $this->hasMany(Incapacidad::class);
+    }
+
+    public function examenesPdf(): HasMany
+    {
+        return $this->hasMany(ExamenPdf::class);
     }
 
     // Scopes
@@ -181,24 +187,4 @@ class HistoriaClinica extends Model
     {
         return $query->where('sede_id', $sedeId);
     }
-
-    public function historiaDiagnosticos()
-{
-    return $this->hasMany(HistoriaDiagnostico::class);
-}
-
-public function historiaMedicamentos()
-{
-    return $this->hasMany(HistoriaMedicamento::class);
-}
-
-public function historiaRemisiones()
-{
-    return $this->hasMany(HistoriaRemision::class);
-}
-
-public function historiaCups()
-{
-    return $this->hasMany(HistoriaCups::class);
-}
 }
