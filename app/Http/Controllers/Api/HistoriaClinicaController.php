@@ -1145,9 +1145,10 @@ private function getCitaIdFromUuid($citaUuid)
                 'historiaMedicamentos.medicamento',    // ✅ CORREGIDO
                 'incapacidades.diagnostico'
             ])
-            ->whereHas('cita', function($query) use ($pacienteId) {
-                $query->where('paciente_id', $pacienteId);
-            })
+           // ✅ POR ESTO:
+->whereHas('cita', function($query) use ($paciente) {
+    $query->where('paciente_uuid', $paciente->uuid);
+})
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -1275,9 +1276,9 @@ private function getCitaIdFromUuid($citaUuid)
                 ], 404);
             }
 
-            // Obtener historias del paciente
+           // ✅ POR ESTO:
             $historias = HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
-                $query->where('paciente_id', $paciente->id);
+                $query->where('paciente_uuid', $paciente->uuid);
             })
             ->with([
                 'sede',
@@ -1487,7 +1488,7 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         }
 
         // ✅ PASO 2: Buscar citas del paciente
-        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+        $citas = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
             ->where('estado', '!=', 'CANCELADA')
             ->get();
 
@@ -1655,7 +1656,7 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
         ]);
 
         // ✅ PASO 2: Buscar citas del paciente (por ID)
-        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+        $citas = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
             ->with(['agenda.usuarioMedico.especialidad'])
             ->get();
 
@@ -1750,7 +1751,7 @@ public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $p
         }
 
         // ✅ BUSCAR CITAS DEL PACIENTE
-        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+        $citas = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
             ->where('estado', '!=', 'CANCELADA')
             ->get();
 
