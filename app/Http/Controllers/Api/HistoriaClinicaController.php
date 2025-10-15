@@ -1302,8 +1302,8 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
-   /**
- * ✅ NUEVO MÉTODO: Determinar qué vista mostrar según especialidad
+ /**
+ * ✅ DETERMINAR VISTA - VERSIÓN CORREGIDA COMPLETA
  */
 public function determinarVistaHistoriaClinica(Request $request, string $citaUuid)
 {
@@ -1312,10 +1312,10 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'cita_uuid' => $citaUuid
         ]);
 
-        // ✅ OBTENER DATOS DE LA CITA CON RELACIONES CORRECTAS
+        // ✅ OBTENER DATOS DE LA CITA
         $cita = \App\Models\Cita::with([
             'paciente',
-            'agenda.usuarioMedico.especialidad' // ✅ USAR usuarioMedico
+            'agenda.usuarioMedico.especialidad'
         ])->where('uuid', $citaUuid)->first();
 
         if (!$cita) {
@@ -1325,7 +1325,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             ], 404);
         }
 
-        // ✅ OBTENER ESPECIALIDAD DEL MÉDICO - CORREGIDO
+        // ✅ OBTENER ESPECIALIDAD
         $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? 'MEDICINA GENERAL';
         
         Log::info('🔍 Especialidad detectada', [
@@ -1333,7 +1333,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
         ]);
 
-        // ✅ VERIFICAR SI EL PACIENTE TIENE HISTORIAS PREVIAS EN ESTA ESPECIALIDAD
+        // ✅ VERIFICAR HISTORIAS ANTERIORES
         $tieneHistoriasAnteriores = $this->verificarHistoriasAnterioresPorEspecialidad(
             $cita->paciente->uuid, 
             $especialidad
@@ -1341,16 +1341,37 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
 
         $tipoConsulta = $tieneHistoriasAnteriores ? 'CONTROL' : 'PRIMERA VEZ';
 
-        // ✅ OBTENER HISTORIA PREVIA SI ES CONTROL
+        // ✅ OBTENER HISTORIA PREVIA - CORREGIDO
         $historiaPrevia = null;
         if ($tipoConsulta === 'CONTROL') {
-            $historiaPrevia = $this->obtenerUltimaHistoriaPorEspecialidad(
-                $cita->paciente->uuid, 
-                $especialidad
-            );
+            // ✅ USAR EL MÉTODO QUE YA FUNCIONA
+            $ultimaHistoria = \App\Models\HistoriaClinica::with([
+                'historiaDiagnosticos.diagnostico',
+                'historiaMedicamentos.medicamento',
+                'historiaRemisiones.remision',
+                'historiaCups.cups'
+            ])
+            ->whereHas('cita', function($query) use ($cita) {
+                $query->where('paciente_uuid', $cita->paciente->uuid);
+            })
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+            if ($ultimaHistoria) {
+                // ✅ PROCESAR CON EL MÉTODO QUE YA TIENES
+                $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
+                
+                Log::info('✅ Historia previa procesada correctamente', [
+                    'historia_uuid' => $ultimaHistoria->uuid,
+                    'medicamentos_count' => count($historiaPrevia['medicamentos'] ?? []),
+                    'diagnosticos_count' => count($historiaPrevia['diagnosticos'] ?? []),
+                    'remisiones_count' => count($historiaPrevia['remisiones'] ?? []),
+                    'cups_count' => count($historiaPrevia['cups'] ?? [])
+                ]);
+            }
         }
 
-        // ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD
+        // ✅ DETERMINAR VISTA
         $vistaInfo = $this->determinarVistaSegunEspecialidad($especialidad, $tipoConsulta);
 
         return response()->json([
@@ -1360,7 +1381,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
                 'especialidad' => $especialidad,
                 'tipo_consulta' => $tipoConsulta,
                 'vista_recomendada' => $vistaInfo,
-                'historia_previa' => $historiaPrevia,
+                'historia_previa' => $historiaPrevia, // ✅ AHORA CON DATOS CORRECTOS
                 'tiene_historias_anteriores' => $tieneHistoriasAnteriores
             ]
         ]);
