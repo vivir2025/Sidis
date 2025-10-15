@@ -1519,7 +1519,7 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
                 'fecha_creacion' => $ultimaHistoria->created_at
             ]);
 
-            return $ultimaHistoria->toArray();
+            return $this->procesarHistoriaParaFrontend($ultimaHistoria); 
         }
 
         Log::info('ℹ️ No se encontró historia previa (UUID CORREGIDA)', [
