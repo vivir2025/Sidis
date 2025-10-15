@@ -1303,7 +1303,7 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
  /**
- * ✅ DETERMINAR VISTA - VERSIÓN CORREGIDA COMPLETA
+ * ✅ DETERMINAR VISTA - VERSIÓN CORREGIDA
  */
 public function determinarVistaHistoriaClinica(Request $request, string $citaUuid)
 {
@@ -1341,32 +1341,22 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
 
         $tipoConsulta = $tieneHistoriasAnteriores ? 'CONTROL' : 'PRIMERA VEZ';
 
-        // ✅ OBTENER HISTORIA PREVIA - CORREGIDO
+        // ✅ OBTENER HISTORIA PREVIA - AHORA CORREGIDO
         $historiaPrevia = null;
         if ($tipoConsulta === 'CONTROL') {
-            // ✅ USAR EL MÉTODO QUE YA FUNCIONA
-            $ultimaHistoria = \App\Models\HistoriaClinica::with([
-                'historiaDiagnosticos.diagnostico',
-                'historiaMedicamentos.medicamento',
-                'historiaRemisiones.remision',
-                'historiaCups.cups'
-            ])
-            ->whereHas('cita', function($query) use ($cita) {
-                $query->where('paciente_uuid', $cita->paciente->uuid);
-            })
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-            if ($ultimaHistoria) {
-                // ✅ PROCESAR CON EL MÉTODO QUE YA TIENES
-                $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
-                
-                Log::info('✅ Historia previa procesada correctamente', [
-                    'historia_uuid' => $ultimaHistoria->uuid,
+            $historiaPrevia = $this->obtenerUltimaHistoriaPorEspecialidad(
+                $cita->paciente->uuid, 
+                $especialidad
+            );
+            
+            // ✅ LOG PARA VERIFICAR QUE LLEGAN LOS DATOS
+            if ($historiaPrevia) {
+                Log::info('✅ Historia previa obtenida correctamente', [
                     'medicamentos_count' => count($historiaPrevia['medicamentos'] ?? []),
                     'diagnosticos_count' => count($historiaPrevia['diagnosticos'] ?? []),
                     'remisiones_count' => count($historiaPrevia['remisiones'] ?? []),
-                    'cups_count' => count($historiaPrevia['cups'] ?? [])
+                    'cups_count' => count($historiaPrevia['cups'] ?? []),
+                    'tiene_test_morisky' => !empty($historiaPrevia['test_morisky_olvida_tomar_medicamentos'])
                 ]);
             }
         }
@@ -1488,12 +1478,12 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
     }
 }
 /**
- * ✅ OBTENER ÚLTIMA HISTORIA - CARGA MANUAL DE RELACIONES
+ * ✅ OBTENER ÚLTIMA HISTORIA - VERSIÓN CORREGIDA COMPLETA
  */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
     try {
-        Log::info('🔍 Obteniendo última historia - CARGA MANUAL', [
+        Log::info('🔍 Obteniendo última historia - VERSIÓN CORREGIDA', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad
         ]);
@@ -1502,86 +1492,54 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
         
         if (!$paciente) {
-            Log::warning('⚠️ Paciente no encontrado para última historia', [
-                'paciente_uuid' => $pacienteUuid
-            ]);
+            Log::warning('⚠️ Paciente no encontrado', ['paciente_uuid' => $pacienteUuid]);
             return null;
         }
 
-        // ✅ PASO 2: Buscar citas del paciente
-        $citas = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
-            ->where('estado', '!=', 'CANCELADA')
-            ->get();
+        // ✅ PASO 2: Buscar la última historia CON RELACIONES CARGADAS
+        $ultimaHistoria = \App\Models\HistoriaClinica::with([
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ])
+        ->whereHas('cita', function($query) use ($paciente) {
+            $query->where('paciente_uuid', $paciente->uuid);
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
 
-        if ($citas->isEmpty()) {
-            Log::info('ℹ️ Paciente no tiene citas para historia', [
+        if (!$ultimaHistoria) {
+            Log::info('ℹ️ No se encontró historia previa', [
                 'paciente_uuid' => $paciente->uuid
             ]);
             return null;
         }
 
-        // ✅ PASO 3: Buscar la última historia clínica SIN with()
-        $citasIds = $citas->pluck('id')->toArray();
-        
-        $ultimaHistoria = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        if (!$ultimaHistoria) {
-            Log::info('ℹ️ No se encontró historia previa', [
-                'paciente_uuid' => $paciente->uuid,
-                'total_citas' => $citas->count()
-            ]);
-            return null;
-        }
-
-        // ✅ PASO 4: CARGAR RELACIONES MANUALMENTE
-        $diagnosticos = \App\Models\HistoriaDiagnostico::where('historia_clinica_id', $ultimaHistoria->id)
-            ->with('diagnostico')
-            ->get();
-
-        $medicamentos = \App\Models\HistoriaMedicamento::where('historia_clinica_id', $ultimaHistoria->id)
-            ->with('medicamento')
-            ->get();
-
-        $remisiones = \App\Models\HistoriaRemision::where('historia_clinica_id', $ultimaHistoria->id)
-            ->with('remision')
-            ->get();
-
-        $cups = \App\Models\HistoriaCups::where('historia_clinica_id', $ultimaHistoria->id)
-            ->with('cups')
-            ->get();
-
-        Log::info('✅ Relaciones cargadas manualmente', [
-            'historia_id' => $ultimaHistoria->id,
-            'diagnosticos_count' => $diagnosticos->count(),
-            'medicamentos_count' => $medicamentos->count(),
-            'remisiones_count' => $remisiones->count(),
-            'cups_count' => $cups->count()
-        ]);
-
-        // ✅ PASO 5: CREAR ARRAY MANUALMENTE
-        $historiaArray = $ultimaHistoria->toArray();
-        
-        // ✅ AGREGAR RELACIONES AL ARRAY
-        $historiaArray['historia_diagnosticos'] = $diagnosticos->toArray();
-        $historiaArray['historia_medicamentos'] = $medicamentos->toArray();
-        $historiaArray['historia_remisiones'] = $remisiones->toArray();
-        $historiaArray['historia_cups'] = $cups->toArray();
-
-        Log::info('✅ Historia con relaciones preparada', [
+        Log::info('✅ Historia encontrada con relaciones', [
             'historia_uuid' => $ultimaHistoria->uuid,
-            'array_keys' => array_keys($historiaArray),
-            'tiene_diagnosticos' => !empty($historiaArray['historia_diagnosticos']),
-            'tiene_medicamentos' => !empty($historiaArray['historia_medicamentos']),
-            'tiene_remisiones' => !empty($historiaArray['historia_remisiones']),
-            'tiene_cups' => !empty($historiaArray['historia_cups'])
+            'diagnosticos_count' => $ultimaHistoria->historiaDiagnosticos->count(),
+            'medicamentos_count' => $ultimaHistoria->historiaMedicamentos->count(),
+            'remisiones_count' => $ultimaHistoria->historiaRemisiones->count(),
+            'cups_count' => $ultimaHistoria->historiaCups->count()
         ]);
 
-        return $historiaArray;
+        // ✅ PASO 3: PROCESAR CON EL MÉTODO QUE FUNCIONA
+        $historiaFormateada = $this->procesarHistoriaParaFrontend($ultimaHistoria);
+
+        Log::info('✅ Historia procesada para frontend', [
+            'historia_uuid' => $ultimaHistoria->uuid,
+            'medicamentos_procesados' => count($historiaFormateada['medicamentos'] ?? []),
+            'diagnosticos_procesados' => count($historiaFormateada['diagnosticos'] ?? []),
+            'remisiones_procesadas' => count($historiaFormateada['remisiones'] ?? []),
+            'cups_procesados' => count($historiaFormateada['cups'] ?? []),
+            'tiene_test_morisky' => !empty($historiaFormateada['test_morisky_olvida_tomar_medicamentos'])
+        ]);
+
+        return $historiaFormateada;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error obteniendo última historia - CARGA MANUAL', [
+        Log::error('❌ Error obteniendo última historia', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
