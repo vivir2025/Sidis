@@ -29,8 +29,10 @@ class HistoriaClinicaController extends Controller
                 'paciente',
                 'medico',
                 'sede',
-                'diagnosticos.diagnostico',
-                'medicamentos.medicamento'
+                'historiaDiagnosticos.diagnostico',    
+                'historiaMedicamentos.medicamento',   
+                'historiaRemisiones.remision',         
+                'historiaCups.cups'            
             ]);
 
             // Filtros
@@ -505,10 +507,10 @@ private function getCitaIdFromUuid($citaUuid)
                 'paciente',
                 'medico',
                 'sede',
-                'diagnosticos.diagnostico',
-                'medicamentos.medicamento',
-                'cups.cups',
-                'remisiones.remision',
+                'historiaDiagnosticos.diagnostico',   
+                'historiaMedicamentos.medicamento',   
+                'historiaCups.cups',                   
+                'historiaRemisiones.remision',       
                 'incapacidades.diagnostico',
                 'examenesPdf'
             ])->where('uuid', $uuid)->firstOrFail();
@@ -610,13 +612,13 @@ private function getCitaIdFromUuid($citaUuid)
     }
 
     /**
-     * Obtener diagnósticos de la historia
+     * ✅ GET DIAGNÓSTICOS - CORREGIDO
      */
     public function getDiagnosticos($uuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $diagnosticos = $historia->diagnosticos()->with('diagnostico')->get();
+            $diagnosticos = $historia->historiaDiagnosticos()->with('diagnostico')->get(); // ✅ CORREGIDO
 
             return response()->json([
                 'success' => true,
@@ -631,26 +633,25 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
-
-    /**
-     * Agregar diagnóstico a la historia
+   /**
+     * ✅ ADD DIAGNÓSTICO - CORREGIDO
      */
     public function addDiagnostico(Request $request, $uuid)
     {
         $request->validate([
             'diagnostico_id' => 'required|exists:diagnosticos,id',
-            'tipo' => 'required|in:PRINCIPAL,RELACIONADO,COMPLICACIÓN'
+            'tipo' => 'required|in:PRINCIPAL,SECUNDARIO'
         ]);
 
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
 
-            $diagnosticoHistoria = $historia->diagnosticos()->create([
+            $diagnosticoHistoria = \App\Models\HistoriaDiagnostico::create([
                 'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
                 'diagnostico_id' => $request->diagnostico_id,
                 'tipo' => $request->tipo,
-                'observaciones' => $request->observaciones,
-                'estado' => 'ACTIVO'
+                'tipo_diagnostico' => $request->tipo_diagnostico ?? 'IMPRESION_DIAGNOSTICA'
             ]);
 
             return response()->json([
@@ -669,13 +670,13 @@ private function getCitaIdFromUuid($citaUuid)
     }
 
     /**
-     * Eliminar diagnóstico de la historia
+     * ✅ REMOVE DIAGNÓSTICO - CORREGIDO
      */
     public function removeDiagnostico($uuid, $diagnosticoUuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $diagnostico = $historia->diagnosticos()->where('uuid', $diagnosticoUuid)->firstOrFail();
+            $diagnostico = $historia->historiaDiagnosticos()->where('uuid', $diagnosticoUuid)->firstOrFail(); // ✅ CORREGIDO
             $diagnostico->delete();
 
             return response()->json([
@@ -691,15 +692,14 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
-
        /**
-     * Obtener medicamentos de la historia
+     * ✅ GET MEDICAMENTOS - CORREGIDO
      */
     public function getMedicamentos($uuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $medicamentos = $historia->medicamentos()->with('medicamento')->get();
+            $medicamentos = $historia->historiaMedicamentos()->with('medicamento')->get(); // ✅ CORREGIDO
 
             return response()->json([
                 'success' => true,
@@ -715,33 +715,26 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Agregar medicamento a la historia
+      /**
+     * ✅ ADD MEDICAMENTO - CORREGIDO
      */
     public function addMedicamento(Request $request, $uuid)
     {
         $request->validate([
             'medicamento_id' => 'required|exists:medicamentos,id',
-            'via' => 'required|string',
-            'dosis' => 'required|string',
-            'frecuencia' => 'required|string',
-            'duracion' => 'required|string'
+            'cantidad' => 'required|string',
+            'dosis' => 'required|string'
         ]);
 
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $medicamento = Medicamento::findOrFail($request->medicamento_id);
 
-            $medicamentoHistoria = $historia->medicamentos()->create([
+            $medicamentoHistoria = \App\Models\HistoriaMedicamento::create([
                 'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
                 'medicamento_id' => $request->medicamento_id,
-                'concentracion' => $medicamento->concentracion,
-                'via' => $request->via,
-                'dosis' => $request->dosis,
-                'frecuencia' => $request->frecuencia,
-                'duracion' => $request->duracion,
-                'indicaciones' => $request->indicaciones,
-                'estado' => 'ACTIVO'
+                'cantidad' => $request->cantidad,
+                'dosis' => $request->dosis
             ]);
 
             return response()->json([
@@ -759,14 +752,15 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Eliminar medicamento de la historia
+
+     /**
+     * ✅ REMOVE MEDICAMENTO - CORREGIDO
      */
     public function removeMedicamento($uuid, $medicamentoUuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $medicamento = $historia->medicamentos()->where('uuid', $medicamentoUuid)->firstOrFail();
+            $medicamento = $historia->historiaMedicamentos()->where('uuid', $medicamentoUuid)->firstOrFail(); // ✅ CORREGIDO
             $medicamento->delete();
 
             return response()->json([
@@ -783,14 +777,14 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Obtener CUPS de la historia
+     /**
+     * ✅ GET CUPS - CORREGIDO
      */
     public function getCups($uuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $cups = $historia->cups()->with('cups')->get();
+            $cups = $historia->historiaCups()->with('cups')->get(); // ✅ CORREGIDO
 
             return response()->json([
                 'success' => true,
@@ -806,8 +800,8 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Agregar CUPS a la historia
+      /**
+     * ✅ ADD CUPS - CORREGIDO
      */
     public function addCups(Request $request, $uuid)
     {
@@ -819,12 +813,12 @@ private function getCitaIdFromUuid($citaUuid)
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
 
-            $cupsHistoria = $historia->cups()->create([
+            $cupsHistoria = \App\Models\HistoriaCups::create([
                 'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
                 'cups_id' => $request->cups_id,
                 'observacion' => $request->observacion,
-                'cantidad' => $request->cantidad,
-                'estado' => 'PENDIENTE'
+                'cantidad' => $request->cantidad
             ]);
 
             return response()->json([
@@ -841,15 +835,14 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
-
-    /**
-     * Eliminar CUPS de la historia
+     /**
+     * ✅ REMOVE CUPS - CORREGIDO
      */
     public function removeCups($uuid, $cupsUuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $cups = $historia->cups()->where('uuid', $cupsUuid)->firstOrFail();
+            $cups = $historia->historiaCups()->where('uuid', $cupsUuid)->firstOrFail(); // ✅ CORREGIDO
             $cups->delete();
 
             return response()->json([
@@ -866,14 +859,15 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Obtener remisiones de la historia
+
+     /**
+     * ✅ GET REMISIONES - CORREGIDO
      */
     public function getRemisiones($uuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $remisiones = $historia->remisiones()->with('remision')->get();
+            $remisiones = $historia->historiaRemisiones()->with('remision')->get(); // ✅ CORREGIDO
 
             return response()->json([
                 'success' => true,
@@ -889,28 +883,26 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Agregar remisión a la historia
+     /**
+     * ✅ ADD REMISIÓN - CORREGIDO
      */
     public function addRemision(Request $request, $uuid)
     {
         $request->validate([
             'remision_id' => 'required|exists:remisiones,id',
-            'prioridad' => 'required|in:ALTA,MEDIA,BAJA'
+            'observacion' => 'nullable|string'
         ]);
 
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
 
-            $remisionHistoria = $historia->remisiones()->create([
+            $remisionHistoria = \App\Models\HistoriaRemision::create([
                 'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
                 'remision_id' => $request->remision_id,
-                'observacion' => $request->observacion,
-                'prioridad' => $request->prioridad,
-                'estado' => 'PENDIENTE'
+                'observacion' => $request->observacion
             ]);
 
-            // ✅ ERROR CORREGIDO: return response() con espacio
             return response()->json([
                 'success' => true,
                 'message' => 'Remisión agregada exitosamente',
@@ -926,14 +918,15 @@ private function getCitaIdFromUuid($citaUuid)
         }
     }
 
-    /**
-     * Eliminar remisión de la historia
+
+   /**
+     * ✅ REMOVE REMISIÓN - CORREGIDO
      */
     public function removeRemision($uuid, $remisionUuid)
     {
         try {
             $historia = HistoriaClinica::where('uuid', $uuid)->firstOrFail();
-            $remision = $historia->remisiones()->where('uuid', $remisionUuid)->firstOrFail();
+            $remision = $historia->historiaRemisiones()->where('uuid', $remisionUuid)->firstOrFail(); // ✅ CORREGIDO
             $remision->delete();
 
             return response()->json([
@@ -1138,7 +1131,7 @@ private function getCitaIdFromUuid($citaUuid)
     }
 
     /**
-     * Obtener historial completo de un paciente
+     * ✅ HISTORIAL PACIENTE - CORREGIDO
      */
     public function historialPaciente($pacienteId)
     {
@@ -1146,14 +1139,16 @@ private function getCitaIdFromUuid($citaUuid)
             $paciente = Paciente::findOrFail($pacienteId);
             
             $historias = HistoriaClinica::with([
-                'medico',
                 'sede',
-                'diagnosticos.diagnostico',
-                'medicamentos.medicamento',
+                'cita.paciente',
+                'historiaDiagnosticos.diagnostico',    // ✅ CORREGIDO
+                'historiaMedicamentos.medicamento',    // ✅ CORREGIDO
                 'incapacidades.diagnostico'
             ])
-            ->where('paciente_id', $pacienteId)
-            ->orderBy('fecha_atencion', 'desc')
+            ->whereHas('cita', function($query) use ($pacienteId) {
+                $query->where('paciente_id', $pacienteId);
+            })
+            ->orderBy('created_at', 'desc')
             ->get();
 
             return response()->json([
@@ -1172,6 +1167,7 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
+
 
     /**
      * Generar PDF de la historia clínica completa
@@ -1263,48 +1259,48 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
-/**
- * ✅ MÉTODO FALTANTE: Obtener historias de un paciente
- */
-public function historiasPaciente($pacienteUuid)
-{
-    try {
-        // Buscar paciente por UUID
-        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
-        
-        if (!$paciente) {
+  /**
+     * ✅ HISTORIAS PACIENTE - CORREGIDO
+     */
+    public function historiasPaciente($pacienteUuid)
+    {
+        try {
+            // Buscar paciente por UUID
+            $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+            
+            if (!$paciente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paciente no encontrado'
+                ], 404);
+            }
+
+            // Obtener historias del paciente
+            $historias = HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
+                $query->where('paciente_id', $paciente->id);
+            })
+            ->with([
+                'sede',
+                'cita.paciente',
+                'historiaDiagnosticos.diagnostico',    // ✅ CORREGIDO
+                'historiaMedicamentos.medicamento'     // ✅ CORREGIDO
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $historias
+            ]);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Paciente no encontrado'
-            ], 404);
+                'message' => 'Error al obtener historias del paciente',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Obtener historias del paciente
-        $historias = HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
-            $query->where('paciente_id', $paciente->id);
-        })
-        ->with([
-            'sede',
-            'cita.paciente',
-            'diagnosticos.diagnostico',
-            'medicamentos.medicamento'
-        ])
-        ->orderBy('created_at', 'desc')
-        ->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $historias
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al obtener historias del paciente',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
    /**
  * ✅ NUEVO MÉTODO: Determinar qué vista mostrar según especialidad
  */
@@ -1704,154 +1700,156 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
     }
 }
 
-/**
- * ✅ OBTENER ÚLTIMA HISTORIA PARA MEDICINA GENERAL
- */
-public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $pacienteUuid)
-{
-    try {
-        Log::info('🔍 Obteniendo última historia para Medicina General', [
-            'paciente_uuid' => $pacienteUuid
-        ]);
+  /**
+     * ✅ OBTENER ÚLTIMA HISTORIA MEDICINA GENERAL - CORREGIDO
+     */
+    public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $pacienteUuid)
+    {
+        try {
+            Log::info('🔍 Obteniendo última historia para Medicina General', [
+                'paciente_uuid' => $pacienteUuid
+            ]);
 
-        // ✅ BUSCAR PACIENTE POR UUID
-        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
-        
-        if (!$paciente) {
+            // ✅ BUSCAR PACIENTE POR UUID
+            $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+            
+            if (!$paciente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paciente no encontrado'
+                ], 404);
+            }
+
+            // ✅ BUSCAR CITAS DEL PACIENTE
+            $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+                ->where('estado', '!=', 'CANCELADA')
+                ->get();
+
+            if ($citas->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'message' => 'No hay historias previas - Primera vez'
+                ]);
+            }
+
+            // ✅ BUSCAR ÚLTIMA HISTORIA CLÍNICA
+            $citasIds = $citas->pluck('id')->toArray();
+            
+            $ultimaHistoria = \App\Models\HistoriaClinica::with([
+                'sede',
+                'cita.paciente',
+                'historiaDiagnosticos.diagnostico',    // ✅ CORREGIDO
+                'historiaMedicamentos.medicamento',    // ✅ CORREGIDO
+                'historiaRemisiones.remision',         // ✅ CORREGIDO
+                'historiaCups.cups'                    // ✅ CORREGIDO
+            ])
+            ->whereIn('cita_id', $citasIds)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+            if (!$ultimaHistoria) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'message' => 'No hay historias previas - Primera vez'
+                ]);
+            }
+
+            // ✅ PROCESAR DATOS PARA EL FRONTEND
+            $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
+
+            Log::info('✅ Historia previa procesada para Medicina General', [
+                'paciente_uuid' => $pacienteUuid,
+                'historia_uuid' => $ultimaHistoria->uuid,
+                'medicamentos_count' => count($historiaPrevia['medicamentos']),
+                'remisiones_count' => count($historiaPrevia['remisiones']),
+                'diagnosticos_count' => count($historiaPrevia['diagnosticos']),
+                'cups_count' => count($historiaPrevia['cups'])
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $historiaPrevia,
+                'message' => 'Historia previa encontrada - Control'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error obteniendo última historia para Medicina General', [
+                'error' => $e->getMessage(),
+                'paciente_uuid' => $pacienteUuid,
+                'line' => $e->getLine(),
+                'file' => basename($e->getFile())
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Paciente no encontrado'
-            ], 404);
+                'message' => 'Error obteniendo historia previa',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // ✅ BUSCAR CITAS DEL PACIENTE
-        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
-            ->where('estado', '!=', 'CANCELADA')
-            ->get();
-
-        if ($citas->isEmpty()) {
-            return response()->json([
-                'success' => true,
-                'data' => null,
-                'message' => 'No hay historias previas - Primera vez'
-            ]);
-        }
-
-        // ✅ BUSCAR ÚLTIMA HISTORIA CLÍNICA
-        $citasIds = $citas->pluck('id')->toArray();
-        
-        $ultimaHistoria = \App\Models\HistoriaClinica::with([
-            'sede',
-            'cita.paciente',
-            'historiaDiagnosticos.diagnostico',
-            'historiaMedicamentos.medicamento',
-            'historiaRemisiones.remision',
-            'historiaCups.cups'
-        ])
-        ->whereIn('cita_id', $citasIds)
-        ->orderBy('created_at', 'desc')
-        ->first();
-
-        if (!$ultimaHistoria) {
-            return response()->json([
-                'success' => true,
-                'data' => null,
-                'message' => 'No hay historias previas - Primera vez'
-            ]);
-        }
-
-        // ✅ PROCESAR DATOS PARA EL FRONTEND
-        $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
-
-        Log::info('✅ Historia previa procesada para Medicina General', [
-            'paciente_uuid' => $pacienteUuid,
-            'historia_uuid' => $ultimaHistoria->uuid,
-            'medicamentos_count' => count($historiaPrevia['medicamentos']),
-            'remisiones_count' => count($historiaPrevia['remisiones']),
-            'diagnosticos_count' => count($historiaPrevia['diagnosticos']),
-            'cups_count' => count($historiaPrevia['cups'])
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'data' => $historiaPrevia,
-            'message' => 'Historia previa encontrada - Control'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('❌ Error obteniendo última historia para Medicina General', [
-            'error' => $e->getMessage(),
-            'paciente_uuid' => $pacienteUuid,
-            'line' => $e->getLine(),
-            'file' => basename($e->getFile())
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Error obteniendo historia previa',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
-// ✅ EN TU API CONTROLLER - MÉTODO CORREGIDO
-private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
-{
-    return [
-        // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
-        'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
-            return [
-                'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
-                'cantidad' => $item->cantidad,
-                'dosis' => $item->dosis,
-                'medicamento' => [
-                    'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
-                    'nombre' => $item->medicamento->nombre,
-                    'principio_activo' => $item->medicamento->principio_activo ?? ''
-                ]
-            ];
-        })->toArray(),
 
-        // ✅ REMISIONES - ESTRUCTURA CORREGIDA
-        'remisiones' => $historia->historiaRemisiones->map(function($item) {
-            return [
-                'remision_id' => $item->remision->uuid ?? $item->remision->id,
-                'observacion' => $item->observacion,
-                'remision' => [
-                    'uuid' => $item->remision->uuid ?? $item->remision->id,
-                    'nombre' => $item->remision->nombre,
-                    'tipo' => $item->remision->tipo ?? ''
-                ]
-            ];
-        })->toArray(),
+  /**
+     * ✅ PROCESAR HISTORIA PARA FRONTEND - CORREGIDO
+     */
+    private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
+    {
+        return [
+            // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
+            'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
+                return [
+                    'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
+                    'cantidad' => $item->cantidad,
+                    'dosis' => $item->dosis,
+                    'medicamento' => [
+                        'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
+                        'nombre' => $item->medicamento->nombre,
+                        'principio_activo' => $item->medicamento->principio_activo ?? ''
+                    ]
+                ];
+            })->toArray(),
 
-        // ✅ DIAGNÓSTICOS - ESTRUCTURA CORREGIDA
-        'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
-            return [
-                'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                'tipo' => $item->tipo,
-                'tipo_diagnostico' => $item->tipo_diagnostico,
-                'diagnostico' => [
-                    'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                    'codigo' => $item->diagnostico->codigo,
-                    'nombre' => $item->diagnostico->nombre
-                ]
-            ];
-        })->toArray(),
+            // ✅ REMISIONES - ESTRUCTURA CORREGIDA
+            'remisiones' => $historia->historiaRemisiones->map(function($item) {
+                return [
+                    'remision_id' => $item->remision->uuid ?? $item->remision->id,
+                    'observacion' => $item->observacion,
+                    'remision' => [
+                        'uuid' => $item->remision->uuid ?? $item->remision->id,
+                        'nombre' => $item->remision->nombre,
+                        'tipo' => $item->remision->tipo ?? ''
+                    ]
+                ];
+            })->toArray(),
 
-        // ✅ CUPS - ESTRUCTURA CORREGIDA
-        'cups' => $historia->historiaCups->map(function($item) {
-            return [
-                'cups_id' => $item->cups->uuid ?? $item->cups->id,
-                'observacion' => $item->observacion,
-                'cups' => [
-                    'uuid' => $item->cups->uuid ?? $item->cups->id,
-                    'codigo' => $item->cups->codigo,
-                    'nombre' => $item->cups->nombre
-                ]
-            ];
-        })->toArray(),
+            // ✅ DIAGNÓSTICOS - ESTRUCTURA CORREGIDA
+            'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
+                return [
+                    'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                    'tipo' => $item->tipo,
+                    'tipo_diagnostico' => $item->tipo_diagnostico,
+                    'diagnostico' => [
+                        'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                        'codigo' => $item->diagnostico->codigo,
+                        'nombre' => $item->diagnostico->nombre
+                    ]
+                ];
+            })->toArray(),
 
+            // ✅ CUPS - ESTRUCTURA CORREGIDA
+            'cups' => $historia->historiaCups->map(function($item) {
+                return [
+                    'cups_id' => $item->cups->uuid ?? $item->cups->id,
+                    'observacion' => $item->observacion,
+                    'cups' => [
+                        'uuid' => $item->cups->uuid ?? $item->cups->id,
+                        'codigo' => $item->cups->codigo,
+                        'nombre' => $item->cups->nombre
+                    ]
+                ];
+            })->toArray(),
         // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
         'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
         'clasificacion_hta' => $historia->clasificacion_hta,
