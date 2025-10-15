@@ -1701,101 +1701,108 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
 }
 
   /**
-     * ✅ OBTENER ÚLTIMA HISTORIA MEDICINA GENERAL - CORREGIDO
-     */
-    public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $pacienteUuid)
-    {
-        try {
-            Log::info('🔍 Obteniendo última historia para Medicina General', [
-                'paciente_uuid' => $pacienteUuid
-            ]);
+ * ✅ OBTENER ÚLTIMA HISTORIA - SOLO CON TUS DATOS
+ */
+public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $pacienteUuid)
+{
+    try {
+        Log::info('🔍 Obteniendo última historia para Medicina General', [
+            'paciente_uuid' => $pacienteUuid
+        ]);
 
-            // ✅ BUSCAR PACIENTE POR UUID
-            $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
-            
-            if (!$paciente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Paciente no encontrado'
-                ], 404);
-            }
-
-            // ✅ BUSCAR CITAS DEL PACIENTE
-            $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
-                ->where('estado', '!=', 'CANCELADA')
-                ->get();
-
-            if ($citas->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => null,
-                    'message' => 'No hay historias previas - Primera vez'
-                ]);
-            }
-
-            // ✅ BUSCAR ÚLTIMA HISTORIA CLÍNICA
-            $citasIds = $citas->pluck('id')->toArray();
-            
-            $ultimaHistoria = \App\Models\HistoriaClinica::with([
-                'sede',
-                'cita.paciente',
-                'historiaDiagnosticos.diagnostico',    // ✅ CORREGIDO
-                'historiaMedicamentos.medicamento',    // ✅ CORREGIDO
-                'historiaRemisiones.remision',         // ✅ CORREGIDO
-                'historiaCups.cups'                    // ✅ CORREGIDO
-            ])
-            ->whereIn('cita_id', $citasIds)
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-            if (!$ultimaHistoria) {
-                return response()->json([
-                    'success' => true,
-                    'data' => null,
-                    'message' => 'No hay historias previas - Primera vez'
-                ]);
-            }
-
-            // ✅ PROCESAR DATOS PARA EL FRONTEND
-            $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
-
-            Log::info('✅ Historia previa procesada para Medicina General', [
-                'paciente_uuid' => $pacienteUuid,
-                'historia_uuid' => $ultimaHistoria->uuid,
-                'medicamentos_count' => count($historiaPrevia['medicamentos']),
-                'remisiones_count' => count($historiaPrevia['remisiones']),
-                'diagnosticos_count' => count($historiaPrevia['diagnosticos']),
-                'cups_count' => count($historiaPrevia['cups'])
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $historiaPrevia,
-                'message' => 'Historia previa encontrada - Control'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error obteniendo última historia para Medicina General', [
-                'error' => $e->getMessage(),
-                'paciente_uuid' => $pacienteUuid,
-                'line' => $e->getLine(),
-                'file' => basename($e->getFile())
-            ]);
-
+        // ✅ BUSCAR PACIENTE POR UUID
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error obteniendo historia previa',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Paciente no encontrado'
+            ], 404);
         }
+
+        // ✅ BUSCAR CITAS DEL PACIENTE
+        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
+            ->where('estado', '!=', 'CANCELADA')
+            ->get();
+
+        if ($citas->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay historias previas - Primera vez'
+            ]);
+        }
+
+        // ✅ BUSCAR ÚLTIMA HISTORIA CLÍNICA CON RELACIONES
+        $citasIds = $citas->pluck('id')->toArray();
+        
+        $ultimaHistoria = \App\Models\HistoriaClinica::with([
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ])
+        ->whereIn('cita_id', $citasIds)
+        ->orderBy('created_at', 'desc')
+        ->first();
+
+        if (!$ultimaHistoria) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay historias previas - Primera vez'
+            ]);
+        }
+
+        // ✅ PROCESAR DATOS PARA EL FRONTEND
+        $historiaPrevia = $this->procesarHistoriaParaFrontend($ultimaHistoria);
+
+        Log::info('✅ Historia previa procesada', [
+            'paciente_uuid' => $pacienteUuid,
+            'historia_uuid' => $ultimaHistoria->uuid,
+            'medicamentos_count' => count($historiaPrevia['medicamentos'] ?? []),
+            'diagnosticos_count' => count($historiaPrevia['diagnosticos'] ?? []),
+            'remisiones_count' => count($historiaPrevia['remisiones'] ?? []),
+            'cups_count' => count($historiaPrevia['cups'] ?? [])
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $historiaPrevia,
+            'message' => 'Historia previa encontrada - Control'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo última historia', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error obteniendo historia previa',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
 
   /**
-     * ✅ PROCESAR HISTORIA PARA FRONTEND - CORREGIDO
-     */
-    private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
-    {
+ * ✅ PROCESAR HISTORIA PARA FRONTEND - SOLO CON LOS DATOS QUE TIENES
+ */
+private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
+{
+    try {
+        Log::info('🔧 Procesando historia para frontend', [
+            'historia_uuid' => $historia->uuid,
+            'medicamentos_count' => $historia->historiaMedicamentos->count(),
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count(),
+            'cups_count' => $historia->historiaCups->count()
+        ]);
+
         return [
             // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
             'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
@@ -1850,36 +1857,72 @@ public function debugPacienteHistorias(Request $request, string $pacienteUuid)
                     ]
                 ];
             })->toArray(),
-        // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
-        'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
-        'clasificacion_hta' => $historia->clasificacion_hta,
-        'clasificacion_dm' => $historia->clasificacion_dm,
-        'clasificacion_rcv' => $historia->clasificacion_rcv,
-        'clasificacion_erc_estado' => $historia->clasificacion_erc_estado,
-        'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente,
 
-        // ✅ TASAS DE FILTRACIÓN
-        'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
-        'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
+            // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
+            'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
+            'clasificacion_hta' => $historia->clasificacion_hta,
+            'clasificacion_dm' => $historia->clasificacion_dm,
+            'clasificacion_rcv' => $historia->clasificacion_rcv,
+            'clasificacion_erc_estado' => $historia->clasificacion_erc_estado,
+            'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente,
 
-        // ✅ ANTECEDENTES PERSONALES - NOMBRES CORRECTOS SEGÚN TU MODELO
-        'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
-        'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
-        'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
-        'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
+            // ✅ TASAS DE FILTRACIÓN
+            'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
+            'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
 
-        // ✅ TALLA
-        'talla' => $historia->talla,
+            // ✅ ANTECEDENTES PERSONALES - NOMBRES CORRECTOS SEGÚN TU MODELO
+            'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
+            'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
+            'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
+            'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
 
-        // ✅ TEST DE MORISKY - NOMBRES CORRECTOS SEGÚN TU MODELO
-        'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
-        'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
-        'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
-        'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos,
-        'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
-        'adherente' => $historia->adherente,
-    ];
+            // ✅ TALLA
+            'talla' => $historia->talla,
+
+            // ✅ TEST DE MORISKY - NOMBRES CORRECTOS SEGÚN TU MODELO
+            'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
+            'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
+            'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
+            'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos,
+            'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
+            'adherente' => $historia->adherente,
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error procesando historia para frontend', [
+            'error' => $e->getMessage(),
+            'historia_id' => $historia->id ?? 'N/A',
+            'line' => $e->getLine()
+        ]);
+        
+        return [
+            'medicamentos' => [],
+            'remisiones' => [],
+            'diagnosticos' => [],
+            'cups' => [],
+            'clasificacion_estado_metabolico' => null,
+            'clasificacion_hta' => null,
+            'clasificacion_dm' => null,
+            'clasificacion_rcv' => null,
+            'clasificacion_erc_estado' => null,
+            'clasificacion_erc_categoria_ambulatoria_persistente' => null,
+            'tasa_filtracion_glomerular_ckd_epi' => null,
+            'tasa_filtracion_glomerular_gockcroft_gault' => null,
+            'hipertension_arterial_personal' => 'NO',
+            'obs_hipertension_arterial_personal' => null,
+            'diabetes_mellitus_personal' => 'NO',
+            'obs_diabetes_mellitus_personal' => null,
+            'talla' => null,
+            'test_morisky_olvida_tomar_medicamentos' => null,
+            'test_morisky_toma_medicamentos_hora_indicada' => null,
+            'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => null,
+            'test_morisky_siente_mal_deja_tomarlos' => null,
+            'test_morisky_valoracio_psicologia' => null,
+            'adherente' => null,
+        ];
+    }
 }
+
 /**
  * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO
  */
