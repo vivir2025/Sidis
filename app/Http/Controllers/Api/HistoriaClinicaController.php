@@ -1466,12 +1466,12 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
     }
 }
 /**
- * ✅ OBTENER ÚLTIMA HISTORIA - VERSIÓN UUID CORREGIDA
+ * ✅ OBTENER ÚLTIMA HISTORIA - CARGA MANUAL DE RELACIONES
  */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
     try {
-        Log::info('🔍 Obteniendo última historia - UUID CORREGIDA', [
+        Log::info('🔍 Obteniendo última historia - CARGA MANUAL', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad
         ]);
@@ -1486,51 +1486,80 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return null;
         }
 
-        // ✅ PASO 2: CORREGIDO - Buscar citas usando PACIENTE_UUID
-        $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
+        // ✅ PASO 2: Buscar citas del paciente
+        $citas = \App\Models\Cita::where('paciente_id', $paciente->id)
             ->where('estado', '!=', 'CANCELADA')
             ->get();
 
-        if ($citasDelPaciente->isEmpty()) {
+        if ($citas->isEmpty()) {
             Log::info('ℹ️ Paciente no tiene citas para historia', [
                 'paciente_uuid' => $paciente->uuid
             ]);
             return null;
         }
 
-        // ✅ PASO 3: Buscar la última historia clínica
-        $citasIds = $citasDelPaciente->pluck('id')->toArray();
+        // ✅ PASO 3: Buscar la última historia clínica SIN with()
+        $citasIds = $citas->pluck('id')->toArray();
         
-        $ultimaHistoria = \App\Models\HistoriaClinica::with([
-            'sede',
-            'cita.paciente',
-            'historiaDiagnosticos.diagnostico',
-            'historiaMedicamentos.medicamento'
-        ])
-        ->whereIn('cita_id', $citasIds)
-        ->orderBy('created_at', 'desc')
-        ->first();
+        $ultimaHistoria = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)
+            ->orderBy('created_at', 'desc')
+            ->first();
 
-        if ($ultimaHistoria) {
-            Log::info('✅ Última historia encontrada (UUID CORREGIDA)', [
+        if (!$ultimaHistoria) {
+            Log::info('ℹ️ No se encontró historia previa', [
                 'paciente_uuid' => $paciente->uuid,
-                'historia_id' => $ultimaHistoria->id,
-                'historia_uuid' => $ultimaHistoria->uuid,
-                'fecha_creacion' => $ultimaHistoria->created_at
+                'total_citas' => $citas->count()
             ]);
-
-            return $ultimaHistoria->toArray();
+            return null;
         }
 
-        Log::info('ℹ️ No se encontró historia previa (UUID CORREGIDA)', [
-            'paciente_uuid' => $paciente->uuid,
-            'total_citas' => $citasDelPaciente->count()
+        // ✅ PASO 4: CARGAR RELACIONES MANUALMENTE
+        $diagnosticos = \App\Models\HistoriaDiagnostico::where('historia_clinica_id', $ultimaHistoria->id)
+            ->with('diagnostico')
+            ->get();
+
+        $medicamentos = \App\Models\HistoriaMedicamento::where('historia_clinica_id', $ultimaHistoria->id)
+            ->with('medicamento')
+            ->get();
+
+        $remisiones = \App\Models\HistoriaRemision::where('historia_clinica_id', $ultimaHistoria->id)
+            ->with('remision')
+            ->get();
+
+        $cups = \App\Models\HistoriaCups::where('historia_clinica_id', $ultimaHistoria->id)
+            ->with('cups')
+            ->get();
+
+        Log::info('✅ Relaciones cargadas manualmente', [
+            'historia_id' => $ultimaHistoria->id,
+            'diagnosticos_count' => $diagnosticos->count(),
+            'medicamentos_count' => $medicamentos->count(),
+            'remisiones_count' => $remisiones->count(),
+            'cups_count' => $cups->count()
         ]);
 
-        return null;
+        // ✅ PASO 5: CREAR ARRAY MANUALMENTE
+        $historiaArray = $ultimaHistoria->toArray();
+        
+        // ✅ AGREGAR RELACIONES AL ARRAY
+        $historiaArray['historia_diagnosticos'] = $diagnosticos->toArray();
+        $historiaArray['historia_medicamentos'] = $medicamentos->toArray();
+        $historiaArray['historia_remisiones'] = $remisiones->toArray();
+        $historiaArray['historia_cups'] = $cups->toArray();
+
+        Log::info('✅ Historia con relaciones preparada', [
+            'historia_uuid' => $ultimaHistoria->uuid,
+            'array_keys' => array_keys($historiaArray),
+            'tiene_diagnosticos' => !empty($historiaArray['historia_diagnosticos']),
+            'tiene_medicamentos' => !empty($historiaArray['historia_medicamentos']),
+            'tiene_remisiones' => !empty($historiaArray['historia_remisiones']),
+            'tiene_cups' => !empty($historiaArray['historia_cups'])
+        ]);
+
+        return $historiaArray;
 
     } catch (\Exception $e) {
-        Log::error('❌ Error obteniendo última historia - UUID CORREGIDA', [
+        Log::error('❌ Error obteniendo última historia - CARGA MANUAL', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
@@ -1924,15 +1953,15 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
 }
 
 /**
- * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO
+ * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO - CORREGIDO
  */
 private function formatearHistoriaDesdeAPI(array $historiaAPI): array
 {
     try {
         Log::info('🔧 Formateando historia desde API', [
             'keys_disponibles' => array_keys($historiaAPI),
-            'tiene_medicamentos' => !empty($historiaAPI['medicamentos']),
-            'tiene_diagnosticos' => !empty($historiaAPI['diagnosticos'])
+            'tiene_medicamentos' => !empty($historiaAPI['historia_medicamentos']),
+            'tiene_diagnosticos' => !empty($historiaAPI['historia_diagnosticos'])
         ]);
 
         $historiaFormateada = [
@@ -1965,17 +1994,17 @@ private function formatearHistoriaDesdeAPI(array $historiaAPI): array
             // ✅ TALLA
             'talla' => $historiaAPI['talla'] ?? '',
 
-            // ✅ MEDICAMENTOS
-            'medicamentos' => $this->formatearMedicamentosDesdeAPI($historiaAPI['medicamentos'] ?? []),
+            // ✅ MEDICAMENTOS - USAR NOMBRES CORRECTOS
+            'medicamentos' => $this->formatearMedicamentosDesdeAPI($historiaAPI['historia_medicamentos'] ?? []),
 
-            // ✅ REMISIONES
-            'remisiones' => $this->formatearRemisionesDesdeAPI($historiaAPI['remisiones'] ?? []),
+            // ✅ REMISIONES - USAR NOMBRES CORRECTOS
+            'remisiones' => $this->formatearRemisionesDesdeAPI($historiaAPI['historia_remisiones'] ?? []),
 
-            // ✅ DIAGNÓSTICOS
-            'diagnosticos' => $this->formatearDiagnosticosDesdeAPI($historiaAPI['diagnosticos'] ?? []),
+            // ✅ DIAGNÓSTICOS - USAR NOMBRES CORRECTOS
+            'diagnosticos' => $this->formatearDiagnosticosDesdeAPI($historiaAPI['historia_diagnosticos'] ?? []),
 
-            // ✅ CUPS
-            'cups' => $this->formatearCupsDesdeAPI($historiaAPI['cups'] ?? []),
+            // ✅ CUPS - USAR NOMBRES CORRECTOS
+            'cups' => $this->formatearCupsDesdeAPI($historiaAPI['historia_cups'] ?? []),
         ];
 
         Log::info('✅ Historia formateada desde API', [
