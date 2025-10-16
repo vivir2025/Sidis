@@ -1895,6 +1895,16 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos,
             'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
             'adherente' => $historia->adherente,
+
+                // ✅ EDUCACIÓN EN SALUD
+            'alimentacion' => $historia->alimentacion,
+            'disminucion_consumo_sal_azucar' => $historia->disminucion_consumo_sal_azucar,
+            'fomento_actividad_fisica' => $historia->fomento_actividad_fisica,
+            'importancia_adherencia_tratamiento' => $historia->importancia_adherencia_tratamiento,
+            'consumo_frutas_verduras' => $historia->consumo_frutas_verduras,
+            'manejo_estres' => $historia->manejo_estres,
+            'disminucion_consumo_cigarrillo' => $historia->disminucion_consumo_cigarrillo,
+            'disminucion_peso' => $historia->disminucion_peso,
         ];
 
     } catch (\Exception $e) {
@@ -1928,6 +1938,14 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'test_morisky_siente_mal_deja_tomarlos' => null,
             'test_morisky_valoracio_psicologia' => null,
             'adherente' => null,
+            'alimentacion' => null,
+            'disminucion_consumo_sal_azucar' => null,
+            'fomento_actividad_fisica' => null,
+            'importancia_adherencia_tratamiento' => null,
+            'consumo_frutas_verduras' => null,
+            'manejo_estres' => null,
+            'disminucion_consumo_cigarrillo' => null,
+            'disminucion_peso' => null,
         ];
     }
 }
@@ -1974,6 +1992,17 @@ private function formatearHistoriaDesdeAPI(array $historiaAPI): array
             // ✅ TALLA
             'talla' => $historiaAPI['talla'] ?? '',
 
+              // ✅ EDUCACIÓN EN SALUD
+            'alimentacion' => $historiaAPI['alimentacion'] ?? null,
+            'disminucion_consumo_sal_azucar' => $historiaAPI['disminucion_consumo_sal_azucar'] ?? null,
+            'fomento_actividad_fisica' => $historiaAPI['fomento_actividad_fisica'] ?? null,
+            'importancia_adherencia_tratamiento' => $historiaAPI['importancia_adherencia_tratamiento'] ?? null,
+            'consumo_frutas_verduras' => $historiaAPI['consumo_frutas_verduras'] ?? null,
+            'manejo_estres' => $historiaAPI['manejo_estres'] ?? null,
+            'disminucion_consumo_cigarrillo' => $historiaAPI['disminucion_consumo_cigarrillo'] ?? null,
+            'disminucion_peso' => $historiaAPI['disminucion_peso'] ?? null,
+
+            
             // ✅ MEDICAMENTOS - USAR NOMBRES CORRECTOS
             'medicamentos' => $this->formatearMedicamentosDesdeAPI($historiaAPI['historia_medicamentos'] ?? []),
 
