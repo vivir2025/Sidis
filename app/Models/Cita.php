@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class Cita extends Model
 {
@@ -31,11 +32,12 @@ class Cita extends Model
         'usuario_creo_cita_id'  
     ];
 
+    // ✅✅✅ CAMBIO CRÍTICO: Especificar formato de fechas ✅✅✅
     protected $casts = [
-        'fecha' => 'date',
-        'fecha_inicio' => 'datetime',
-        'fecha_final' => 'datetime',
-        'fecha_deseada' => 'date'
+        'fecha' => 'date:Y-m-d',              // ← CAMBIO: Solo fecha
+        'fecha_inicio' => 'datetime:Y-m-d H:i:s',  // ← CAMBIO: Fecha y hora
+        'fecha_final' => 'datetime:Y-m-d H:i:s',   // ← CAMBIO: Fecha y hora
+        'fecha_deseada' => 'date:Y-m-d'       // ← CAMBIO: Solo fecha
     ];
 
     protected static function boot()
@@ -49,7 +51,86 @@ class Cita extends Model
         });
     }
 
+    // ✅✅✅ NUEVO: Accessors para asegurar formato correcto ✅✅✅
+    
+    /**
+     * Formatear fecha al obtenerla
+     */
+    public function getFechaAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // Si ya es un string en formato Y-m-d, devolverlo tal cual
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+        
+        // Si es Carbon o DateTime, formatear
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Formatear fecha_deseada al obtenerla
+     */
+    public function getFechaDeseadaAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // Si ya es un string en formato Y-m-d, devolverlo tal cual
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+        
+        // Si es Carbon o DateTime, formatear
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Formatear fecha_inicio al obtenerla (con hora)
+     */
+    public function getFechaInicioAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        try {
+            return Carbon::parse($value)->format('Y-m-d H:i:s');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Formatear fecha_final al obtenerla (con hora)
+     */
+    public function getFechaFinalAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        try {
+            return Carbon::parse($value)->format('Y-m-d H:i:s');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     // ✅ RELACIONES USANDO UUIDs
+    
     public function sede(): BelongsTo
     {
         return $this->belongsTo(Sede::class);
@@ -74,11 +155,16 @@ class Cita extends Model
     {
         return $this->belongsTo(Usuario::class, 'usuario_creo_cita_id');
     }
-      public function pacientePorId(): BelongsTo
+
+    public function pacientePorId(): BelongsTo
     {
         return $this->belongsTo(Paciente::class, 'paciente_id', 'id');
     }
-       public function obtenerPaciente()
+
+    /**
+     * Método auxiliar para obtener paciente (UUID o ID)
+     */
+    public function obtenerPaciente()
     {
         // Primero intentar por UUID (sistema nuevo)
         if (!empty($this->paciente_uuid)) {
@@ -96,7 +182,8 @@ class Cita extends Model
         return null;
     }
 
-    // Scopes
+    // ✅ SCOPES
+    
     public function scopeBySede($query, $sedeId)
     {
         return $query->where('sede_id', $sedeId);
@@ -122,23 +209,46 @@ class Cita extends Model
         return $query->whereDate('fecha', now()->toDateString());
     }
 
-    // Métodos auxiliares
-    public function getDuracionAttribute()
+    // ✅ MÉTODOS AUXILIARES
+    
+    /**
+     * Obtener duración de la cita en minutos
+     */
+    public function getDuracionAttribute(): ?int
     {
-        return $this->fecha_inicio->diffInMinutes($this->fecha_final);
+        if (!$this->fecha_inicio || !$this->fecha_final) {
+            return null;
+        }
+
+        try {
+            $inicio = Carbon::parse($this->fecha_inicio);
+            $final = Carbon::parse($this->fecha_final);
+            return $inicio->diffInMinutes($final);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
-    public function getEsProgramadaAttribute()
+    /**
+     * Verificar si la cita está programada
+     */
+    public function getEsProgramadaAttribute(): bool
     {
         return $this->estado === 'PROGRAMADA';
     }
 
-    public function getEsAtendidaAttribute()
+    /**
+     * Verificar si la cita fue atendida
+     */
+    public function getEsAtendidaAttribute(): bool
     {
         return $this->estado === 'ATENDIDA';
     }
 
-    public function getEsCanceladaAttribute()
+    /**
+     * Verificar si la cita fue cancelada
+     */
+    public function getEsCanceladaAttribute(): bool
     {
         return $this->estado === 'CANCELADA';
     }
