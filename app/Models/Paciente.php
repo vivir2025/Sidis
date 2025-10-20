@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -64,6 +63,9 @@ class Paciente extends Model
         'fecha_actualizacion' => 'date',
     ];
 
+    // ✅✅✅ AGREGAR APPENDS PARA QUE SIEMPRE SE INCLUYAN LOS ACCESSORS ✅✅✅
+    protected $appends = ['nombre_completo', 'edad'];
+
     protected static function boot()
     {
         parent::boot();
@@ -75,7 +77,34 @@ class Paciente extends Model
         });
     }
 
-    // Relaciones BelongsTo
+    // ✅✅✅ ACCESSORS (MOVERLOS AQUÍ ARRIBA) ✅✅✅
+    
+    /**
+     * Obtener el nombre completo del paciente
+     */
+    public function getNombreCompletoAttribute(): string
+    {
+        $nombre = trim(($this->primer_nombre ?? '') . ' ' . ($this->segundo_nombre ?? ''));
+        $apellido = trim(($this->primer_apellido ?? '') . ' ' . ($this->segundo_apellido ?? ''));
+        $nombreCompleto = trim($nombre . ' ' . $apellido);
+        
+        return $nombreCompleto ?: 'Paciente sin nombre';
+    }
+
+    /**
+     * Calcular la edad del paciente
+     */
+    public function getEdadAttribute(): ?int
+    {
+        if (!$this->fecha_nacimiento) {
+            return null;
+        }
+
+        return Carbon::parse($this->fecha_nacimiento)->age;
+    }
+
+    // ✅ RELACIONES BELONGSTO
+    
     public function sede(): BelongsTo
     {
         return $this->belongsTo(Sede::class);
@@ -161,7 +190,8 @@ class Paciente extends Model
         return $this->belongsTo(Brigada::class);
     }
 
-    // Relaciones HasMany (si existen otras tablas)
+    // ✅ RELACIONES HASMANY
+    
     public function visitas(): HasMany
     {
         return $this->hasMany(Visita::class);
@@ -177,15 +207,8 @@ class Paciente extends Model
         return $this->hasMany(HistoriaClinica::class);
     }
 
-    // Accessors
-    public function getEdadAttribute()
-    {
-        return $this->fecha_nacimiento ? Carbon::parse($this->fecha_nacimiento)->age : null;
-    }
-
-
-
-    // Scopes
+    // ✅ SCOPES
+    
     public function scopeActivos($query)
     {
         return $query->where('estado', 'ACTIVO');
@@ -200,11 +223,4 @@ class Paciente extends Model
     {
         return $query->where('documento', $documento);
     }
-
-    public function getNombreCompletoAttribute()
-{
-    $nombre = trim(($this->primer_nombre ?? '') . ' ' . ($this->segundo_nombre ?? ''));
-    $apellido = trim(($this->primer_apellido ?? '') . ' ' . ($this->segundo_apellido ?? ''));
-    return trim($nombre . ' ' . $apellido) ?: 'Paciente sin nombre';
-}
 }
