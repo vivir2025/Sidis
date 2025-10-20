@@ -53,7 +53,9 @@ class PacienteResource extends JsonResource
             'segundo_nombre' => $this->segundo_nombre,
             'primer_apellido' => $this->primer_apellido,
             'segundo_apellido' => $this->segundo_apellido,
-            'fecha_nacimiento' => $this->fecha_nacimiento?->format('Y-m-d'),
+             'fecha_nacimiento' => $this->fecha_nacimiento 
+                ? $this->fecha_nacimiento->format('Y-m-d') 
+                : null,
             'edad' => $this->edad,
             'sexo' => $this->sexo,
             'direccion' => $this->direccion,
