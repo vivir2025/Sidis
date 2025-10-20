@@ -57,13 +57,14 @@ class Paciente extends Model
         'fecha_actualizacion'
     ];
 
+    // ✅✅✅ CAMBIO CRÍTICO: Especificar formato de fecha ✅✅✅
     protected $casts = [
-        'fecha_nacimiento' => 'date',
-        'fecha_registro' => 'date',
-        'fecha_actualizacion' => 'date',
+        'fecha_nacimiento' => 'date:Y-m-d',      // ← CAMBIO AQUÍ
+        'fecha_registro' => 'date:Y-m-d',        // ← Y AQUÍ
+        'fecha_actualizacion' => 'date:Y-m-d',   // ← Y AQUÍ
     ];
 
-    // ✅✅✅ AGREGAR APPENDS PARA QUE SIEMPRE SE INCLUYAN LOS ACCESSORS ✅✅✅
+    // ✅ AGREGAR APPENDS PARA QUE SIEMPRE SE INCLUYAN LOS ACCESSORS
     protected $appends = ['nombre_completo', 'edad'];
 
     protected static function boot()
@@ -77,7 +78,7 @@ class Paciente extends Model
         });
     }
 
-    // ✅✅✅ ACCESSORS (MOVERLOS AQUÍ ARRIBA) ✅✅✅
+    // ✅✅✅ ACCESSORS ✅✅✅
     
     /**
      * Obtener el nombre completo del paciente
@@ -101,6 +102,30 @@ class Paciente extends Model
         }
 
         return Carbon::parse($this->fecha_nacimiento)->age;
+    }
+
+    // ✅✅✅ NUEVO: Formatear fecha de nacimiento (OPCIONAL) ✅✅✅
+    /**
+     * Formatear fecha de nacimiento al obtenerla
+     * Este accessor asegura que siempre se devuelva en formato Y-m-d
+     */
+    public function getFechaNacimientoAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // Si ya es un string en formato Y-m-d, devolverlo tal cual
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+        
+        // Si es Carbon o DateTime, formatear
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     // ✅ RELACIONES BELONGSTO
