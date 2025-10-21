@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Carbon\Carbon;
 
 class PacienteResource extends JsonResource
 {
@@ -14,7 +15,7 @@ class PacienteResource extends JsonResource
             'registro' => $this->registro,
             'documento' => $this->documento,
             
-            // ✅ IDs DIRECTOS PARA EL FORMULARIO (ya están bien)
+            // ✅ IDs DIRECTOS PARA EL FORMULARIO
             'tipo_documento_id' => $this->tipoDocumento?->uuid,
             'empresa_id' => $this->empresa?->uuid,
             'regimen_id' => $this->regimen?->uuid,
@@ -32,7 +33,7 @@ class PacienteResource extends JsonResource
             'auxiliar_id' => $this->auxiliar?->uuid ?? null,
             'brigada_id' => $this->brigada?->uuid ?? null,
             
-            // ✅ CAMPOS DE ACUDIENTE Y ACOMPAÑANTE (ya están bien)
+            // ✅ CAMPOS DE ACUDIENTE Y ACOMPAÑANTE
             'nombre_acudiente' => $this->nombre_acudiente,
             'parentesco_acudiente' => $this->parentesco_acudiente,
             'telefono_acudiente' => $this->telefono_acudiente,
@@ -40,7 +41,7 @@ class PacienteResource extends JsonResource
             'acompanante_nombre' => $this->acompanante_nombre,
             'acompanante_telefono' => $this->acompanante_telefono,
             
-            // ✅ DATOS BÁSICOS (ya están bien)
+            // ✅ DATOS BÁSICOS
             'tipo_documento' => $this->whenLoaded('tipoDocumento', function () {
                 return [
                     'uuid' => $this->tipoDocumento->uuid,
@@ -48,14 +49,16 @@ class PacienteResource extends JsonResource
                     'nombre' => $this->tipoDocumento->nombre
                 ];
             }),
+            
             'nombre_completo' => $this->nombre_completo,
             'primer_nombre' => $this->primer_nombre,
             'segundo_nombre' => $this->segundo_nombre,
             'primer_apellido' => $this->primer_apellido,
             'segundo_apellido' => $this->segundo_apellido,
-             'fecha_nacimiento' => $this->fecha_nacimiento 
-                ? $this->fecha_nacimiento->format('Y-m-d') 
-                : null,
+            
+            // ✅ FECHA DE NACIMIENTO CORREGIDA
+            'fecha_nacimiento' => $this->formatDate($this->fecha_nacimiento, 'Y-m-d'),
+            
             'edad' => $this->edad,
             'sexo' => $this->sexo,
             'direccion' => $this->direccion,
@@ -65,7 +68,7 @@ class PacienteResource extends JsonResource
             'estado_civil' => $this->estado_civil,
             'observacion' => $this->observacion,
             
-            // ✅ RELACIONES EXISTENTES (ya están bien)
+            // ✅ RELACIONES EXISTENTES
             'empresa' => $this->whenLoaded('empresa', function () {
                 return [
                     'uuid' => $this->empresa->uuid,
@@ -154,7 +157,7 @@ class PacienteResource extends JsonResource
                 ];
             }),
             
-            // ✅ AGREGAR ESTAS RELACIONES ADMINISTRATIVAS QUE FALTABAN
+            // ✅ RELACIONES ADMINISTRATIVAS
             'novedad' => $this->whenLoaded('novedad', function () {
                 return [
                     'uuid' => $this->novedad->uuid,
@@ -176,7 +179,7 @@ class PacienteResource extends JsonResource
                 ];
             }),
             
-            // ✅ ESTRUCTURA ANIDADA PARA COMPATIBILIDAD (ya está bien)
+            // ✅ ESTRUCTURA ANIDADA PARA COMPATIBILIDAD
             'acudiente' => [
                 'nombre' => $this->nombre_acudiente,
                 'parentesco' => $this->parentesco_acudiente,
@@ -189,11 +192,11 @@ class PacienteResource extends JsonResource
                 'telefono' => $this->acompanante_telefono
             ],
             
-            // ✅ FECHAS Y RESTO (ya están bien)
-            'fecha_registro' => $this->fecha_registro?->format('Y-m-d'),
-            'fecha_actualizacion' => $this->fecha_actualizacion?->format('Y-m-d'),
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            // ✅ FECHAS CORREGIDAS
+            'fecha_registro' => $this->formatDate($this->fecha_registro, 'Y-m-d'),
+            'fecha_actualizacion' => $this->formatDate($this->fecha_actualizacion, 'Y-m-d'),
+            'created_at' => $this->formatDate($this->created_at, 'c'),
+            'updated_at' => $this->formatDate($this->updated_at, 'c'),
             
             // Estadísticas
             'total_citas' => $this->whenCounted('citas'),
@@ -203,7 +206,7 @@ class PacienteResource extends JsonResource
                 return $this->citas->take(5)->map(function ($cita) {
                     return [
                         'uuid' => $cita->uuid ?? null,
-                        'fecha' => $cita->fecha?->format('Y-m-d'),
+                        'fecha' => $this->formatDate($cita->fecha, 'Y-m-d'),
                         'estado' => $cita->estado,
                         'motivo' => $cita->motivo
                     ];
@@ -214,11 +217,50 @@ class PacienteResource extends JsonResource
                 return $this->historiasClinicas->take(5)->map(function ($historia) {
                     return [
                         'uuid' => $historia->uuid ?? null,
-                        'fecha' => $historia->fecha?->format('Y-m-d'),
+                        'fecha' => $this->formatDate($historia->fecha, 'Y-m-d'),
                         'tipo' => $historia->tipo ?? 'CONSULTA'
                     ];
                 });
             })
         ];
+    }
+
+    /**
+     * ✅ Método helper para formatear fechas de forma segura
+     * 
+     * @param mixed $date
+     * @param string $format
+     * @return string|null
+     */
+    private function formatDate($date, string $format = 'Y-m-d'): ?string
+    {
+        if (!$date) {
+            return null;
+        }
+        
+        // Si ya es una instancia de Carbon
+        if ($date instanceof Carbon) {
+            return $date->format($format);
+        }
+        
+        // Si es una instancia de DateTime
+        if ($date instanceof \DateTime) {
+            return Carbon::instance($date)->format($format);
+        }
+        
+        // Si es un string, intentar parsearlo
+        if (is_string($date)) {
+            try {
+                return Carbon::parse($date)->format($format);
+            } catch (\Exception $e) {
+                \Log::warning('Error al parsear fecha en PacienteResource', [
+                    'fecha' => $date,
+                    'error' => $e->getMessage()
+                ]);
+                return $date; // Devolver el valor original si falla
+            }
+        }
+        
+        return null;
     }
 }
