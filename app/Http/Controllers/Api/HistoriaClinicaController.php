@@ -1557,8 +1557,8 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
 private function determinarVistaSegunEspecialidad(string $especialidad, string $tipoConsulta): array
 {
     $especialidadesConComplementaria = [
-        'CARDIOLOGÍA', 'PEDIATRÍA', 'GINECOLOGÍA', 'NEUROLOGÍA', 
-        'DERMATOLOGÍA', 'ORTOPEDIA', 'PSIQUIATRÍA'
+        'REFORMULACION', 'NUTRICIONISTA', 'PSICOLOGIA', 'NEFROLOGIA', 
+        'INTERNISTA', 'FISIOTERAPIA', 'TRABAJO SOCIAL'
     ];
 
     $usaComplementaria = in_array($especialidad, $especialidadesConComplementaria);
@@ -1569,33 +1569,33 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
             'PRIMERA VEZ' => 'medicina-general.primera-vez',
             'CONTROL' => 'medicina-general.control'
         ],
-        'CARDIOLOGÍA' => [
-            'PRIMERA VEZ' => 'cardiologia.primera-vez',
-            'CONTROL' => 'cardiologia.control'
+        'REFORMULACION' => [
+            'PRIMERA VEZ' => 'reformulacion.primera-vez',
+            'CONTROL' => 'reformulacion.control'
         ],
-        'PEDIATRÍA' => [
-            'PRIMERA VEZ' => 'pediatria.primera-vez',
-            'CONTROL' => 'pediatria.control'
+        'NUTRICIONISTA' => [
+            'PRIMERA VEZ' => 'nutricionista.primera-vez',
+            'CONTROL' => 'nutricionista.control'
         ],
-        'GINECOLOGÍA' => [
-            'PRIMERA VEZ' => 'ginecologia.primera-vez',
-            'CONTROL' => 'ginecologia.control'
+        'PSICOLOGIA' => [
+            'PRIMERA VEZ' => 'psicologia.primera-vez',
+            'CONTROL' => 'psicologia.control'
         ],
-        'NEUROLOGÍA' => [
-            'PRIMERA VEZ' => 'neurologia.primera-vez',
-            'CONTROL' => 'neurologia.control'
+        'NEFROLOGIA' => [
+            'PRIMERA VEZ' => 'nefrologia.primera-vez',
+            'CONTROL' => 'nefrologia.control'
         ],
-        'DERMATOLOGÍA' => [
-            'PRIMERA VEZ' => 'dermatologia.primera-vez',
-            'CONTROL' => 'dermatologia.control'
+        'INTERNISTA' => [
+            'PRIMERA VEZ' => 'internista.primera-vez',
+            'CONTROL' => 'internista.control'
         ],
-        'ORTOPEDIA' => [
-            'PRIMERA VEZ' => 'ortopedia.primera-vez',
-            'CONTROL' => 'ortopedia.control'
+        'FISIOTERAPIA' => [
+            'PRIMERA VEZ' => 'fisioterapia.primera-vez',
+            'CONTROL' => 'fisioterapia.control'
         ],
-        'PSIQUIATRÍA' => [
-            'PRIMERA VEZ' => 'psiquiatria.primera-vez',
-            'CONTROL' => 'psiquiatria.control'
+        'TRABAJO SOCIAL' => [
+            'PRIMERA VEZ' => 'trabajo-social.primera-vez',
+            'CONTROL' => 'trabajo-social.control'
         ]
     ];
 

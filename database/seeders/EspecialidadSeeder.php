@@ -13,13 +13,13 @@ class EspecialidadSeeder extends Seeder
     {
         $especialidades = [
             ['id' => 1, 'codigo' => 'MG001', 'nombre' => 'MEDICINA GENERAL'],
-            ['id' => 2, 'codigo' => 'CA002', 'nombre' => 'CARDIOLOGÍA'],
-            ['id' => 3, 'codigo' => 'PE003', 'nombre' => 'PEDIATRÍA'],
-            ['id' => 4, 'codigo' => 'GI004', 'nombre' => 'GINECOLOGÍA'],
-            ['id' => 5, 'codigo' => 'NE005', 'nombre' => 'NEUROLOGÍA'],
-            ['id' => 6, 'codigo' => 'DE006', 'nombre' => 'DERMATOLOGÍA'],
-            ['id' => 7, 'codigo' => 'OR007', 'nombre' => 'ORTOPEDIA'],
-            ['id' => 8, 'codigo' => 'PS008', 'nombre' => 'PSIQUIATRÍA']
+            ['id' => 2, 'codigo' => 'CA002', 'nombre' => 'REFORMULACION'],
+            ['id' => 3, 'codigo' => 'PE003', 'nombre' => 'NUTRICIONISTA'],
+            ['id' => 4, 'codigo' => 'GI004', 'nombre' => 'PSICOLOGIA'],
+            ['id' => 5, 'codigo' => 'NE005', 'nombre' => 'NEFROLOGIA'],
+            ['id' => 6, 'codigo' => 'DE006', 'nombre' => 'INTERNISTA'],
+            ['id' => 7, 'codigo' => 'OR007', 'nombre' => 'FISIOTERAPIA'],
+            ['id' => 8, 'codigo' => 'PS008', 'nombre' => 'TRABAJO SOCIAL']
         ];
 
         foreach ($especialidades as $especialidadData) {
