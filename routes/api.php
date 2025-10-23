@@ -137,28 +137,39 @@ Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda
 Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
 Route::patch('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
 Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
-    // ================================
-    // AGENDAS
-    // ================================
-    Route::prefix('agendas')->group(function () {
-        Route::get('/', [AgendaController::class, 'index']);
-        Route::post('/', [AgendaController::class, 'store']);
-        Route::get('/disponibles', [AgendaController::class, 'disponibles']);
-        
-        // ✅ NUEVA RUTA: Contar citas por UUID de agenda
-        Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas']);
-        
-
-        Route::get('/{uuid}/citas', [AgendaController::class, 'getCitas'])
+ // ================================
+// AGENDAS
+// ================================
+Route::prefix('agendas')->group(function () {
+    // ✅ Rutas sin parámetros (van primero)
+    Route::get('/', [AgendaController::class, 'index']);
+    Route::post('/', [AgendaController::class, 'store']);
+    Route::get('/disponibles', [AgendaController::class, 'disponibles']);
+    
+    // ✅ MANTENGO AMBAS RUTAS (agregando validación a la primera)
+    Route::get('/{uuid}/citas/count', [AgendaController::class, 'contarCitas'])
+        ->where('uuid', '[0-9a-f-]{36}');  // ⬅️ SOLO AGREGUÉ ESTO
+    
+    Route::get('/{uuid}/citas', [AgendaController::class, 'getCitas'])
         ->where('uuid', '[0-9a-f-]{36}');
 
-        Route::get('/{uuid}/citas/count', [AgendaController::class, 'getCitasCount'])
+    Route::get('/{uuid}/citas/count', [AgendaController::class, 'getCitasCount'])
         ->where('uuid', '[0-9a-f-]{36}');
-        Route::get('/{uuid}', [AgendaController::class, 'show'])->where('uuid', '[0-9a-f-]{36}');
-        Route::put('/{agenda}', [AgendaController::class, 'update']);
-        Route::delete('/{agenda}', [AgendaController::class, 'destroy']);
-        Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda']);
-    });
+    
+    Route::get('/{uuid}', [AgendaController::class, 'show'])
+        ->where('uuid', '[0-9a-f-]{36}');
+    
+    // ✅ Solo agregué validación UUID
+    Route::put('/{agenda}', [AgendaController::class, 'update'])
+        ->where('agenda', '[0-9a-f-]{36}');  // ⬅️ AGREGADO
+    
+    Route::delete('/{agenda}', [AgendaController::class, 'destroy'])
+        ->where('agenda', '[0-9a-f-]{36}');  // ⬅️ AGREGADO
+    
+    Route::get('/{agenda}/citas', [AgendaController::class, 'citasAgenda'])
+        ->where('agenda', '[0-9a-f-]{36}');  // ⬅️ AGREGADO
+});
+
 
     // ================================
     // ESPECIALIDADES
