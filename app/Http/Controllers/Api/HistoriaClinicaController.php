@@ -128,6 +128,21 @@ public function store(Request $request)
             throw new \Exception('Cita no encontrada con UUID: ' . $request->cita_uuid);
         }
 
+          // ✅ PASO 2: DETECTAR ESPECIALIDAD
+        $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? 'MEDICINA GENERAL';
+        
+        \Log::info('🔍 Especialidad detectada en store', [
+            'especialidad' => $especialidad,
+            'cita_uuid' => $request->cita_uuid,
+            'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
+        ]);
+
+        // ✅ PASO 3: SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
+        if ($especialidad === 'FISIOTERAPIA') {
+            DB::rollBack(); // Cancelar transacción actual
+            return $this->storeFisioterapia($request, $cita);
+        }
+
         // ✅ CREAR HISTORIA - SOLO CAMPOS QUE EXISTEN EN TU MIGRACIÓN
         $historia = HistoriaClinica::create([
             'uuid' => $request->uuid ?? Str::uuid(),
@@ -484,6 +499,169 @@ public function store(Request $request)
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
             'file' => basename($e->getFile())
+        ], 500);
+    }
+}
+
+private function storeFisioterapia(Request $request, $cita)
+{
+    $request->validate([
+        'paciente_uuid' => 'required|string',
+        'usuario_id' => 'required|integer',
+        'sede_id' => 'required|integer',
+        'motivo' => 'nullable|string',
+        'idDiagnostico' => 'nullable|string',
+        'diagnosticos_adicionales' => 'nullable|array',
+        'remisiones' => 'nullable|array',
+    ]);
+
+    DB::beginTransaction();
+    try {
+        \Log::info('🏥 Guardando historia de FISIOTERAPIA', [
+            'cita_uuid' => $cita->uuid,
+            'paciente_uuid' => $request->paciente_uuid
+        ]);
+
+        // ✅ CREAR HISTORIA - SOLO CAMPOS DE FISIOTERAPIA
+        $historia = HistoriaClinica::create([
+            'uuid' => $request->uuid ?? Str::uuid(),
+            'sede_id' => $request->sede_id,
+            'cita_id' => $cita->id,
+            
+            // ✅ CAMPOS BÁSICOS
+            'finalidad' => $request->finalidad ?? 'CONSULTA',
+            'causa_externa' => $request->causa_externa,
+            'acompanante' => $request->acompanante,
+            'acu_parentesco' => $request->parentesco,
+            'acu_telefono' => $request->telefono_acudiente,
+            'motivo_consulta' => $request->motivo ?? '',
+            
+            // ✅ MEDIDAS ANTROPOMÉTRICAS
+            'peso' => $request->peso,
+            'talla' => $request->talla,
+            'imc' => $request->imc,
+            'clasificacion' => $request->clasificacion_imc,
+            'perimetro_abdominal' => $request->perimetro_abdominal,
+            'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
+        ]);
+
+        // ✅ CREAR COMPLEMENTARIA CON CAMPOS DE FISIOTERAPIA
+        \App\Models\HistoriaClinicaComplementaria::create([
+            'uuid' => Str::uuid(),
+            'historia_clinica_id' => $historia->id,
+            
+            // ✅ EVALUACIONES ESPECÍFICAS DE FISIOTERAPIA
+            'actitud' => $request->Actitud,
+            'evaluacion_d' => $request->Evaluaciond,
+            'evaluacion_p' => $request->Evaluacionp,
+            'estado' => $request->Estado,
+            'evaluacion_dolor' => $request->Evaluacion_dolor,
+            'evaluacion_os' => $request->Evaluacionos,
+            'evaluacion_neu' => $request->Evaluacionneu,
+            'comitante' => $request->Comitante,
+            
+            // ✅ PLAN DE TRATAMIENTO
+            'plan_seguir' => $request->plan_seguir,
+        ]);
+
+        // ✅ PROCESAR DIAGNÓSTICO PRINCIPAL
+        if ($request->idDiagnostico) {
+            $diagnostico = \App\Models\Diagnostico::where('uuid', $request->idDiagnostico)
+                ->orWhere('id', $request->idDiagnostico)
+                ->first();
+            
+            if ($diagnostico) {
+                \App\Models\HistoriaDiagnostico::create([
+                    'uuid' => Str::uuid(),
+                    'historia_clinica_id' => $historia->id,
+                    'diagnostico_id' => $diagnostico->id,
+                    'tipo' => 'PRINCIPAL',
+                    'tipo_diagnostico' => $request->tipo_diagnostico ?? 'CONFIRMADO_NUEVO',
+                ]);
+            }
+        }
+
+        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES
+        if ($request->has('diagnosticos_adicionales') && is_array($request->diagnosticos_adicionales)) {
+            foreach ($request->diagnosticos_adicionales as $diag) {
+                if (!empty($diag['idDiagnostico'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['idDiagnostico'])
+                        ->orWhere('id', $diag['idDiagnostico'])
+                        ->first();
+                    
+                    if ($diagnostico) {
+                        \App\Models\HistoriaDiagnostico::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'diagnostico_id' => $diagnostico->id,
+                            'tipo' => 'SECUNDARIO',
+                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR REMISIONES
+        if ($request->has('remisiones') && is_array($request->remisiones)) {
+            foreach ($request->remisiones as $rem) {
+                $remisionId = $rem['idRemision'] ?? null;
+                
+                if (!empty($remisionId)) {
+                    $remision = \App\Models\Remision::where('uuid', $remisionId)
+                        ->orWhere('id', $remisionId)
+                        ->first();
+                    
+                    if ($remision) {
+                        \App\Models\HistoriaRemision::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'remision_id' => $remision->id,
+                            'observacion' => $rem['remObservacion'] ?? null,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        DB::commit();
+
+        // ✅ CARGAR RELACIONES
+        $historia->load([
+            'sede', 
+            'cita.paciente', 
+            'historiaDiagnosticos.diagnostico',
+            'historiaRemisiones.remision',
+            'complementaria'
+        ]);
+
+        \Log::info('✅ Historia de fisioterapia guardada exitosamente', [
+            'historia_uuid' => $historia->uuid,
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historia clínica de fisioterapia guardada exitosamente',
+            'data' => $historia,
+            'historia_uuid' => $historia->uuid,
+            'redirect_url' => route('cronograma.index')
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Log::error('❌ Error guardando historia de fisioterapia', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica de fisioterapia',
+            'error' => $e->getMessage()
         ], 500);
     }
 }
