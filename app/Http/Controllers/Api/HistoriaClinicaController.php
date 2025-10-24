@@ -533,7 +533,7 @@ private function storeFisioterapia(Request $request, $cita)
             'causa_externa' => $request->causa_externa,
             'acompanante' => $request->acompanante,
             'acu_parentesco' => $request->acu_parentesco,
-            'acu_telefono' => $request->telefono_acudiente,
+            'acu_telefono' => $request->acu_telefono,
             'motivo_consulta' => $request->motivo_consulta ?? '',
             
             // ✅ MEDIDAS ANTROPOMÉTRICAS
