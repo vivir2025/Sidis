@@ -532,15 +532,15 @@ private function storeFisioterapia(Request $request, $cita)
             'finalidad' => $request->finalidad ?? 'CONSULTA',
             'causa_externa' => $request->causa_externa,
             'acompanante' => $request->acompanante,
-            'acu_parentesco' => $request->parentesco,
+            'acu_parentesco' => $request->acu_parentesco,
             'acu_telefono' => $request->telefono_acudiente,
-            'motivo_consulta' => $request->motivo ?? '',
+            'motivo_consulta' => $request->motivo_consulta ?? '',
             
             // ✅ MEDIDAS ANTROPOMÉTRICAS
             'peso' => $request->peso,
             'talla' => $request->talla,
             'imc' => $request->imc,
-            'clasificacion' => $request->clasificacion_imc,
+            'clasificacion' => $request->clasificacion,
             'perimetro_abdominal' => $request->perimetro_abdominal,
             'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
         ]);
@@ -551,14 +551,14 @@ private function storeFisioterapia(Request $request, $cita)
             'historia_clinica_id' => $historia->id,
             
             // ✅ EVALUACIONES ESPECÍFICAS DE FISIOTERAPIA
-            'actitud' => $request->Actitud,
-            'evaluacion_d' => $request->Evaluaciond,
-            'evaluacion_p' => $request->Evaluacionp,
-            'estado' => $request->Estado,
-            'evaluacion_dolor' => $request->Evaluacion_dolor,
-            'evaluacion_os' => $request->Evaluacionos,
-            'evaluacion_neu' => $request->Evaluacionneu,
-            'comitante' => $request->Comitante,
+            'actitud' => $request->actitud,
+            'evaluacion_d' => $request->evaluacion_d,
+            'evaluacion_p' => $request->evaluacion_p,
+            'estado' => $request->estado,
+            'evaluacion_dolor' => $request->evaluacion_dolor,
+            'evaluacion_os' => $request->evaluacion_os,
+            'evaluacion_neu' => $request->evaluacion_neu,
+            'comitante' => $request->comitante,
             
             // ✅ PLAN DE TRATAMIENTO
             'plan_seguir' => $request->plan_seguir,
