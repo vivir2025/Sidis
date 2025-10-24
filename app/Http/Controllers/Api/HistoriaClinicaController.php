@@ -641,12 +641,17 @@ private function storeFisioterapia(Request $request, $cita)
             'remisiones_count' => $historia->historiaRemisiones->count()
         ]);
 
+        // ✅ RESPUESTA LIMPIA SIN REDIRECT
         return response()->json([
             'success' => true,
             'message' => 'Historia clínica de fisioterapia guardada exitosamente',
-            'data' => $historia,
-            'historia_uuid' => $historia->uuid,
-            'redirect_url' => route('cronograma.index')
+            'data' => [
+                'historia' => $historia,
+                'uuid' => $historia->uuid,
+                'cita_uuid' => $cita->uuid,
+                'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+                'remisiones_count' => $historia->historiaRemisiones->count(),
+            ]
         ], 201);
 
     } catch (\Exception $e) {
@@ -655,7 +660,8 @@ private function storeFisioterapia(Request $request, $cita)
         \Log::error('❌ Error guardando historia de fisioterapia', [
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
-            'file' => basename($e->getFile())
+            'file' => basename($e->getFile()),
+            'trace' => $e->getTraceAsString()
         ]);
         
         return response()->json([
