@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
 use App\Traits\{HasUuidTrait, SyncableTrait};
 
 class HistoriaClinica extends Model
@@ -170,6 +172,12 @@ class HistoriaClinica extends Model
     {
         return $this->hasMany(HistoriaCups::class);
     }
+
+    public function complementaria(): HasOne
+{
+    return $this->hasOne(HistoriaClinicaComplementaria::class, 'historia_clinica_id');
+}
+
 
     // ✅ RELACIONES ADICIONALES
     public function incapacidades(): HasMany
