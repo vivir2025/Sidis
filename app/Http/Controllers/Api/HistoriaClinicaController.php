@@ -504,26 +504,22 @@ public function store(Request $request)
 }
 private function storeFisioterapia(Request $request, $cita)
 {
-    // ✅ VALIDACIÓN CORREGIDA - TODO EN SNAKE_CASE
+    // ✅ VALIDACIÓN FLEXIBLE - ACEPTA CAMELCASE Y SNAKE_CASE
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
         'sede_id' => 'required|integer',
         'motivo_consulta' => 'nullable|string',
         
-        // ✅ DIAGNÓSTICO PRINCIPAL - SNAKE_CASE
-        'id_diagnostico' => 'required|string',
+        // ✅ DIAGNÓSTICO PRINCIPAL - AMBOS FORMATOS
+        'idDiagnostico' => 'required|string',
         'tipo_diagnostico' => 'required|string|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
         
-        // ✅ DIAGNÓSTICOS ADICIONALES - SNAKE_CASE
+        // ✅ DIAGNÓSTICOS ADICIONALES - FLEXIBLE
         'diagnosticos_adicionales' => 'nullable|array',
-        'diagnosticos_adicionales.*.id_diagnostico' => 'required_with:diagnosticos_adicionales|string',
-        'diagnosticos_adicionales.*.tipo_diagnostico' => 'required_with:diagnosticos_adicionales|string|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
         
-        // ✅ REMISIONES - SNAKE_CASE
+        // ✅ REMISIONES - FLEXIBLE
         'remisiones' => 'nullable|array',
-        'remisiones.*.id_remision' => 'required_with:remisiones|string',
-        'remisiones.*.observacion' => 'nullable|string|max:500',
         
         // ✅ OTROS CAMPOS
         'peso' => 'nullable|numeric',
@@ -553,14 +549,14 @@ private function storeFisioterapia(Request $request, $cita)
         \Log::info('🏥 Guardando historia de FISIOTERAPIA', [
             'cita_uuid' => $cita->uuid,
             'paciente_uuid' => $request->paciente_uuid,
-            'tiene_diagnostico_principal' => !empty($request->id_diagnostico),
+            'tiene_diagnostico_principal' => !empty($request->idDiagnostico),
             'diagnosticos_adicionales_count' => $request->diagnosticos_adicionales ? count($request->diagnosticos_adicionales) : 0,
             'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
         ]);
 
         // ✅ LOG DE DATOS RECIBIDOS
         \Log::info('📋 Datos recibidos en storeFisioterapia', [
-            'id_diagnostico' => $request->id_diagnostico,
+            'idDiagnostico' => $request->idDiagnostico,
             'tipo_diagnostico' => $request->tipo_diagnostico,
             'diagnosticos_adicionales' => $request->diagnosticos_adicionales,
             'remisiones' => $request->remisiones,
@@ -615,17 +611,20 @@ private function storeFisioterapia(Request $request, $cita)
 
         \Log::info('✅ Tabla complementaria creada');
 
-        // ✅ PROCESAR DIAGNÓSTICO PRINCIPAL
+        // ✅✅✅ PROCESAR DIAGNÓSTICO PRINCIPAL - CORREGIDO ✅✅✅
         $diagnosticosProcesados = [];
         
-        if ($request->id_diagnostico && !empty($request->id_diagnostico)) {
+        // ✅ BUSCAR EN AMBOS FORMATOS
+        $idDiagnosticoPrincipal = $request->idDiagnostico ?? $request->id_diagnostico ?? null;
+        
+        if ($idDiagnosticoPrincipal && !empty($idDiagnosticoPrincipal)) {
             \Log::info('🔍 Procesando diagnóstico principal FISIOTERAPIA', [
-                'id_diagnostico' => $request->id_diagnostico,
+                'idDiagnostico' => $idDiagnosticoPrincipal,
                 'tipo_diagnostico' => $request->tipo_diagnostico
             ]);
             
-            $diagnostico = \App\Models\Diagnostico::where('uuid', $request->id_diagnostico)
-                ->orWhere('id', $request->id_diagnostico)
+            $diagnostico = \App\Models\Diagnostico::where('uuid', $idDiagnosticoPrincipal)
+                ->orWhere('id', $idDiagnosticoPrincipal)
                 ->first();
             
             if ($diagnostico) {
@@ -644,17 +643,17 @@ private function storeFisioterapia(Request $request, $cita)
                 ]);
             } else {
                 \Log::error('❌ Diagnóstico principal NO ENCONTRADO', [
-                    'id_diagnostico' => $request->id_diagnostico
+                    'idDiagnostico' => $idDiagnosticoPrincipal
                 ]);
             }
         } else {
             \Log::warning('⚠️ No se recibió diagnóstico principal', [
-                'id_diagnostico' => $request->id_diagnostico,
-                'is_empty' => empty($request->id_diagnostico)
+                'idDiagnostico' => $request->idDiagnostico,
+                'id_diagnostico' => $request->id_diagnostico
             ]);
         }
 
-        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES
+        // ✅✅✅ PROCESAR DIAGNÓSTICOS ADICIONALES - CORREGIDO ✅✅✅
         if ($request->has('diagnosticos_adicionales') && is_array($request->diagnosticos_adicionales)) {
             \Log::info('🔍 Procesando diagnósticos adicionales FISIOTERAPIA', [
                 'count' => count($request->diagnosticos_adicionales),
@@ -664,12 +663,15 @@ private function storeFisioterapia(Request $request, $cita)
             foreach ($request->diagnosticos_adicionales as $index => $diag) {
                 \Log::info("🔍 Procesando diagnóstico adicional #{$index}", [
                     'diag' => $diag,
-                    'tiene_id_diagnostico' => !empty($diag['id_diagnostico'])
+                    'keys' => array_keys($diag)
                 ]);
                 
-                if (!empty($diag['id_diagnostico'])) {
-                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['id_diagnostico'])
-                        ->orWhere('id', $diag['id_diagnostico'])
+                // ✅ BUSCAR EN AMBOS FORMATOS: idDiagnostico o id_diagnostico
+                $idDiagnostico = $diag['idDiagnostico'] ?? $diag['id_diagnostico'] ?? null;
+                
+                if (!empty($idDiagnostico)) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $idDiagnostico)
+                        ->orWhere('id', $idDiagnostico)
                         ->first();
                     
                     if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
@@ -689,7 +691,7 @@ private function storeFisioterapia(Request $request, $cita)
                     } else {
                         \Log::warning('⚠️ Diagnóstico adicional no encontrado o duplicado', [
                             'index' => $index,
-                            'id_diagnostico' => $diag['id_diagnostico'],
+                            'idDiagnostico' => $idDiagnostico,
                             'encontrado' => $diagnostico ? 'SI' : 'NO',
                             'duplicado' => $diagnostico ? in_array($diagnostico->id, $diagnosticosProcesados) : false
                         ]);
@@ -705,7 +707,7 @@ private function storeFisioterapia(Request $request, $cita)
             \Log::info('ℹ️ No hay diagnósticos adicionales para procesar');
         }
 
-        // ✅ PROCESAR REMISIONES
+        // ✅✅✅ PROCESAR REMISIONES - CORREGIDO ✅✅✅
         if ($request->has('remisiones') && is_array($request->remisiones)) {
             \Log::info('🔍 Procesando remisiones FISIOTERAPIA', [
                 'count' => count($request->remisiones),
@@ -715,14 +717,15 @@ private function storeFisioterapia(Request $request, $cita)
             foreach ($request->remisiones as $index => $rem) {
                 \Log::info("🔍 Procesando remisión #{$index}", [
                     'rem' => $rem,
-                    'tiene_id_remision' => !empty($rem['id_remision'])
+                    'keys' => array_keys($rem)
                 ]);
                 
-                $remisionId = $rem['id_remision'] ?? null;
+                // ✅ BUSCAR EN AMBOS FORMATOS: idRemision o id_remision
+                $idRemision = $rem['idRemision'] ?? $rem['id_remision'] ?? null;
                 
-                if (!empty($remisionId)) {
-                    $remision = \App\Models\Remision::where('uuid', $remisionId)
-                        ->orWhere('id', $remisionId)
+                if (!empty($idRemision)) {
+                    $remision = \App\Models\Remision::where('uuid', $idRemision)
+                        ->orWhere('id', $idRemision)
                         ->first();
                     
                     if ($remision) {
@@ -730,7 +733,7 @@ private function storeFisioterapia(Request $request, $cita)
                             'uuid' => Str::uuid(),
                             'historia_clinica_id' => $historia->id,
                             'remision_id' => $remision->id,
-                            'observacion' => $rem['observacion'] ?? null,
+                            'observacion' => $rem['remObservacion'] ?? $rem['observacion'] ?? null,
                         ]);
                         \Log::info('✅ Remisión FISIOTERAPIA guardada', [
                             'index' => $index,
@@ -740,7 +743,7 @@ private function storeFisioterapia(Request $request, $cita)
                     } else {
                         \Log::error('❌ Remisión NO ENCONTRADA', [
                             'index' => $index,
-                            'id_remision' => $remisionId
+                            'idRemision' => $idRemision
                         ]);
                     }
                 } else {
@@ -775,7 +778,7 @@ private function storeFisioterapia(Request $request, $cita)
         return response()->json([
             'success' => true,
             'message' => 'Historia clínica de fisioterapia guardada exitosamente',
-            'historia_uuid' => $historia->uuid, // ✅ AGREGAR ESTE CAMPO
+            'historia_uuid' => $historia->uuid,
             'data' => $historia,
             'offline' => false
         ], 201);
@@ -799,6 +802,7 @@ private function storeFisioterapia(Request $request, $cita)
         ], 500);
     }
 }
+
 
 
 /**
