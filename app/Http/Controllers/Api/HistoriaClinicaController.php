@@ -502,10 +502,9 @@ public function store(Request $request)
         ], 500);
     }
 }
-
 private function storeFisioterapia(Request $request, $cita)
 {
-    // ✅ VALIDACIÓN COMPLETA Y CORRECTA
+    // ✅ VALIDACIÓN CORREGIDA - USAR SNAKE_CASE COMO EN EL HTML
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
@@ -513,18 +512,18 @@ private function storeFisioterapia(Request $request, $cita)
         'motivo_consulta' => 'nullable|string',
         
         // ✅ DIAGNÓSTICO PRINCIPAL - REQUIRED
-        'idDiagnostico' => 'required|string|uuid',
+        'idDiagnostico' => 'required|string',
         'tipo_diagnostico' => 'required|string|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
         
-        // ✅ DIAGNÓSTICOS ADICIONALES - VALIDACIÓN COMPLETA
+        // ✅ DIAGNÓSTICOS ADICIONALES - SNAKE_CASE (id_diagnostico)
         'diagnosticos_adicionales' => 'nullable|array',
-        'diagnosticos_adicionales.*.idDiagnostico' => 'required_with:diagnosticos_adicionales|string|uuid',
+        'diagnosticos_adicionales.*.id_diagnostico' => 'required_with:diagnosticos_adicionales|string',
         'diagnosticos_adicionales.*.tipo_diagnostico' => 'required_with:diagnosticos_adicionales|string|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
         
-        // ✅ REMISIONES - VALIDACIÓN COMPLETA
+        // ✅ REMISIONES - SNAKE_CASE (id_remision y observacion)
         'remisiones' => 'nullable|array',
-        'remisiones.*.idRemision' => 'required_with:remisiones|string|uuid',
-        'remisiones.*.remObservacion' => 'nullable|string|max:500',
+        'remisiones.*.id_remision' => 'required_with:remisiones|string',
+        'remisiones.*.observacion' => 'nullable|string|max:500',
         
         // ✅ OTROS CAMPOS
         'peso' => 'nullable|numeric',
@@ -655,7 +654,7 @@ private function storeFisioterapia(Request $request, $cita)
             ]);
         }
 
-        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES
+        // ✅ PROCESAR DIAGNÓSTICOS ADICIONALES - CORREGIDO CON SNAKE_CASE
         if ($request->has('diagnosticos_adicionales') && is_array($request->diagnosticos_adicionales)) {
             \Log::info('🔍 Procesando diagnósticos adicionales FISIOTERAPIA', [
                 'count' => count($request->diagnosticos_adicionales),
@@ -665,12 +664,13 @@ private function storeFisioterapia(Request $request, $cita)
             foreach ($request->diagnosticos_adicionales as $index => $diag) {
                 \Log::info("🔍 Procesando diagnóstico adicional #{$index}", [
                     'diag' => $diag,
-                    'tiene_idDiagnostico' => !empty($diag['idDiagnostico'])
+                    'tiene_id_diagnostico' => !empty($diag['id_diagnostico']) // ✅ CAMBIO AQUÍ
                 ]);
                 
-                if (!empty($diag['idDiagnostico'])) {
-                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['idDiagnostico'])
-                        ->orWhere('id', $diag['idDiagnostico'])
+                // ✅ USAR id_diagnostico (SNAKE_CASE) EN LUGAR DE idDiagnostico
+                if (!empty($diag['id_diagnostico'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['id_diagnostico'])
+                        ->orWhere('id', $diag['id_diagnostico'])
                         ->first();
                     
                     if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
@@ -690,7 +690,7 @@ private function storeFisioterapia(Request $request, $cita)
                     } else {
                         \Log::warning('⚠️ Diagnóstico adicional no encontrado o duplicado', [
                             'index' => $index,
-                            'idDiagnostico' => $diag['idDiagnostico'],
+                            'id_diagnostico' => $diag['id_diagnostico'], // ✅ CAMBIO AQUÍ
                             'encontrado' => $diagnostico ? 'SI' : 'NO',
                             'duplicado' => $diagnostico ? in_array($diagnostico->id, $diagnosticosProcesados) : false
                         ]);
@@ -706,7 +706,7 @@ private function storeFisioterapia(Request $request, $cita)
             \Log::info('ℹ️ No hay diagnósticos adicionales para procesar');
         }
 
-        // ✅ PROCESAR REMISIONES
+        // ✅ PROCESAR REMISIONES - CORREGIDO CON SNAKE_CASE
         if ($request->has('remisiones') && is_array($request->remisiones)) {
             \Log::info('🔍 Procesando remisiones FISIOTERAPIA', [
                 'count' => count($request->remisiones),
@@ -716,10 +716,11 @@ private function storeFisioterapia(Request $request, $cita)
             foreach ($request->remisiones as $index => $rem) {
                 \Log::info("🔍 Procesando remisión #{$index}", [
                     'rem' => $rem,
-                    'tiene_idRemision' => !empty($rem['idRemision'])
+                    'tiene_id_remision' => !empty($rem['id_remision']) // ✅ CAMBIO AQUÍ
                 ]);
                 
-                $remisionId = $rem['idRemision'] ?? null;
+                // ✅ USAR id_remision (SNAKE_CASE) EN LUGAR DE idRemision
+                $remisionId = $rem['id_remision'] ?? null;
                 
                 if (!empty($remisionId)) {
                     $remision = \App\Models\Remision::where('uuid', $remisionId)
@@ -731,7 +732,7 @@ private function storeFisioterapia(Request $request, $cita)
                             'uuid' => Str::uuid(),
                             'historia_clinica_id' => $historia->id,
                             'remision_id' => $remision->id,
-                            'observacion' => $rem['remObservacion'] ?? null,
+                            'observacion' => $rem['observacion'] ?? null, // ✅ CAMBIO AQUÍ (observacion, no remObservacion)
                         ]);
                         \Log::info('✅ Remisión FISIOTERAPIA guardada', [
                             'index' => $index,
@@ -741,7 +742,7 @@ private function storeFisioterapia(Request $request, $cita)
                     } else {
                         \Log::error('❌ Remisión NO ENCONTRADA', [
                             'index' => $index,
-                            'idRemision' => $remisionId
+                            'id_remision' => $remisionId // ✅ CAMBIO AQUÍ
                         ]);
                     }
                 } else {
