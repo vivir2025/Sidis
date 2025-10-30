@@ -87,10 +87,9 @@ class HistoriaClinicaController extends Controller
 
 
 
-
 public function store(Request $request)
 {
-    // ✅ VALIDACIÓN (mantener igual)
+    // ✅ VALIDACIÓN
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
@@ -112,14 +111,6 @@ public function store(Request $request)
         'cups.*.cups_id' => 'required_with:cups|string',
     ]);
 
-    \Log::info('🔍 DEBUG: Datos recibidos en store', [
-        'has_idDiagnostico' => $request->has('idDiagnostico'),
-        'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
-        'medicamentos_count' => $request->medicamentos ? count($request->medicamentos) : 0,
-        'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
-        'cups_count' => $request->cups ? count($request->cups) : 0,
-    ]);
-
     DB::beginTransaction();
     try {
         // ✅ OBTENER CITA
@@ -128,48 +119,226 @@ public function store(Request $request)
             throw new \Exception('Cita no encontrada con UUID: ' . $request->cita_uuid);
         }
 
-          // ✅ PASO 2: DETECTAR ESPECIALIDAD
+        // ✅ DETECTAR ESPECIALIDAD
         $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? 'MEDICINA GENERAL';
         
         \Log::info('🔍 Especialidad detectada en store', [
             'especialidad' => $especialidad,
-            'cita_uuid' => $request->cita_uuid,
-            'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
+            'tipo_consulta' => $request->tipo_consulta,
+            'cita_uuid' => $request->cita_uuid
         ]);
 
-        // ✅ PASO 3: SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
+        // ✅ SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
         if ($especialidad === 'FISIOTERAPIA') {
-            DB::rollBack(); // Cancelar transacción actual
+            DB::rollBack();
             return $this->storeFisioterapia($request, $cita);
         }
 
-        // ✅ CREAR HISTORIA - SOLO CAMPOS QUE EXISTEN EN TU MIGRACIÓN
-        $historia = HistoriaClinica::create([
-            'uuid' => $request->uuid ?? Str::uuid(),
-            'sede_id' => $request->sede_id,
-            'cita_id' => $cita->id,
-            
-            // ✅ TODOS TUS CAMPOS EXISTENTES
-            'finalidad' => $request->finalidad ?? 'CONSULTA',
-            'acompanante' => $request->acompanante,
-            'acu_telefono' => $request->acu_telefono,
-            'acu_parentesco' => $request->acu_parentesco,
-            'causa_externa' => $request->causa_externa,
-            'motivo_consulta' => $request->motivo_consulta?? '',
-            'enfermedad_actual' => $request->enfermedad_actual?? '',
+        // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
+        $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
+
+        // ✅ CREAR HISTORIA
+        $historia = HistoriaClinica::create($datosHistoria);
+
+        // ✅ PROCESAR DIAGNÓSTICOS (sin cambios)
+        $this->procesarDiagnosticos($request, $historia);
+
+        // ✅ PROCESAR MEDICAMENTOS (sin cambios)
+        $this->procesarMedicamentos($request, $historia);
+
+        // ✅ PROCESAR REMISIONES (sin cambios)
+        $this->procesarRemisiones($request, $historia);
+
+        // ✅ PROCESAR CUPS (sin cambios)
+        $this->procesarCups($request, $historia);
+
+        DB::commit();
+
+        // ✅ CARGAR RELACIONES
+        $historia->load([
+            'sede', 
+            'cita.paciente', 
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ]);
+
+        \Log::info('✅ Historia clínica creada exitosamente', [
+            'tipo_consulta' => $request->tipo_consulta,
+            'historia_uuid' => $historia->uuid,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historia clínica creada exitosamente',
+            'data' => $historia
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Log::error('❌ Error creando historia clínica', [
+            'error' => $e->getMessage(),
+            'tipo_consulta' => $request->tipo_consulta,
+            'line' => $e->getLine()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+/**
+ * ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
+ */
+private function prepararDatosHistoriaSegunTipo(Request $request, $cita)
+{
+    // ✅ DATOS BASE (SIEMPRE SE GUARDAN)
+    $datos = [
+        'uuid' => $request->uuid ?? Str::uuid(),
+        'sede_id' => $request->sede_id,
+        'cita_id' => $cita->id,
+        'motivo_consulta' => $request->motivo_consulta ?? '',
+        'enfermedad_actual' => $request->enfermedad_actual ?? '',
+    ];
+
+    // ✅ CAMPOS COMUNES A PRIMERA VEZ Y CONTROL (CON VALORES POR DEFECTO)
+    $camposComunes = [
+        'finalidad' => $request->finalidad ?? 'CONSULTA',
+        'causa_externa' => $request->causa_externa,
+        'acompanante' => $request->acompanante,
+        'acu_parentesco' => $request->acu_parentesco,
+        'acu_telefono' => $request->acu_telefono,
+        
+        // Medidas antropométricas
+        'peso' => $request->peso,
+        'talla' => $request->talla,
+        'imc' => $request->imc,
+        'clasificacion' => $request->clasificacion,
+        'perimetro_abdominal' => $request->perimetro_abdominal,
+        'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
+        
+        // Test de Morisky
+        'olvida_tomar_medicamentos' => $request->olvida_tomar_medicamentos ?? 'NO',
+        'toma_medicamentos_hora_indicada' => $request->toma_medicamentos_hora_indicada ?? 'SI',
+        'cuando_esta_bien_deja_tomar_medicamentos' => $request->cuando_esta_bien_deja_tomar_medicamentos ?? 'NO',
+        'siente_mal_deja_tomarlos' => $request->siente_mal_deja_tomarlos ?? 'NO',
+        'valoracion_psicologia' => $request->valoracion_psicologia ?? 'NO',
+        'adherente' => $request->adherente,
+        
+        // Revisión por sistemas
+        'general' => $request->general,
+        'cabeza' => $request->cabeza ?? 'NORMAL',
+        'respiratorio' => $request->respiratorio,
+        'cardiovascular' => $request->cardiovascular ?? 'NORMAL',
+        'gastrointestinal' => $request->gastrointestinal ?? 'NORMAL',
+        'osteoatromuscular' => $request->osteoatromuscular ?? 'NORMAL',
+        'snc' => $request->snc ?? 'NORMAL',
+        
+        // Signos vitales
+        'presion_arterial_sistolica_sentado_pie' => $request->presion_arterial_sistolica_sentado_pie,
+        'presion_arterial_distolica_sentado_pie' => $request->presion_arterial_distolica_sentado_pie,
+        'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
+        'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
+        
+        // Examen físico
+        'ef_cabeza' => $request->ef_cabeza ?? 'NORMAL',
+        'agudeza_visual' => $request->agudeza_visual ?? 'NORMAL',
+        'oidos' => $request->oidos ?? 'NORMAL',
+        'nariz_senos_paranasales' => $request->nariz_senos_paranasales ?? 'NORMAL',
+        'cavidad_oral' => $request->cavidad_oral ?? 'NORMAL',
+        'cuello' => $request->cuello ?? 'NORMAL',
+        'cardio_respiratorio' => $request->cardio_respiratorio ?? 'NORMAL',
+        'mamas' => $request->mamas ?? 'NORMAL',
+        'genito_urinario' => $request->genito_urinario ?? 'NORMAL',
+        'musculo_esqueletico' => $request->musculo_esqueletico ?? 'NORMAL',
+        'piel_anexos_pulsos' => $request->piel_anexos_pulsos ?? 'NORMAL',
+        'inspeccion_sensibilidad_pies' => $request->inspeccion_sensibilidad_pies ?? 'NORMAL',
+        'sistema_nervioso' => $request->sistema_nervioso ?? 'NORMAL',
+        'capacidad_cognitiva_orientacion' => $request->capacidad_cognitiva_orientacion ?? 'NORMAL',
+        'reflejo_aquiliar' => $request->reflejo_aquiliar ?? 'NORMAL',
+        'reflejo_patelar' => $request->reflejo_patelar ?? 'NORMAL',
+        
+        // Observaciones examen físico
+        'obs_cabeza' => $request->obs_cabeza,
+        'obs_agudeza_visual' => $request->obs_agudeza_visual,
+        'obs_cuello' => $request->obs_cuello,
+        'obs_torax' => $request->obs_torax,
+        'obs_mamas' => $request->obs_mamas,
+        'obs_abdomen' => $request->obs_abdomen,
+        'obs_genito_urinario' => $request->obs_genito_urinario,
+        'obs_extremidades' => $request->obs_extremidades,
+        'obs_piel_anexos_pulsos' => $request->obs_piel_anexos_pulsos,
+        'obs_sistema_nervioso' => $request->obs_sistema_nervioso,
+        'obs_orientacion' => $request->obs_orientacion,
+        'hallazgo_positivo_examen_fisico' => $request->hallazgo_positivo_examen_fisico,
+        
+        // Factores de riesgo
+        'dislipidemia' => $request->dislipidemia ?? 'NO',
+        'lesion_organo_blanco' => $request->lesion_organo_blanco ?? 'NO',
+        'descripcion_lesion_organo_blanco' => $request->descripcion_lesion_organo_blanco,
+        
+        // Exámenes complementarios
+        'fex_es' => $request->fex_es,
+        'electrocardiograma' => $request->electrocardiograma,
+        'fex_es1' => $request->fex_es1,
+        'ecocardiograma' => $request->ecocardiograma,
+        'fex_es2' => $request->fex_es2,
+        'ecografia_renal' => $request->ecografia_renal,
+        
+        // Clasificaciones
+        'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
+        'clasificacion_hta' => $request->clasificacion_hta,
+        'clasificacion_dm' => $request->clasificacion_dm,
+        'clasificacion_rcv' => $request->clasificacion_rcv,
+        'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
+        'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+        
+        // Tasas de filtración
+        'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
+        'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+        
+        // Antecedentes personales
+        'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
+        'obs_personal_hipertension_arterial' => $request->obs_personal_hipertension_arterial,
+        'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
+        'obs_personal_mellitus' => $request->obs_personal_mellitus,
+        
+        // Educación en salud
+        'alimentacion' => $request->alimentacion ?? 'NO',
+        'disminucion_consumo_sal_azucar' => $request->disminucion_consumo_sal_azucar ?? 'NO',
+        'fomento_actividad_fisica' => $request->fomento_actividad_fisica ?? 'NO',
+        'importancia_adherencia_tratamiento' => $request->importancia_adherencia_tratamiento ?? 'NO',
+        'consumo_frutas_verduras' => $request->consumo_frutas_verduras ?? 'NO',
+        'manejo_estres' => $request->manejo_estres ?? 'NO',
+        'disminucion_consumo_cigarrillo' => $request->disminucion_consumo_cigarrillo ?? 'NO',
+        'disminucion_peso' => $request->disminucion_peso ?? 'NO',
+        
+        'observaciones_generales' => $request->observaciones_generales,
+    ];
+
+    // ✅ AGREGAR CAMPOS COMUNES
+    $datos = array_merge($datos, $camposComunes);
+
+    // ✅ CAMPOS EXCLUSIVOS DE PRIMERA VEZ (CON VALORES POR DEFECTO)
+    if ($request->tipo_consulta === 'PRIMERA VEZ') {
+        $camposPrimeraVez = [
+            // Discapacidades
             'discapacidad_fisica' => $request->discapacidad_fisica ?? 'NO',
             'discapacidad_visual' => $request->discapacidad_visual ?? 'NO',
             'discapacidad_mental' => $request->discapacidad_mental ?? 'NO',
             'discapacidad_auditiva' => $request->discapacidad_auditiva ?? 'NO',
             'discapacidad_intelectual' => $request->discapacidad_intelectual ?? 'NO',
+            
+            // Drogodependencia
             'drogo_dependiente' => $request->drogo_dependiente ?? 'NO',
             'drogo_dependiente_cual' => $request->drogo_dependiente_cual,
-            'peso' => $request->peso,
-            'talla' => $request->talla,
-            'imc' => $request->imc,
-            'clasificacion' => $request->clasificacion,
-            'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
-            'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+            
+            // Antecedentes Familiares
             'hipertension_arterial' => $request->hipertension_arterial ?? 'NO',
             'parentesco_hipertension' => $request->parentesco_hipertension,
             'diabetes_mellitus' => $request->diabetes_mellitus ?? 'NO',
@@ -188,10 +357,8 @@ public function store(Request $request)
             'parentesco_vih' => $request->parentesco_vih,
             'otro' => $request->otro ?? 'NO',
             'parentesco_otro' => $request->parentesco_otro,
-            'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
-            'obs_personal_hipertension_arterial' => $request->obs_personal_hipertension_arterial,
-            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
-            'obs_personal_mellitus' => $request->obs_personal_mellitus,
+            
+            // Antecedentes Personales Adicionales
             'enfermedad_cardiovascular_personal' => $request->enfermedad_cardiovascular_personal ?? 'NO',
             'obs_personal_enfermedad_cardiovascular' => $request->obs_personal_enfermedad_cardiovascular,
             'arterial_periferica_personal' => $request->arterial_periferica_personal ?? 'NO',
@@ -222,286 +389,188 @@ public function store(Request $request)
             'obs_personal_acontosis' => $request->obs_personal_acontosis,
             'otro_personal' => $request->otro_personal ?? 'NO',
             'obs_personal_otro' => $request->obs_personal_otro,
-            'insulina_requiriente' => $request->insulina_requiriente,
-            'olvida_tomar_medicamentos' => $request->olvida_tomar_medicamentos ?? 'NO',
-            'toma_medicamentos_hora_indicada' => $request->toma_medicamentos_hora_indicada ?? 'SI',
-            'cuando_esta_bien_deja_tomar_medicamentos' => $request->cuando_esta_bien_deja_tomar_medicamentos ?? 'NO',
-            'siente_mal_deja_tomarlos' => $request->siente_mal_deja_tomarlos ?? 'NO',
-            'valoracion_psicologia' => $request->valoracion_psicologia ?? 'NO',
-            'cabeza' => $request->cabeza ?? 'NORMAL',
+            
+            // Revisión por sistemas adicional
             'orl' => $request->orl ?? 'NORMAL',
-            'cardiovascular' => $request->cardiovascular ?? 'NORMAL',
-            'gastrointestinal' => $request->gastrointestinal ?? 'NORMAL',
-            'osteoatromuscular' => $request->osteoatromuscular ?? 'NORMAL',
-            'snc' => $request->snc ?? 'NORMAL',
             'revision_sistemas' => $request->revision_sistemas,
-            'presion_arterial_sistolica_sentado_pie' => $request->presion_arterial_sistolica_sentado_pie,
-            'presion_arterial_distolica_sentado_pie' => $request->presion_arterial_distolica_sentado_pie,
+            
+            // Examen físico adicional
             'presion_arterial_sistolica_acostado' => $request->presion_arterial_sistolica_acostado,
             'presion_arterial_distolica_acostado' => $request->presion_arterial_distolica_acostado,
-            'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
-            'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
-            'ef_cabeza' => $request->ef_cabeza ?? 'NORMAL',
-            'obs_cabeza' => $request->obs_cabeza,
-            'agudeza_visual' => $request->agudeza_visual ?? 'NORMAL',
-            'obs_agudeza_visual' => $request->obs_agudeza_visual,
             'fundoscopia' => $request->fundoscopia ?? 'NORMAL',
             'obs_fundoscopia' => $request->obs_fundoscopia,
-            'cuello' => $request->cuello ?? 'NORMAL',
-            'obs_cuello' => $request->obs_cuello,
             'torax' => $request->torax ?? 'NORMAL',
-            'obs_torax' => $request->obs_torax,
-            'mamas' => $request->mamas ?? 'NORMAL',
-            'obs_mamas' => $request->obs_mamas,
             'abdomen' => $request->abdomen ?? 'NORMAL',
-            'obs_abdomen' => $request->obs_abdomen,
-            'genito_urinario' => $request->genito_urinario ?? 'NORMAL',
-            'obs_genito_urinario' => $request->obs_genito_urinario,
             'extremidades' => $request->extremidades ?? 'NORMAL',
-            'obs_extremidades' => $request->obs_extremidades,
-            'piel_anexos_pulsos' => $request->piel_anexos_pulsos ?? 'NORMAL',
-            'obs_piel_anexos_pulsos' => $request->obs_piel_anexos_pulsos,
-            'sistema_nervioso' => $request->sistema_nervioso ?? 'NORMAL',
-            'obs_sistema_nervioso' => $request->obs_sistema_nervioso,
             'capacidad_cognitiva' => $request->capacidad_cognitiva ?? 'NORMAL',
             'obs_capacidad_cognitiva' => $request->obs_capacidad_cognitiva,
             'orientacion' => $request->orientacion ?? 'NORMAL',
-            'obs_orientacion' => $request->obs_orientacion,
-            'reflejo_aquiliar' => $request->reflejo_aquiliar ?? 'NORMAL',
             'obs_reflejo_aquiliar' => $request->obs_reflejo_aquiliar,
-            'reflejo_patelar' => $request->reflejo_patelar ?? 'NORMAL',
             'obs_reflejo_patelar' => $request->obs_reflejo_patelar,
-            'hallazgo_positivo_examen_fisico' => $request->hallazgo_positivo_examen_fisico,
+            
+            // Factores de riesgo adicionales
             'tabaquismo' => $request->tabaquismo ?? 'NO',
             'obs_tabaquismo' => $request->obs_tabaquismo,
-            'dislipidemia' => $request->dislipidemia ?? 'NO',
             'obs_dislipidemia' => $request->obs_dislipidemia,
             'menor_cierta_edad' => $request->menor_cierta_edad ?? 'NO',
             'obs_menor_cierta_edad' => $request->obs_menor_cierta_edad,
-            'perimetro_abdominal' => $request->perimetro_abdominal,
-            'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
             'condicion_clinica_asociada' => $request->condicion_clinica_asociada ?? 'NO',
             'obs_condicion_clinica_asociada' => $request->obs_condicion_clinica_asociada,
-            'lesion_organo_blanco' => $request->lesion_organo_blanco ?? 'NO',
-            'descripcion_lesion_organo_blanco' => $request->descripcion_lesion_organo_blanco,
             'obs_lesion_organo_blanco' => $request->obs_lesion_organo_blanco,
-            'clasificacion_hta' => $request->clasificacion_hta,
-            'clasificacion_dm' => $request->clasificacion_dm,
-            'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
-            'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
-            'clasificacion_rcv' => $request->clasificacion_rcv,
-            'alimentacion' => $request->alimentacion ?? 'NO',
-            'disminucion_consumo_sal_azucar' => $request->disminucion_consumo_sal_azucar ?? 'NO',
-            'fomento_actividad_fisica' => $request->fomento_actividad_fisica ?? 'NO',
-            'importancia_adherencia_tratamiento' => $request->importancia_adherencia_tratamiento ?? 'NO',
-            'consumo_frutas_verduras' => $request->consumo_frutas_verduras ?? 'NO',
-            'manejo_estres' => $request->manejo_estres ?? 'NO',
-            'disminucion_consumo_cigarrillo' => $request->disminucion_consumo_cigarrillo ?? 'NO',
-            'disminucion_peso' => $request->disminucion_peso ?? 'NO',
-            'observaciones_generales' => $request->observaciones_generales,
-            'oidos' => $request->oidos ?? 'NORMAL',
-            'nariz_senos_paranasales' => $request->nariz_senos_paranasales ?? 'NORMAL',
-            'cavidad_oral' => $request->cavidad_oral ?? 'NORMAL',
-            'cardio_respiratorio' => $request->cardio_respiratorio ?? 'NORMAL',
-            'musculo_esqueletico' => $request->musculo_esqueletico ?? 'NORMAL',
-            'inspeccion_sensibilidad_pies' => $request->inspeccion_sensibilidad_pies ?? 'NORMAL',
-            'capacidad_cognitiva_orientacion' => $request->capacidad_cognitiva_orientacion ?? 'NORMAL',
+            
+            // Otros campos de primera vez
+            'insulina_requiriente' => $request->insulina_requiriente,
             'recibe_tratamiento_alternativo' => $request->recibe_tratamiento_alternativo ?? 'NO',
             'recibe_tratamiento_con_plantas_medicinales' => $request->recibe_tratamiento_con_plantas_medicinales ?? 'NO',
             'recibe_ritual_medicina_tradicional' => $request->recibe_ritual_medicina_tradicional ?? 'NO',
             'numero_frutas_diarias' => $request->numero_frutas_diarias ?? 0,
             'elevado_consumo_grasa_saturada' => $request->elevado_consumo_grasa_saturada ?? 'NO',
             'adiciona_sal_despues_preparar_comida' => $request->adiciona_sal_despues_preparar_comida ?? 'NO',
-            'general' => $request->general,
-            'respiratorio' => $request->respiratorio,
-            'adherente' => $request->adherente,
-            'ecografia_renal' => $request->ecografia_renal,
+            
+            // Reformulación
             'razon_reformulacion' => $request->razon_reformulacion,
             'motivo_reformulacion' => $request->motivo_reformulacion,
             'reformulacion_quien_reclama' => $request->reformulacion_quien_reclama,
             'reformulacion_nombre_reclama' => $request->reformulacion_nombre_reclama,
-            'electrocardiograma' => $request->electrocardiograma,
-            'ecocardiograma' => $request->ecocardiograma,
             'adicional' => $request->adicional,
-            'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
-            'fex_es' => $request->fex_es,
-            'fex_es1' => $request->fex_es1,
-            'fex_es2' => $request->fex_es2,
-        ]);
-
-        // ✅ PROCESAR DIAGNÓSTICOS
-        $diagnosticosProcesados = [];
+        ];
         
-        if ($request->idDiagnostico && !empty($request->idDiagnostico)) {
-            \Log::info('🔍 Procesando diagnóstico individual', ['idDiagnostico' => $request->idDiagnostico]);
-            
-            $diagnostico = \App\Models\Diagnostico::where('uuid', $request->idDiagnostico)
-                ->orWhere('id', $request->idDiagnostico)
-                ->first();
-            
-            if ($diagnostico) {
-                \App\Models\HistoriaDiagnostico::create([
-                    'uuid' => Str::uuid(),
-                    'historia_clinica_id' => $historia->id,
-                    'diagnostico_id' => $diagnostico->id,
-                    'tipo' => 'PRINCIPAL',
-                    'tipo_diagnostico' => $request->tipo_diagnostico ?? 'CONFIRMADO_NUEVO',
-                ]);
-                $diagnosticosProcesados[] = $diagnostico->id;
-                \Log::info('✅ Diagnóstico individual guardado', ['diagnostico_id' => $diagnostico->id]);
-            }
-        }
-        
-        if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
-            \Log::info('🔍 Procesando array diagnosticos', ['count' => count($request->diagnosticos)]);
-            
-            foreach ($request->diagnosticos as $index => $diag) {
-                if (!empty($diag['diagnostico_id'])) {
-                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
-                        ->orWhere('id', $diag['diagnostico_id'])
-                        ->first();
-                    
-                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
-                        \App\Models\HistoriaDiagnostico::create([
-                            'uuid' => Str::uuid(),
-                            'historia_clinica_id' => $historia->id,
-                            'diagnostico_id' => $diagnostico->id,
-                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
-                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
-                        ]);
-                        $diagnosticosProcesados[] = $diagnostico->id;
-                        \Log::info('✅ Diagnóstico del array guardado', [
-                            'index' => $index,
-                            'diagnostico_id' => $diagnostico->id
-                        ]);
-                    }
-                }
-            }
-        }
+        $datos = array_merge($datos, $camposPrimeraVez);
+    }
 
-        // ✅ PROCESAR MEDICAMENTOS
-        if ($request->has('medicamentos') && is_array($request->medicamentos)) {
-            \Log::info('🔍 Procesando medicamentos', ['count' => count($request->medicamentos)]);
-            
-            foreach ($request->medicamentos as $med) {
-                $medicamentoId = $med['medicamento_id'] ?? $med['idMedicamento'] ?? null;
+    return $datos;
+}
+
+/**
+ * ✅ PROCESAR DIAGNÓSTICOS
+ */
+private function procesarDiagnosticos(Request $request, HistoriaClinica $historia)
+{
+    $diagnosticosProcesados = [];
+    
+    // Diagnóstico individual
+    if ($request->idDiagnostico && !empty($request->idDiagnostico)) {
+        $diagnostico = \App\Models\Diagnostico::where('uuid', $request->idDiagnostico)
+            ->orWhere('id', $request->idDiagnostico)
+            ->first();
+        
+        if ($diagnostico) {
+            \App\Models\HistoriaDiagnostico::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                'diagnostico_id' => $diagnostico->id,
+                'tipo' => 'PRINCIPAL',
+                'tipo_diagnostico' => $request->tipo_diagnostico ?? 'CONFIRMADO_NUEVO',
+            ]);
+            $diagnosticosProcesados[] = $diagnostico->id;
+        }
+    }
+    
+    // Array de diagnósticos
+    if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
+        foreach ($request->diagnosticos as $index => $diag) {
+            if (!empty($diag['diagnostico_id'])) {
+                $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
+                    ->orWhere('id', $diag['diagnostico_id'])
+                    ->first();
                 
-                if (!empty($medicamentoId)) {
-                    $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
-                        ->orWhere('id', $medicamentoId)
-                        ->first();
-                    
-                    if ($medicamento) {
-                        \App\Models\HistoriaMedicamento::create([
-                            'uuid' => Str::uuid(),
-                            'historia_clinica_id' => $historia->id,
-                            'medicamento_id' => $medicamento->id,
-                            'cantidad' => $med['cantidad'] ?? '1',
-                            'dosis' => $med['dosis'] ?? 'Según indicación médica',
-                        ]);
-                        \Log::info('✅ Medicamento guardado', ['medicamento_id' => $medicamento->id]);
-                    }
+                if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
+                    \App\Models\HistoriaDiagnostico::create([
+                        'uuid' => Str::uuid(),
+                        'historia_clinica_id' => $historia->id,
+                        'diagnostico_id' => $diagnostico->id,
+                        'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                        'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                    ]);
+                    $diagnosticosProcesados[] = $diagnostico->id;
                 }
             }
         }
-
-        // ✅ PROCESAR REMISIONES
-        if ($request->has('remisiones') && is_array($request->remisiones)) {
-            \Log::info('🔍 Procesando remisiones', ['count' => count($request->remisiones)]);
-            
-            foreach ($request->remisiones as $rem) {
-                $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
-                
-                if (!empty($remisionId)) {
-                    $remision = \App\Models\Remision::where('uuid', $remisionId)
-                        ->orWhere('id', $remisionId)
-                        ->first();
-                    
-                    if ($remision) {
-                        \App\Models\HistoriaRemision::create([
-                            'uuid' => Str::uuid(),
-                            'historia_clinica_id' => $historia->id,
-                            'remision_id' => $remision->id,
-                            'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
-                        ]);
-                        \Log::info('✅ Remisión guardada', ['remision_id' => $remision->id]);
-                    }
-                }
-            }
-        }
-
-        // ✅ PROCESAR CUPS
-        if ($request->has('cups') && is_array($request->cups)) {
-            \Log::info('🔍 Procesando CUPS', ['count' => count($request->cups)]);
-            
-            foreach ($request->cups as $cup) {
-                $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
-                
-                if (!empty($cupsId)) {
-                    $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
-                        ->orWhere('id', $cupsId)
-                        ->first();
-                    
-                    if ($cupsModel) {
-                        \App\Models\HistoriaCups::create([
-                            'uuid' => Str::uuid(),
-                            'historia_clinica_id' => $historia->id,
-                            'cups_id' => $cupsModel->id,
-                            'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
-                        ]);
-                        \Log::info('✅ CUPS guardado', ['cups_id' => $cupsModel->id]);
-                    }
-                }
-            }
-        }
-
-        DB::commit();
-
-        // ✅ CARGAR RELACIONES
-        $historia->load([
-            'sede', 
-            'cita.paciente', 
-            'historiaDiagnosticos.diagnostico',
-            'historiaMedicamentos.medicamento',
-            'historiaRemisiones.remision',
-            'historiaCups.cups'
-        ]);
-
-        \Log::info('✅ Historia clínica creada exitosamente', [
-            'historia_uuid' => $historia->uuid,
-            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
-            'medicamentos_count' => $historia->historiaMedicamentos->count(),
-            'remisiones_count' => $historia->historiaRemisiones->count(),
-            'cups_count' => $historia->historiaCups->count()
-        ]);
-
-        // ✅ RESPUESTA PARA API SIN REDIRECT_URL
-        return response()->json([
-            'success' => true,
-            'message' => 'Historia clínica creada exitosamente con todos sus componentes',
-            'data' => $historia
-        ], 201);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        
-        \Log::error('❌ Error creando historia clínica completa', [
-            'error' => $e->getMessage(),
-            'line' => $e->getLine(),
-            'file' => $e->getFile(),
-            'trace' => $e->getTraceAsString(),
-            'request_data' => $request->all()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al crear historia clínica',
-            'error' => $e->getMessage(),
-            'line' => $e->getLine(),
-            'file' => basename($e->getFile())
-        ], 500);
     }
 }
+
+/**
+ * ✅ PROCESAR MEDICAMENTOS
+ */
+private function procesarMedicamentos(Request $request, HistoriaClinica $historia)
+{
+    if ($request->has('medicamentos') && is_array($request->medicamentos)) {
+        foreach ($request->medicamentos as $med) {
+            $medicamentoId = $med['medicamento_id'] ?? $med['idMedicamento'] ?? null;
+            
+            if (!empty($medicamentoId)) {
+                $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
+                    ->orWhere('id', $medicamentoId)
+                    ->first();
+                
+                if ($medicamento) {
+                    \App\Models\HistoriaMedicamento::create([
+                        'uuid' => Str::uuid(),
+                        'historia_clinica_id' => $historia->id,
+                        'medicamento_id' => $medicamento->id,
+                        'cantidad' => $med['cantidad'] ?? '1',
+                        'dosis' => $med['dosis'] ?? 'Según indicación médica',
+                    ]);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * ✅ PROCESAR REMISIONES
+ */
+private function procesarRemisiones(Request $request, HistoriaClinica $historia)
+{
+    if ($request->has('remisiones') && is_array($request->remisiones)) {
+        foreach ($request->remisiones as $rem) {
+            $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
+            
+            if (!empty($remisionId)) {
+                $remision = \App\Models\Remision::where('uuid', $remisionId)
+                    ->orWhere('id', $remisionId)
+                    ->first();
+                
+                if ($remision) {
+                    \App\Models\HistoriaRemision::create([
+                        'uuid' => Str::uuid(),
+                        'historia_clinica_id' => $historia->id,
+                        'remision_id' => $remision->id,
+                        'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
+                    ]);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * ✅ PROCESAR CUPS
+ */
+private function procesarCups(Request $request, HistoriaClinica $historia)
+{
+    if ($request->has('cups') && is_array($request->cups)) {
+        foreach ($request->cups as $cup) {
+            $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
+            
+            if (!empty($cupsId)) {
+                $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
+                    ->orWhere('id', $cupsId)
+                    ->first();
+                
+                if ($cupsModel) {
+                    \App\Models\HistoriaCups::create([
+                        'uuid' => Str::uuid(),
+                        'historia_clinica_id' => $historia->id,
+                        'cups_id' => $cupsModel->id,
+                        'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
+                    ]);
+                }
+            }
+        }
+    }
+}
+
 private function storeFisioterapia(Request $request, $cita)
 {
     // ✅ VALIDACIÓN IGUAL QUE MEDICINA GENERAL
