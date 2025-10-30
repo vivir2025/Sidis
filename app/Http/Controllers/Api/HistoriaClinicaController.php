@@ -573,25 +573,23 @@ private function procesarCups(Request $request, HistoriaClinica $historia)
 
 private function storeFisioterapia(Request $request, $cita)
 {
-    // ✅ VALIDACIÓN IGUAL QUE MEDICINA GENERAL
+    // ✅ VALIDACIÓN
     $request->validate([
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
         'sede_id' => 'required|integer',
+        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL', // ✅ AGREGADO
         'motivo_consulta' => 'nullable|string',
         
-        // ✅✅✅ CAMBIO PRINCIPAL: USAR ARRAY DIAGNOSTICOS ✅✅✅
         'diagnosticos' => 'required|array|min:1',
         'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
         'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
         'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
         
-        // ✅ REMISIONES IGUAL QUE MEDICINA GENERAL
         'remisiones' => 'nullable|array',
         'remisiones.*.remision_id' => 'required_with:remisiones|string',
         'remisiones.*.observacion' => 'nullable|string',
         
-        // ✅ OTROS CAMPOS
         'peso' => 'nullable|numeric',
         'talla' => 'nullable|numeric',
         'imc' => 'nullable|numeric',
@@ -603,6 +601,8 @@ private function storeFisioterapia(Request $request, $cita)
         'acompanante' => 'nullable|string',
         'acu_parentesco' => 'nullable|string',
         'acu_telefono' => 'nullable|string',
+        
+        // ✅ CAMPOS DE FISIOTERAPIA (solo para PRIMERA VEZ)
         'actitud' => 'nullable|string',
         'evaluacion_d' => 'nullable|string',
         'evaluacion_p' => 'nullable|string',
@@ -618,18 +618,19 @@ private function storeFisioterapia(Request $request, $cita)
     try {
         \Log::info('🏥 Guardando historia de FISIOTERAPIA', [
             'cita_uuid' => $cita->uuid,
+            'tipo_consulta' => $request->tipo_consulta, // ✅ LOG
             'paciente_uuid' => $request->paciente_uuid,
             'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
             'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
         ]);
 
-        // ✅ CREAR HISTORIA - SOLO CAMPOS DE FISIOTERAPIA
+        // ✅ CREAR HISTORIA BASE (SIEMPRE)
         $historia = HistoriaClinica::create([
             'uuid' => $request->uuid ?? Str::uuid(),
             'sede_id' => $request->sede_id,
             'cita_id' => $cita->id,
             
-            // ✅ CAMPOS BÁSICOS
+            // Campos básicos
             'finalidad' => $request->finalidad ?? 'CONSULTA',
             'causa_externa' => $request->causa_externa,
             'acompanante' => $request->acompanante,
@@ -637,7 +638,7 @@ private function storeFisioterapia(Request $request, $cita)
             'acu_telefono' => $request->acu_telefono,
             'motivo_consulta' => $request->motivo_consulta ?? '',
             
-            // ✅ MEDIDAS ANTROPOMÉTRICAS
+            // Medidas antropométricas
             'peso' => $request->peso,
             'talla' => $request->talla,
             'imc' => $request->imc,
@@ -651,34 +652,35 @@ private function storeFisioterapia(Request $request, $cita)
             'historia_uuid' => $historia->uuid
         ]);
 
-        // ✅ CREAR COMPLEMENTARIA CON CAMPOS DE FISIOTERAPIA
-        \App\Models\HistoriaClinicaComplementaria::create([
-            'uuid' => Str::uuid(),
-            'historia_clinica_id' => $historia->id,
-            
-            // ✅ EVALUACIONES ESPECÍFICAS DE FISIOTERAPIA
-            'actitud' => $request->actitud,
-            'evaluacion_d' => $request->evaluacion_d,
-            'evaluacion_p' => $request->evaluacion_p,
-            'estado' => $request->estado,
-            'evaluacion_dolor' => $request->evaluacion_dolor,
-            'evaluacion_os' => $request->evaluacion_os,
-            'evaluacion_neu' => $request->evaluacion_neu,
-            'comitante' => $request->comitante,
-            
-            // ✅ PLAN DE TRATAMIENTO
-            'plan_seguir' => $request->plan_seguir,
-        ]);
+        // ✅✅✅ SOLO CREAR COMPLEMENTARIA SI ES PRIMERA VEZ ✅✅✅
+        if ($request->tipo_consulta === 'PRIMERA VEZ') {
+            \App\Models\HistoriaClinicaComplementaria::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                
+                // Evaluaciones específicas de fisioterapia
+                'actitud' => $request->actitud,
+                'evaluacion_d' => $request->evaluacion_d,
+                'evaluacion_p' => $request->evaluacion_p,
+                'estado' => $request->estado,
+                'evaluacion_dolor' => $request->evaluacion_dolor,
+                'evaluacion_os' => $request->evaluacion_os,
+                'evaluacion_neu' => $request->evaluacion_neu,
+                'comitante' => $request->comitante,
+                'plan_seguir' => $request->plan_seguir,
+            ]);
 
-        \Log::info('✅ Tabla complementaria creada');
+            \Log::info('✅ Tabla complementaria creada (PRIMERA VEZ)');
+        } else {
+            \Log::info('ℹ️ Tabla complementaria NO creada (CONTROL)');
+        }
 
-        // ✅✅✅ PROCESAR DIAGNÓSTICOS IGUAL QUE MEDICINA GENERAL ✅✅✅
+        // ✅ PROCESAR DIAGNÓSTICOS (IGUAL PARA AMBOS)
         $diagnosticosProcesados = [];
         
         if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
             \Log::info('🔍 Procesando array diagnosticos FISIOTERAPIA', [
-                'count' => count($request->diagnosticos),
-                'data' => $request->diagnosticos
+                'count' => count($request->diagnosticos)
             ]);
             
             foreach ($request->diagnosticos as $index => $diag) {
@@ -697,9 +699,7 @@ private function storeFisioterapia(Request $request, $cita)
                         ]);
                         $diagnosticosProcesados[] = $diagnostico->id;
                         \Log::info('✅ Diagnóstico FISIOTERAPIA guardado', [
-                            'index' => $index,
                             'diagnostico_id' => $diagnostico->id,
-                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
                             'codigo' => $diagnostico->codigo
                         ]);
                     }
@@ -707,14 +707,13 @@ private function storeFisioterapia(Request $request, $cita)
             }
         }
 
-        // ✅✅✅ PROCESAR REMISIONES IGUAL QUE MEDICINA GENERAL ✅✅✅
+        // ✅ PROCESAR REMISIONES (IGUAL PARA AMBOS)
         if ($request->has('remisiones') && is_array($request->remisiones)) {
             \Log::info('🔍 Procesando remisiones FISIOTERAPIA', [
-                'count' => count($request->remisiones),
-                'data' => $request->remisiones
+                'count' => count($request->remisiones)
             ]);
             
-            foreach ($request->remisiones as $index => $rem) {
+            foreach ($request->remisiones as $rem) {
                 $remisionId = $rem['remision_id'] ?? null;
                 
                 if (!empty($remisionId)) {
@@ -730,7 +729,6 @@ private function storeFisioterapia(Request $request, $cita)
                             'observacion' => $rem['observacion'] ?? null,
                         ]);
                         \Log::info('✅ Remisión FISIOTERAPIA guardada', [
-                            'index' => $index,
                             'remision_id' => $remision->id,
                             'nombre' => $remision->nombre
                         ]);
@@ -741,25 +739,32 @@ private function storeFisioterapia(Request $request, $cita)
 
         DB::commit();
 
-        // ✅ CARGAR RELACIONES
-        $historia->load([
+        // ✅ CARGAR RELACIONES (CONDICIONAL)
+        $relaciones = [
             'sede', 
             'cita.paciente', 
             'historiaDiagnosticos.diagnostico',
-            'historiaRemisiones.remision',
-            'complementaria'
-        ]);
+            'historiaRemisiones.remision'
+        ];
+
+        // Solo cargar complementaria si es PRIMERA VEZ
+        if ($request->tipo_consulta === 'PRIMERA VEZ') {
+            $relaciones[] = 'complementaria';
+        }
+
+        $historia->load($relaciones);
 
         \Log::info('✅ Historia de fisioterapia guardada exitosamente', [
+            'tipo_consulta' => $request->tipo_consulta,
             'historia_uuid' => $historia->uuid,
+            'tiene_complementaria' => $request->tipo_consulta === 'PRIMERA VEZ',
             'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
             'remisiones_count' => $historia->historiaRemisiones->count()
         ]);
 
-        // ✅ RESPUESTA LIMPIA
         return response()->json([
             'success' => true,
-            'message' => 'Historia clínica de fisioterapia guardada exitosamente',
+            'message' => "Historia clínica de fisioterapia ({$request->tipo_consulta}) guardada exitosamente",
             'data' => $historia
         ], 201);
 
@@ -768,10 +773,9 @@ private function storeFisioterapia(Request $request, $cita)
         
         \Log::error('❌ Error guardando historia de fisioterapia', [
             'error' => $e->getMessage(),
+            'tipo_consulta' => $request->tipo_consulta,
             'line' => $e->getLine(),
-            'file' => basename($e->getFile()),
-            'trace' => $e->getTraceAsString(),
-            'request_all' => $request->all()
+            'file' => basename($e->getFile())
         ]);
         
         return response()->json([
@@ -782,6 +786,7 @@ private function storeFisioterapia(Request $request, $cita)
         ], 500);
     }
 }
+
 
 
 
