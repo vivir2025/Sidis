@@ -828,23 +828,21 @@ private function storePsicologia(Request $request, $cita)
             'remisiones.*.remision_id' => 'required_with:remisiones|string',
             'remisiones.*.observacion' => 'nullable|string',
             
-            // ✅✅✅ CORREGIDO: Validar array complementaria ✅✅✅
-            'complementaria' => 'nullable|array',
-            'complementaria.estructura_familiar' => 'nullable|string',
-            'complementaria.psicologia_red_apoyo' => 'nullable|string',
-            'complementaria.psicologia_comportamiento_consulta' => 'nullable|string',
-            'complementaria.psicologia_tratamiento_actual_adherencia' => 'nullable|string',
-            'complementaria.psicologia_descripcion_problema' => 'nullable|string',
-            'complementaria.analisis_conclusiones' => 'nullable|string',
-            'complementaria.psicologia_plan_intervencion_recomendacion' => 'nullable|string',
+            // Campos complementarios de PRIMERA VEZ
+            'estructura_familiar' => 'nullable|string',
+            'psicologia_red_apoyo' => 'nullable|string',
+            'psicologia_comportamiento_consulta' => 'nullable|string',
+            'psicologia_tratamiento_actual_adherencia' => 'nullable|string',
+            'psicologia_descripcion_problema' => 'nullable|string',
+            'analisis_conclusiones' => 'nullable|string',
+            'psicologia_plan_intervencion_recomendacion' => 'nullable|string',
         ]);
     } else { // CONTROL
         $validationRules = array_merge($validationRules, [
-            // ✅✅✅ CORREGIDO: Validar array complementaria ✅✅✅
-            'complementaria' => 'nullable|array',
-            'complementaria.psicologia_descripcion_problema' => 'nullable|string',
-            'complementaria.psicologia_plan_intervencion_recomendacion' => 'nullable|string',
-            'complementaria.avance_paciente' => 'nullable|string',
+            // Campos complementarios de CONTROL (solo 3)
+            'psicologia_descripcion_problema' => 'nullable|string',
+            'psicologia_plan_intervencion_recomendacion' => 'nullable|string',
+            'avance_paciente' => 'nullable|string',
         ]);
     }
 
@@ -859,9 +857,6 @@ private function storePsicologia(Request $request, $cita)
             'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
             'medicamentos_count' => ($request->tipo_consulta === 'PRIMERA VEZ' && $request->medicamentos) ? count($request->medicamentos) : 0,
             'remisiones_count' => ($request->tipo_consulta === 'PRIMERA VEZ' && $request->remisiones) ? count($request->remisiones) : 0,
-            // ✅ AGREGAR LOG DE COMPLEMENTARIA
-            'tiene_complementaria' => $request->has('complementaria'),
-            'complementaria_keys' => $request->has('complementaria') ? array_keys($request->complementaria) : []
         ]);
 
         // ✅ CREAR HISTORIA BASE (SIEMPRE)
@@ -884,45 +879,33 @@ private function storePsicologia(Request $request, $cita)
             'historia_uuid' => $historia->uuid
         ]);
 
-        // ✅✅✅ CORREGIDO: Acceder al array complementaria ✅✅✅
+        // ✅ CREAR TABLA COMPLEMENTARIA (AMBOS TIPOS, PERO CON CAMPOS DIFERENTES)
         if ($request->tipo_consulta === 'PRIMERA VEZ') {
-            // ✅ OBTENER DATOS DEL ARRAY complementaria
-            $complementaria = $request->input('complementaria', []);
-            
-            \Log::info('🔍 Datos complementaria recibidos (PRIMERA VEZ)', [
-                'complementaria' => $complementaria
-            ]);
-            
+            // ✅ PRIMERA VEZ: Todos los campos
             \App\Models\HistoriaClinicaComplementaria::create([
                 'uuid' => Str::uuid(),
                 'historia_clinica_id' => $historia->id,
                 
-                'estructura_familiar' => $complementaria['estructura_familiar'] ?? null,
-                'psicologia_red_apoyo' => $complementaria['psicologia_red_apoyo'] ?? null,
-                'psicologia_comportamiento_consulta' => $complementaria['psicologia_comportamiento_consulta'] ?? null,
-                'psicologia_tratamiento_actual_adherencia' => $complementaria['psicologia_tratamiento_actual_adherencia'] ?? null,
-                'psicologia_descripcion_problema' => $complementaria['psicologia_descripcion_problema'] ?? null,
-                'analisis_conclusiones' => $complementaria['analisis_conclusiones'] ?? null,
-                'psicologia_plan_intervencion_recomendacion' => $complementaria['psicologia_plan_intervencion_recomendacion'] ?? null,
+                'estructura_familiar' => $request->estructura_familiar,
+                'psicologia_red_apoyo' => $request->psicologia_red_apoyo,
+                'psicologia_comportamiento_consulta' => $request->psicologia_comportamiento_consulta,
+                'psicologia_tratamiento_actual_adherencia' => $request->psicologia_tratamiento_actual_adherencia,
+                'psicologia_descripcion_problema' => $request->psicologia_descripcion_problema,
+                'analisis_conclusiones' => $request->analisis_conclusiones,
+                'psicologia_plan_intervencion_recomendacion' => $request->psicologia_plan_intervencion_recomendacion,
             ]);
 
             \Log::info('✅ Tabla complementaria creada (PRIMERA VEZ - 7 campos)');
             
         } else { // CONTROL
-            // ✅ OBTENER DATOS DEL ARRAY complementaria
-            $complementaria = $request->input('complementaria', []);
-            
-            \Log::info('🔍 Datos complementaria recibidos (CONTROL)', [
-                'complementaria' => $complementaria
-            ]);
-            
+            // ✅ CONTROL: Solo 3 campos específicos
             \App\Models\HistoriaClinicaComplementaria::create([
                 'uuid' => Str::uuid(),
                 'historia_clinica_id' => $historia->id,
                 
-                'psicologia_descripcion_problema' => $complementaria['psicologia_descripcion_problema'] ?? null,
-                'psicologia_plan_intervencion_recomendacion' => $complementaria['psicologia_plan_intervencion_recomendacion'] ?? null,
-                'avance_paciente' => $complementaria['avance_paciente'] ?? null,
+                'psicologia_descripcion_problema' => $request->psicologia_descripcion_problema,
+                'psicologia_plan_intervencion_recomendacion' => $request->psicologia_plan_intervencion_recomendacion,
+                'avance_paciente' => $request->avance_paciente,
             ]);
 
             \Log::info('✅ Tabla complementaria creada (CONTROL - 3 campos)');
@@ -1061,8 +1044,7 @@ private function storePsicologia(Request $request, $cita)
             'error' => $e->getMessage(),
             'tipo_consulta' => $request->tipo_consulta,
             'line' => $e->getLine(),
-            'file' => basename($e->getFile()),
-            'trace' => $e->getTraceAsString()
+            'file' => basename($e->getFile())
         ]);
         
         return response()->json([
@@ -1073,7 +1055,6 @@ private function storePsicologia(Request $request, $cita)
         ], 500);
     }
 }
-
 
 /**
  * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
