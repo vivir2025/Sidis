@@ -134,6 +134,13 @@ public function store(Request $request)
             return $this->storeFisioterapia($request, $cita);
         }
 
+        
+        if ($especialidad === 'PSICOLOGÍA' || $especialidad === 'PSICOLOGIA') {
+            DB::rollBack();
+            return $this->storePsicologia($request, $cita);
+        }
+
+
         // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
         $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
 
@@ -787,8 +794,267 @@ private function storeFisioterapia(Request $request, $cita)
     }
 }
 
+private function storePsicologia(Request $request, $cita)
+{
+    // ✅ VALIDACIÓN DINÁMICA SEGÚN TIPO DE CONSULTA
+    $validationRules = [
+        'paciente_uuid' => 'required|string',
+        'usuario_id' => 'required|integer',
+        'sede_id' => 'required|integer',
+        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL',
+        'motivo_consulta' => 'nullable|string',
+        
+        'diagnosticos' => 'required|array|min:1',
+        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+        
+        'finalidad' => 'nullable|string',
+        'causa_externa' => 'nullable|string',
+        'acompanante' => 'nullable|string',
+        'acu_parentesco' => 'nullable|string',
+        'acu_telefono' => 'nullable|string',
+    ];
 
+    // ✅ AGREGAR VALIDACIONES ESPECÍFICAS SEGÚN TIPO
+    if ($request->tipo_consulta === 'PRIMERA VEZ') {
+        $validationRules = array_merge($validationRules, [
+            'medicamentos' => 'nullable|array',
+            'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+            'medicamentos.*.cantidad' => 'nullable|string',
+            'medicamentos.*.dosis' => 'nullable|string',
+            
+            'remisiones' => 'nullable|array',
+            'remisiones.*.remision_id' => 'required_with:remisiones|string',
+            'remisiones.*.observacion' => 'nullable|string',
+            
+            // Campos complementarios de PRIMERA VEZ
+            'estructura_familiar' => 'nullable|string',
+            'psicologia_red_apoyo' => 'nullable|string',
+            'psicologia_comportamiento_consulta' => 'nullable|string',
+            'psicologia_tratamiento_actual_adherencia' => 'nullable|string',
+            'psicologia_descripcion_problema' => 'nullable|string',
+            'analisis_conclusiones' => 'nullable|string',
+            'psicologia_plan_intervencion_recomendacion' => 'nullable|string',
+        ]);
+    } else { // CONTROL
+        $validationRules = array_merge($validationRules, [
+            // Campos complementarios de CONTROL (solo 3)
+            'psicologia_descripcion_problema' => 'nullable|string',
+            'psicologia_plan_intervencion_recomendacion' => 'nullable|string',
+            'avance_paciente' => 'nullable|string',
+        ]);
+    }
 
+    $request->validate($validationRules);
+
+    DB::beginTransaction();
+    try {
+        \Log::info('🧠 Guardando historia de PSICOLOGÍA', [
+            'cita_uuid' => $cita->uuid,
+            'tipo_consulta' => $request->tipo_consulta,
+            'paciente_uuid' => $request->paciente_uuid,
+            'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
+            'medicamentos_count' => ($request->tipo_consulta === 'PRIMERA VEZ' && $request->medicamentos) ? count($request->medicamentos) : 0,
+            'remisiones_count' => ($request->tipo_consulta === 'PRIMERA VEZ' && $request->remisiones) ? count($request->remisiones) : 0,
+        ]);
+
+        // ✅ CREAR HISTORIA BASE (SIEMPRE)
+        $historia = HistoriaClinica::create([
+            'uuid' => $request->uuid ?? Str::uuid(),
+            'sede_id' => $request->sede_id,
+            'cita_id' => $cita->id,
+            
+            // Campos básicos
+            'finalidad' => $request->finalidad ?? 'CONSULTA',
+            'causa_externa' => $request->causa_externa,
+            'acompanante' => $request->acompanante,
+            'acu_parentesco' => $request->acu_parentesco,
+            'acu_telefono' => $request->acu_telefono,
+            'motivo_consulta' => $request->motivo_consulta ?? '',
+        ]);
+
+        \Log::info('✅ Historia clínica base creada', [
+            'historia_id' => $historia->id,
+            'historia_uuid' => $historia->uuid
+        ]);
+
+        // ✅ CREAR TABLA COMPLEMENTARIA (AMBOS TIPOS, PERO CON CAMPOS DIFERENTES)
+        if ($request->tipo_consulta === 'PRIMERA VEZ') {
+            // ✅ PRIMERA VEZ: Todos los campos
+            \App\Models\HistoriaClinicaComplementaria::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                
+                'estructura_familiar' => $request->estructura_familiar,
+                'psicologia_red_apoyo' => $request->psicologia_red_apoyo,
+                'psicologia_comportamiento_consulta' => $request->psicologia_comportamiento_consulta,
+                'psicologia_tratamiento_actual_adherencia' => $request->psicologia_tratamiento_actual_adherencia,
+                'psicologia_descripcion_problema' => $request->psicologia_descripcion_problema,
+                'analisis_conclusiones' => $request->analisis_conclusiones,
+                'psicologia_plan_intervencion_recomendacion' => $request->psicologia_plan_intervencion_recomendacion,
+            ]);
+
+            \Log::info('✅ Tabla complementaria creada (PRIMERA VEZ - 7 campos)');
+            
+        } else { // CONTROL
+            // ✅ CONTROL: Solo 3 campos específicos
+            \App\Models\HistoriaClinicaComplementaria::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                
+                'psicologia_descripcion_problema' => $request->psicologia_descripcion_problema,
+                'psicologia_plan_intervencion_recomendacion' => $request->psicologia_plan_intervencion_recomendacion,
+                'avance_paciente' => $request->avance_paciente,
+            ]);
+
+            \Log::info('✅ Tabla complementaria creada (CONTROL - 3 campos)');
+        }
+
+        // ✅ PROCESAR DIAGNÓSTICOS (AMBOS TIPOS)
+        $diagnosticosProcesados = [];
+        
+        if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
+            \Log::info('🔍 Procesando array diagnosticos PSICOLOGÍA', [
+                'count' => count($request->diagnosticos)
+            ]);
+            
+            foreach ($request->diagnosticos as $index => $diag) {
+                if (!empty($diag['diagnostico_id'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
+                        ->orWhere('id', $diag['diagnostico_id'])
+                        ->first();
+                    
+                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
+                        \App\Models\HistoriaDiagnostico::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'diagnostico_id' => $diagnostico->id,
+                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                        ]);
+                        $diagnosticosProcesados[] = $diagnostico->id;
+                        \Log::info('✅ Diagnóstico PSICOLOGÍA guardado', [
+                            'diagnostico_id' => $diagnostico->id,
+                            'codigo' => $diagnostico->codigo
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR MEDICAMENTOS (SOLO PRIMERA VEZ)
+        if ($request->tipo_consulta === 'PRIMERA VEZ' && $request->has('medicamentos') && is_array($request->medicamentos)) {
+            \Log::info('🔍 Procesando medicamentos PSICOLOGÍA (PRIMERA VEZ)', [
+                'count' => count($request->medicamentos)
+            ]);
+            
+            foreach ($request->medicamentos as $med) {
+                $medicamentoId = $med['medicamento_id'] ?? null;
+                
+                if (!empty($medicamentoId)) {
+                    $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
+                        ->orWhere('id', $medicamentoId)
+                        ->first();
+                    
+                    if ($medicamento) {
+                        \App\Models\HistoriaMedicamento::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'medicamento_id' => $medicamento->id,
+                            'cantidad' => $med['cantidad'] ?? '1',
+                            'dosis' => $med['dosis'] ?? 'Según indicación médica',
+                        ]);
+                        \Log::info('✅ Medicamento PSICOLOGÍA guardado', [
+                            'medicamento_id' => $medicamento->id,
+                            'nombre' => $medicamento->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR REMISIONES (SOLO PRIMERA VEZ)
+        if ($request->tipo_consulta === 'PRIMERA VEZ' && $request->has('remisiones') && is_array($request->remisiones)) {
+            \Log::info('🔍 Procesando remisiones PSICOLOGÍA (PRIMERA VEZ)', [
+                'count' => count($request->remisiones)
+            ]);
+            
+            foreach ($request->remisiones as $rem) {
+                $remisionId = $rem['remision_id'] ?? null;
+                
+                if (!empty($remisionId)) {
+                    $remision = \App\Models\Remision::where('uuid', $remisionId)
+                        ->orWhere('id', $remisionId)
+                        ->first();
+                    
+                    if ($remision) {
+                        \App\Models\HistoriaRemision::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'remision_id' => $remision->id,
+                            'observacion' => $rem['observacion'] ?? null,
+                        ]);
+                        \Log::info('✅ Remisión PSICOLOGÍA guardada', [
+                            'remision_id' => $remision->id,
+                            'nombre' => $remision->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        DB::commit();
+
+        // ✅ CARGAR RELACIONES (SIEMPRE INCLUYE COMPLEMENTARIA)
+        $relaciones = [
+            'sede', 
+            'cita.paciente', 
+            'historiaDiagnosticos.diagnostico',
+            'complementaria' // ✅ Siempre se carga porque ambos tipos la usan
+        ];
+
+        // Solo cargar medicamentos y remisiones si es PRIMERA VEZ
+        if ($request->tipo_consulta === 'PRIMERA VEZ') {
+            $relaciones[] = 'historiaMedicamentos.medicamento';
+            $relaciones[] = 'historiaRemisiones.remision';
+        }
+
+        $historia->load($relaciones);
+
+        \Log::info('✅ Historia de psicología guardada exitosamente', [
+            'tipo_consulta' => $request->tipo_consulta,
+            'historia_uuid' => $historia->uuid,
+            'tiene_complementaria' => true,
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'medicamentos_count' => $request->tipo_consulta === 'PRIMERA VEZ' ? $historia->historiaMedicamentos->count() : 0,
+            'remisiones_count' => $request->tipo_consulta === 'PRIMERA VEZ' ? $historia->historiaRemisiones->count() : 0,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Historia clínica de psicología ({$request->tipo_consulta}) guardada exitosamente",
+            'data' => $historia
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Log::error('❌ Error guardando historia de psicología', [
+            'error' => $e->getMessage(),
+            'tipo_consulta' => $request->tipo_consulta,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica de psicología',
+            'error' => $e->getMessage(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+}
 
 /**
  * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
