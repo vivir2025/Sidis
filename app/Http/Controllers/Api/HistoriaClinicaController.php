@@ -1089,6 +1089,7 @@ private function storeNutricionista(Request $request, $cita)
         'acompanante' => 'nullable|string',
         'acu_parentesco' => 'nullable|string',
         'acu_telefono' => 'nullable|string',
+        'tabaquismo' => 'nullable|string',
         
         // Medidas antropométricas (ambos tipos)
         'peso' => 'nullable|numeric',
