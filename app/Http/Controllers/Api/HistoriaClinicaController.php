@@ -1230,6 +1230,7 @@ private function storeNutricionista(Request $request, $cita)
             'acu_parentesco' => $request->acu_parentesco,
             'acu_telefono' => $request->acu_telefono,
             'motivo_consulta' => $request->motivo_consulta ?? '',
+            'tabaquismo' => $request->tabaquismo,
             
             // Medidas antropométricas (ambos tipos)
             'peso' => $request->peso,
