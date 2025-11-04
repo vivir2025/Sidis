@@ -140,7 +140,11 @@ public function store(Request $request)
             return $this->storePsicologia($request, $cita);
         }
 
-
+        if ($especialidad === 'NUTRICIÓN' || $especialidad === 'NUTRICION' || $especialidad === 'NUTRICIONISTA') {
+            DB::rollBack();
+            return $this->storeNutricionista($request, $cita);
+        }
+        
         // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
         $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
 
@@ -1055,6 +1059,447 @@ private function storePsicologia(Request $request, $cita)
         ], 500);
     }
 }
+
+private function storeNutricionista(Request $request, $cita)
+{
+    // ✅ VALIDACIÓN DINÁMICA SEGÚN TIPO DE CONSULTA
+    $validationRules = [
+        'paciente_uuid' => 'required|string',
+        'usuario_id' => 'required|integer',
+        'sede_id' => 'required|integer',
+        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL',
+        'motivo_consulta' => 'nullable|string',
+        
+        'diagnosticos' => 'required|array|min:1',
+        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+        
+        'medicamentos' => 'nullable|array',
+        'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+        'medicamentos.*.cantidad' => 'nullable|string',
+        'medicamentos.*.dosis' => 'nullable|string',
+        
+        'remisiones' => 'nullable|array',
+        'remisiones.*.remision_id' => 'required_with:remisiones|string',
+        'remisiones.*.observacion' => 'nullable|string',
+        
+        'finalidad' => 'nullable|string',
+        'causa_externa' => 'nullable|string',
+        'acompanante' => 'nullable|string',
+        'acu_parentesco' => 'nullable|string',
+        'acu_telefono' => 'nullable|string',
+        
+        // Medidas antropométricas (ambos tipos)
+        'peso' => 'nullable|numeric',
+        'talla' => 'nullable|numeric',
+        'imc' => 'nullable|numeric',
+        'clasificacion' => 'nullable|string',
+        'perimetro_abdominal' => 'nullable|numeric',
+    ];
+
+    // ✅ AGREGAR VALIDACIONES ESPECÍFICAS SEGÚN TIPO
+    if ($request->tipo_consulta === 'PRIMERA VEZ') {
+        $validationRules = array_merge($validationRules, [
+            // Antecedentes PRIMERA VEZ
+            'enfermedad_diagnostica' => 'nullable|string',
+            'habito_intestinal' => 'nullable|string',
+            'quirurgicos' => 'nullable|string',
+            'quirurgicos_observaciones' => 'nullable|string',
+            'alergicos' => 'nullable|string',
+            'alergicos_observaciones' => 'nullable|string',
+            'familiares' => 'nullable|string',
+            'familiares_observaciones' => 'nullable|string',
+            'psa' => 'nullable|string',
+            'psa_observaciones' => 'nullable|string',
+            'farmacologicos' => 'nullable|string',
+            'farmacologicos_observaciones' => 'nullable|string',
+            'sueno' => 'nullable|string',
+            'sueno_observaciones' => 'nullable|string',
+            'tabaquismo_observaciones' => 'nullable|string',
+            'ejercicio' => 'nullable|string',
+            'ejercicio_observaciones' => 'nullable|string',
+            
+            // Gineco-obstétricos
+            'metodo_conceptivo' => 'nullable|string',
+            'metodo_conceptivo_cual' => 'nullable|string',
+            'embarazo_actual' => 'nullable|string',
+            'semanas_gestacion' => 'nullable|integer',
+            'climatero' => 'nullable|string',
+            
+            // Evaluación dietética
+            'tolerancia_via_oral' => 'nullable|string',
+            'percepcion_apetito' => 'nullable|string',
+            'percepcion_apetito_observacion' => 'nullable|string',
+            'alimentos_preferidos' => 'nullable|string',
+            'alimentos_rechazados' => 'nullable|string',
+            'suplemento_nutricionales' => 'nullable|string',
+            'dieta_especial' => 'nullable|string',
+            'dieta_especial_cual' => 'nullable|string',
+            
+            // Horarios de comida
+            'desayuno_hora' => 'nullable|string',
+            'desayuno_hora_observacion' => 'nullable|string',
+            'media_manana_hora' => 'nullable|string',
+            'media_manana_hora_observacion' => 'nullable|string',
+            'almuerzo_hora' => 'nullable|string',
+            'almuerzo_hora_observacion' => 'nullable|string',
+            'media_tarde_hora' => 'nullable|string',
+            'media_tarde_hora_observacion' => 'nullable|string',
+            'cena_hora' => 'nullable|string',
+            'cena_hora_observacion' => 'nullable|string',
+            'refrigerio_nocturno_hora' => 'nullable|string',
+            'refrigerio_nocturno_hora_observacion' => 'nullable|string',
+            
+            // Plan nutricional
+            'peso_ideal' => 'nullable|numeric',
+            'interpretacion' => 'nullable|string',
+            'meta_meses' => 'nullable|integer',
+            'analisis_nutricional' => 'nullable|string',
+            'plan_seguir' => 'nullable|string',
+        ]);
+    } else { // CONTROL
+        $validationRules = array_merge($validationRules, [
+            // Campos CONTROL
+            'enfermedad_diagnostica' => 'nullable|string',
+            'habito_intestinal' => 'nullable|string',
+            
+            // Recordatorio 24h
+            'comida_desayuno' => 'nullable|string',
+            'comida_medio_desayuno' => 'nullable|string',
+            'comida_almuerzo' => 'nullable|string',
+            'comida_medio_almuerzo' => 'nullable|string',
+            'comida_cena' => 'nullable|string',
+            
+            // Frecuencia de consumo
+            'lacteo' => 'nullable|string',
+            'lacteo_observacion' => 'nullable|string',
+            'huevo' => 'nullable|string',
+            'huevo_observacion' => 'nullable|string',
+            'embutido' => 'nullable|string',
+            'embutido_observacion' => 'nullable|string',
+            'carne_roja' => 'nullable|string',
+            'carne_blanca' => 'nullable|string',
+            'carne_vicera' => 'nullable|string',
+            'carne_observacion' => 'nullable|string',
+            'leguminosas' => 'nullable|string',
+            'leguminosas_observacion' => 'nullable|string',
+            'frutas_jugo' => 'nullable|string',
+            'frutas_porcion' => 'nullable|string',
+            'frutas_observacion' => 'nullable|string',
+            'verduras_hortalizas' => 'nullable|string',
+            'vh_observacion' => 'nullable|string',
+            'cereales' => 'nullable|string',
+            'cereales_observacion' => 'nullable|string',
+            'rtp' => 'nullable|string',
+            'rtp_observacion' => 'nullable|string',
+            'azucar_dulce' => 'nullable|string',
+            'ad_observacion' => 'nullable|string',
+            
+            // Plan de seguimiento
+            'diagnostico_nutri' => 'nullable|string',
+            'plan_seguir_nutri' => 'nullable|string',
+            'analisis_nutricional' => 'nullable|string',
+        ]);
+    }
+
+    $request->validate($validationRules);
+
+    DB::beginTransaction();
+    try {
+        \Log::info('🥗 Guardando historia de NUTRICIONISTA', [
+            'cita_uuid' => $cita->uuid,
+            'tipo_consulta' => $request->tipo_consulta,
+            'paciente_uuid' => $request->paciente_uuid,
+            'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
+            'medicamentos_count' => $request->medicamentos ? count($request->medicamentos) : 0,
+            'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
+        ]);
+
+        // ✅ CREAR HISTORIA BASE (SIEMPRE)
+        $historia = HistoriaClinica::create([
+            'uuid' => $request->uuid ?? Str::uuid(),
+            'sede_id' => $request->sede_id,
+            'cita_id' => $cita->id,
+            
+            // Campos básicos
+            'finalidad' => $request->finalidad ?? 'CONSULTA',
+            'causa_externa' => $request->causa_externa,
+            'acompanante' => $request->acompanante,
+            'acu_parentesco' => $request->acu_parentesco,
+            'acu_telefono' => $request->acu_telefono,
+            'motivo_consulta' => $request->motivo_consulta ?? '',
+            
+            // Medidas antropométricas (ambos tipos)
+            'peso' => $request->peso,
+            'talla' => $request->talla,
+            'imc' => $request->imc,
+            'clasificacion' => $request->clasificacion,
+            'perimetro_abdominal' => $request->perimetro_abdominal,
+        ]);
+
+        \Log::info('✅ Historia clínica base creada', [
+            'historia_id' => $historia->id,
+            'historia_uuid' => $historia->uuid
+        ]);
+
+        // ✅ CREAR TABLA COMPLEMENTARIA (AMBOS TIPOS, PERO CON CAMPOS DIFERENTES)
+        if ($request->tipo_consulta === 'PRIMERA VEZ') {
+            // ✅ PRIMERA VEZ: Todos los campos de evaluación inicial
+            \App\Models\HistoriaClinicaComplementaria::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                
+                // Antecedentes
+                'enfermedad_diagnostica' => $request->enfermedad_diagnostica,
+                'habito_intestinal' => $request->habito_intestinal,
+                'quirurgicos' => $request->quirurgicos,
+                'quirurgicos_observaciones' => $request->quirurgicos_observaciones,
+                'alergicos' => $request->alergicos,
+                'alergicos_observaciones' => $request->alergicos_observaciones,
+                'familiares' => $request->familiares,
+                'familiares_observaciones' => $request->familiares_observaciones,
+                'psa' => $request->psa,
+                'psa_observaciones' => $request->psa_observaciones,
+                'farmacologicos' => $request->farmacologicos,
+                'farmacologicos_observaciones' => $request->farmacologicos_observaciones,
+                'sueno' => $request->sueno,
+                'sueno_observaciones' => $request->sueno_observaciones,
+                'tabaquismo_observaciones' => $request->tabaquismo_observaciones,
+                'ejercicio' => $request->ejercicio,
+                'ejercicio_observaciones' => $request->ejercicio_observaciones,
+                
+                // Gineco-obstétricos
+                'metodo_conceptivo' => $request->metodo_conceptivo,
+                'metodo_conceptivo_cual' => $request->metodo_conceptivo_cual,
+                'embarazo_actual' => $request->embarazo_actual,
+                'semanas_gestacion' => $request->semanas_gestacion,
+                'climatero' => $request->climatero,
+                
+                // Evaluación dietética
+                'tolerancia_via_oral' => $request->tolerancia_via_oral,
+                'percepcion_apetito' => $request->percepcion_apetito,
+                'percepcion_apetito_observacion' => $request->percepcion_apetito_observacion,
+                'alimentos_preferidos' => $request->alimentos_preferidos,
+                'alimentos_rechazados' => $request->alimentos_rechazados,
+                'suplemento_nutricionales' => $request->suplemento_nutricionales,
+                'dieta_especial' => $request->dieta_especial,
+                'dieta_especial_cual' => $request->dieta_especial_cual,
+                
+                // Horarios de comida
+                'desayuno_hora' => $request->desayuno_hora,
+                'desayuno_hora_observacion' => $request->desayuno_hora_observacion,
+                'media_manana_hora' => $request->media_manana_hora,
+                'media_manana_hora_observacion' => $request->media_manana_hora_observacion,
+                'almuerzo_hora' => $request->almuerzo_hora,
+                'almuerzo_hora_observacion' => $request->almuerzo_hora_observacion,
+                'media_tarde_hora' => $request->media_tarde_hora,
+                'media_tarde_hora_observacion' => $request->media_tarde_hora_observacion,
+                'cena_hora' => $request->cena_hora,
+                'cena_hora_observacion' => $request->cena_hora_observacion,
+                'refrigerio_nocturno_hora' => $request->refrigerio_nocturno_hora,
+                'refrigerio_nocturno_hora_observacion' => $request->refrigerio_nocturno_hora_observacion,
+                
+                // Plan nutricional
+                'peso_ideal' => $request->peso_ideal,
+                'interpretacion' => $request->interpretacion,
+                'meta_meses' => $request->meta_meses,
+                'analisis_nutricional' => $request->analisis_nutricional,
+                'plan_seguir' => $request->plan_seguir,
+            ]);
+
+            \Log::info('✅ Tabla complementaria creada (PRIMERA VEZ - Evaluación inicial completa)');
+            
+        } else { // CONTROL
+            // ✅ CONTROL: Recordatorio 24h y frecuencia de consumo
+            \App\Models\HistoriaClinicaComplementaria::create([
+                'uuid' => Str::uuid(),
+                'historia_clinica_id' => $historia->id,
+                
+                // Antecedentes básicos
+                'enfermedad_diagnostica' => $request->enfermedad_diagnostica,
+                'habito_intestinal' => $request->habito_intestinal,
+                
+                // Recordatorio 24 horas
+                'comida_desayuno' => $request->comida_desayuno,
+                'comida_medio_desayuno' => $request->comida_medio_desayuno,
+                'comida_almuerzo' => $request->comida_almuerzo,
+                'comida_medio_almuerzo' => $request->comida_medio_almuerzo,
+                'comida_cena' => $request->comida_cena,
+                
+                // Frecuencia de consumo
+                'lacteo' => $request->lacteo,
+                'lacteo_observacion' => $request->lacteo_observacion,
+                'huevo' => $request->huevo,
+                'huevo_observacion' => $request->huevo_observacion,
+                'embutido' => $request->embutido,
+                'embutido_observacion' => $request->embutido_observacion,
+                'carne_roja' => $request->carne_roja,
+                'carne_blanca' => $request->carne_blanca,
+                'carne_vicera' => $request->carne_vicera,
+                'carne_observacion' => $request->carne_observacion,
+                'leguminosas' => $request->leguminosas,
+                'leguminosas_observacion' => $request->leguminosas_observacion,
+                'frutas_jugo' => $request->frutas_jugo,
+                'frutas_porcion' => $request->frutas_porcion,
+                'frutas_observacion' => $request->frutas_observacion,
+                'verduras_hortalizas' => $request->verduras_hortalizas,
+                'vh_observacion' => $request->vh_observacion,
+                'cereales' => $request->cereales,
+                'cereales_observacion' => $request->cereales_observacion,
+                'rtp' => $request->rtp,
+                'rtp_observacion' => $request->rtp_observacion,
+                'azucar_dulce' => $request->azucar_dulce,
+                'ad_observacion' => $request->ad_observacion,
+                
+                // Plan de seguimiento
+                'diagnostico_nutri' => $request->diagnostico_nutri,
+                'plan_seguir_nutri' => $request->plan_seguir_nutri,
+                'analisis_nutricional' => $request->analisis_nutricional,
+            ]);
+
+            \Log::info('✅ Tabla complementaria creada (CONTROL - Recordatorio 24h y frecuencia)');
+        }
+
+        // ✅ PROCESAR DIAGNÓSTICOS (AMBOS TIPOS)
+        $diagnosticosProcesados = [];
+        
+        if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
+            \Log::info('🔍 Procesando array diagnosticos NUTRICIONISTA', [
+                'count' => count($request->diagnosticos)
+            ]);
+            
+            foreach ($request->diagnosticos as $index => $diag) {
+                if (!empty($diag['diagnostico_id'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
+                        ->orWhere('id', $diag['diagnostico_id'])
+                        ->first();
+                    
+                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
+                        \App\Models\HistoriaDiagnostico::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'diagnostico_id' => $diagnostico->id,
+                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                        ]);
+                        $diagnosticosProcesados[] = $diagnostico->id;
+                        \Log::info('✅ Diagnóstico NUTRICIONISTA guardado', [
+                            'diagnostico_id' => $diagnostico->id,
+                            'codigo' => $diagnostico->codigo
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR MEDICAMENTOS (AMBOS TIPOS)
+        if ($request->has('medicamentos') && is_array($request->medicamentos)) {
+            \Log::info('🔍 Procesando medicamentos NUTRICIONISTA', [
+                'count' => count($request->medicamentos)
+            ]);
+            
+            foreach ($request->medicamentos as $med) {
+                $medicamentoId = $med['medicamento_id'] ?? null;
+                
+                if (!empty($medicamentoId)) {
+                    $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
+                        ->orWhere('id', $medicamentoId)
+                        ->first();
+                    
+                    if ($medicamento) {
+                        \App\Models\HistoriaMedicamento::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'medicamento_id' => $medicamento->id,
+                            'cantidad' => $med['cantidad'] ?? '1',
+                            'dosis' => $med['dosis'] ?? 'Según indicación nutricional',
+                        ]);
+                        \Log::info('✅ Medicamento NUTRICIONISTA guardado', [
+                            'medicamento_id' => $medicamento->id,
+                            'nombre' => $medicamento->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR REMISIONES (AMBOS TIPOS)
+        if ($request->has('remisiones') && is_array($request->remisiones)) {
+            \Log::info('🔍 Procesando remisiones NUTRICIONISTA', [
+                'count' => count($request->remisiones)
+            ]);
+            
+            foreach ($request->remisiones as $rem) {
+                $remisionId = $rem['remision_id'] ?? null;
+                
+                if (!empty($remisionId)) {
+                    $remision = \App\Models\Remision::where('uuid', $remisionId)
+                        ->orWhere('id', $remisionId)
+                        ->first();
+                    
+                    if ($remision) {
+                        \App\Models\HistoriaRemision::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'remision_id' => $remision->id,
+                            'observacion' => $rem['observacion'] ?? null,
+                        ]);
+                        \Log::info('✅ Remisión NUTRICIONISTA guardada', [
+                            'remision_id' => $remision->id,
+                            'nombre' => $remision->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        DB::commit();
+
+        // ✅ CARGAR RELACIONES (SIEMPRE INCLUYE COMPLEMENTARIA)
+        $historia->load([
+            'sede', 
+            'cita.paciente', 
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'complementaria' // ✅ Siempre se carga porque ambos tipos la usan
+        ]);
+
+        \Log::info('✅ Historia de nutricionista guardada exitosamente', [
+            'tipo_consulta' => $request->tipo_consulta,
+            'historia_uuid' => $historia->uuid,
+            'tiene_complementaria' => true,
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'medicamentos_count' => $historia->historiaMedicamentos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Historia clínica de nutricionista ({$request->tipo_consulta}) guardada exitosamente",
+            'data' => $historia
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Log::error('❌ Error guardando historia de nutricionista', [
+            'error' => $e->getMessage(),
+            'tipo_consulta' => $request->tipo_consulta,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica de nutricionista',
+            'error' => $e->getMessage(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+}
+
 
 /**
  * ✅ MÉTODO HELPER PARA OBTENER CITA_ID DESDE UUID
