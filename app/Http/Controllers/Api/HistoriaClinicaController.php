@@ -86,25 +86,37 @@ class HistoriaClinicaController extends Controller
     }
 
 
+
 public function store(Request $request)
 {
-    // ✅ PASO 1: VALIDACIÓN MÍNIMA (solo lo esencial para obtener la cita)
+    // ✅ VALIDACIÓN
     $request->validate([
-        'cita_uuid' => 'required|string',
         'paciente_uuid' => 'required|string',
         'usuario_id' => 'required|integer',
         'sede_id' => 'required|integer',
+        'cita_uuid' => 'required|string',
+        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
+        'motivo_consulta' => 'nullable|string',
+        'enfermedad_actual' => 'nullable|string',
+        'idDiagnostico' => 'nullable|string',
+        'diagnosticos' => 'nullable|array',
+        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+        'medicamentos' => 'nullable|array',
+        'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+        'remisiones' => 'nullable|array',
+        'remisiones.*.remision_id' => 'required_with:remisiones|string',
+        'cups' => 'nullable|array',
+        'cups.*.cups_id' => 'required_with:cups|string',
     ]);
 
+    DB::beginTransaction();
     try {
-        // ✅ PASO 2: OBTENER CITA Y DETECTAR ESPECIALIDAD
+        // ✅ OBTENER CITA
         $cita = \App\Models\Cita::where('uuid', $request->cita_uuid)->first();
-        
         if (!$cita) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cita no encontrada con UUID: ' . $request->cita_uuid
-            ], 404);
+            throw new \Exception('Cita no encontrada con UUID: ' . $request->cita_uuid);
         }
 
         // ✅ DETECTAR ESPECIALIDAD
@@ -112,47 +124,26 @@ public function store(Request $request)
         
         \Log::info('🔍 Especialidad detectada en store', [
             'especialidad' => $especialidad,
-            'tipo_consulta' => $request->tipo_consulta ?? 'N/A',
+            'tipo_consulta' => $request->tipo_consulta,
             'cita_uuid' => $request->cita_uuid
         ]);
 
-        // ✅ PASO 3: RUTEAR A MÉTODO ESPECÍFICO SEGÚN ESPECIALIDAD (sin DB::beginTransaction aquí)
-        
-        // FISIOTERAPIA
+        // ✅ SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
         if ($especialidad === 'FISIOTERAPIA') {
+            DB::rollBack();
             return $this->storeFisioterapia($request, $cita);
         }
 
-        // PSICOLOGÍA
+        
         if ($especialidad === 'PSICOLOGÍA' || $especialidad === 'PSICOLOGIA') {
+            DB::rollBack();
             return $this->storePsicologia($request, $cita);
         }
 
-        // NUTRICIÓN
         if ($especialidad === 'NUTRICIÓN' || $especialidad === 'NUTRICION' || $especialidad === 'NUTRICIONISTA') {
+            DB::rollBack();
             return $this->storeNutricionista($request, $cita);
         }
-
-        // ✅ PASO 4: MEDICINA GENERAL - VALIDAR CAMPOS ESPECÍFICOS
-        $request->validate([
-            'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
-            'motivo_consulta' => 'nullable|string',
-            'enfermedad_actual' => 'nullable|string',
-            'idDiagnostico' => 'nullable|string',
-            'diagnosticos' => 'nullable|array',
-            'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
-            'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
-            'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
-            'medicamentos' => 'nullable|array',
-            'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
-            'remisiones' => 'nullable|array',
-            'remisiones.*.remision_id' => 'required_with:remisiones|string',
-            'cups' => 'nullable|array',
-            'cups.*.cups_id' => 'required_with:cups|string',
-        ]);
-
-        // ✅ INICIAR TRANSACCIÓN SOLO PARA MEDICINA GENERAL
-        DB::beginTransaction();
         
         // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
         $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
@@ -160,16 +151,16 @@ public function store(Request $request)
         // ✅ CREAR HISTORIA
         $historia = HistoriaClinica::create($datosHistoria);
 
-        // ✅ PROCESAR DIAGNÓSTICOS
+        // ✅ PROCESAR DIAGNÓSTICOS (sin cambios)
         $this->procesarDiagnosticos($request, $historia);
 
-        // ✅ PROCESAR MEDICAMENTOS
+        // ✅ PROCESAR MEDICAMENTOS (sin cambios)
         $this->procesarMedicamentos($request, $historia);
 
-        // ✅ PROCESAR REMISIONES
+        // ✅ PROCESAR REMISIONES (sin cambios)
         $this->procesarRemisiones($request, $historia);
 
-        // ✅ PROCESAR CUPS
+        // ✅ PROCESAR CUPS (sin cambios)
         $this->procesarCups($request, $historia);
 
         DB::commit();
@@ -184,10 +175,9 @@ public function store(Request $request)
             'historiaCups.cups'
         ]);
 
-        \Log::info('✅ Historia clínica de Medicina General creada exitosamente', [
+        \Log::info('✅ Historia clínica creada exitosamente', [
             'tipo_consulta' => $request->tipo_consulta,
             'historia_uuid' => $historia->uuid,
-            'especialidad' => 'MEDICINA GENERAL'
         ]);
 
         return response()->json([
@@ -196,31 +186,13 @@ public function store(Request $request)
             'data' => $historia
         ], 201);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        // ✅ MANEJAR ERRORES DE VALIDACIÓN
-        \Log::warning('⚠️ Error de validación en historia clínica', [
-            'errors' => $e->errors(),
-            'tipo_consulta' => $request->tipo_consulta ?? 'N/A'
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error de validación',
-            'errors' => $e->errors(),
-        ], 422);
-        
     } catch (\Exception $e) {
-        // ✅ ROLLBACK SOLO SI HAY TRANSACCIÓN ACTIVA
-        if (DB::transactionLevel() > 0) {
-            DB::rollBack();
-        }
+        DB::rollBack();
         
         \Log::error('❌ Error creando historia clínica', [
             'error' => $e->getMessage(),
-            'tipo_consulta' => $request->tipo_consulta ?? 'N/A',
-            'line' => $e->getLine(),
-            'file' => basename($e->getFile()),
-            'trace' => $e->getTraceAsString()
+            'tipo_consulta' => $request->tipo_consulta,
+            'line' => $e->getLine()
         ]);
         
         return response()->json([
@@ -230,7 +202,6 @@ public function store(Request $request)
         ], 500);
     }
 }
-
 
 /**
  * ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
