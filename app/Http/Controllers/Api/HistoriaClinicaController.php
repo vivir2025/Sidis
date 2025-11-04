@@ -1059,7 +1059,6 @@ private function storePsicologia(Request $request, $cita)
         ], 500);
     }
 }
-
 private function storeNutricionista(Request $request, $cita)
 {
     // ✅ VALIDACIÓN DINÁMICA SEGÚN TIPO DE CONSULTA
@@ -1083,6 +1082,11 @@ private function storeNutricionista(Request $request, $cita)
         'remisiones' => 'nullable|array',
         'remisiones.*.remision_id' => 'required_with:remisiones|string',
         'remisiones.*.observacion' => 'nullable|string',
+        
+        // ✅ CUPS (AMBOS TIPOS)
+        'cups' => 'nullable|array',
+        'cups.*.cups_id' => 'required_with:cups|string',
+        'cups.*.observacion' => 'nullable|string',
         
         'finalidad' => 'nullable|string',
         'causa_externa' => 'nullable|string',
@@ -1215,6 +1219,7 @@ private function storeNutricionista(Request $request, $cita)
             'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
             'medicamentos_count' => $request->medicamentos ? count($request->medicamentos) : 0,
             'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
+            'cups_count' => $request->cups ? count($request->cups) : 0,
         ]);
 
         // ✅ CREAR HISTORIA BASE (SIEMPRE)
@@ -1456,16 +1461,48 @@ private function storeNutricionista(Request $request, $cita)
             }
         }
 
+        // ✅ PROCESAR CUPS (AMBOS TIPOS)
+        if ($request->has('cups') && is_array($request->cups)) {
+            \Log::info('🔍 Procesando CUPS NUTRICIONISTA', [
+                'count' => count($request->cups)
+            ]);
+            
+            foreach ($request->cups as $cup) {
+                $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
+                
+                if (!empty($cupsId)) {
+                    $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
+                        ->orWhere('id', $cupsId)
+                        ->first();
+                    
+                    if ($cupsModel) {
+                        \App\Models\HistoriaCups::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'cups_id' => $cupsModel->id,
+                            'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
+                        ]);
+                        \Log::info('✅ CUPS NUTRICIONISTA guardado', [
+                            'cups_id' => $cupsModel->id,
+                            'codigo' => $cupsModel->codigo,
+                            'nombre' => $cupsModel->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
         DB::commit();
 
-        // ✅ CARGAR RELACIONES (SIEMPRE INCLUYE COMPLEMENTARIA)
+        // ✅ CARGAR RELACIONES (SIEMPRE INCLUYE COMPLEMENTARIA Y CUPS)
         $historia->load([
             'sede', 
             'cita.paciente', 
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento',
             'historiaRemisiones.remision',
-            'complementaria' // ✅ Siempre se carga porque ambos tipos la usan
+            'historiaCups.cups',
+            'complementaria'
         ]);
 
         \Log::info('✅ Historia de nutricionista guardada exitosamente', [
@@ -1475,6 +1512,7 @@ private function storeNutricionista(Request $request, $cita)
             'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
             'medicamentos_count' => $historia->historiaMedicamentos->count(),
             'remisiones_count' => $historia->historiaRemisiones->count(),
+            'cups_count' => $historia->historiaCups->count(),
         ]);
 
         return response()->json([
@@ -1501,6 +1539,7 @@ private function storeNutricionista(Request $request, $cita)
         ], 500);
     }
 }
+
 
 
 /**
