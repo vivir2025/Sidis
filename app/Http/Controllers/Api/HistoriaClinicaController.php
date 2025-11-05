@@ -144,6 +144,12 @@ public function store(Request $request)
             DB::rollBack();
             return $this->storeNutricionista($request, $cita);
         }
+
+        if ($especialidad === 'MEDICINA INTERNA' || $especialidad === 'INTERNISTA') {
+            DB::rollBack();
+            return $this->storeInternista($request, $cita);
+        }
+
         
         // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
         $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
@@ -1534,6 +1540,494 @@ private function storeNutricionista(Request $request, $cita)
         return response()->json([
             'success' => false,
             'message' => 'Error al crear historia clínica de nutricionista',
+            'error' => $e->getMessage(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+}
+
+private function storeInternista(Request $request, $cita)
+{
+    // ✅ VALIDACIÓN (SOLO CONTROL - NO HAY PRIMERA VEZ)
+    $validationRules = [
+        'paciente_uuid' => 'required|string',
+        'usuario_id' => 'required|integer',
+        'sede_id' => 'required|integer',
+        'tipo_consulta' => 'required|in:CONTROL', // ✅ SOLO CONTROL
+        'motivo_consulta' => 'nullable|string',
+        
+        // ✅ DIAGNÓSTICOS (REQUERIDOS)
+        'diagnosticos' => 'required|array|min:1',
+        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+        
+        // ✅ MEDICAMENTOS
+        'medicamentos' => 'nullable|array',
+        'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+        'medicamentos.*.cantidad' => 'nullable|string',
+        'medicamentos.*.dosis' => 'nullable|string',
+        
+        // ✅ REMISIONES
+        'remisiones' => 'nullable|array',
+        'remisiones.*.remision_id' => 'required_with:remisiones|string',
+        'remisiones.*.observacion' => 'nullable|string',
+        
+        // ✅ CUPS
+        'cups' => 'nullable|array',
+        'cups.*.cups_id' => 'required_with:cups|string',
+        'cups.*.observacion' => 'nullable|string',
+        
+        // ✅ CAMPOS DE HISTORIA CLÍNICA BASE
+        'finalidad' => 'nullable|string',
+        'causa_externa' => 'nullable|string',
+        'peso' => 'nullable|numeric',
+        'talla' => 'nullable|numeric',
+        'imc' => 'nullable|numeric',
+        'clasificacion' => 'nullable|string',
+        'acompanante' => 'nullable|string',
+        'acu_telefono' => 'nullable|string',
+        'acu_parentesco' => 'nullable|string',
+        'enfermedad_actual' => 'nullable|string',
+        'sistema_nervioso' => 'nullable|string',
+        'ef_cabeza' => 'nullable|string',
+        'obs_cabeza' => 'nullable|string',
+        'cuello' => 'nullable|string',
+        'obs_cuello' => 'nullable|string',
+        'torax' => 'nullable|string',
+        'obs_torax' => 'nullable|string',
+        'abdomen' => 'nullable|string',
+        'obs_abdomen' => 'nullable|string',
+        'extremidades' => 'nullable|string',
+        'obs_extremidades' => 'nullable|string',
+        'perimetro_abdominal' => 'nullable|numeric',
+        'presion_arterial_sistolica_sentado_pie' => 'nullable|numeric',
+        'presion_arterial_distolica_sentado_pie' => 'nullable|numeric',
+        'frecuencia_cardiaca' => 'nullable|numeric',
+        'frecuencia_respiratoria' => 'nullable|numeric',
+        'observaciones_generales' => 'nullable|string',
+        'clasificacion_estado_metabolico' => 'nullable|string',
+        'hipertension_arterial_personal' => 'nullable|string',
+        'diabetes_mellitus_personal' => 'nullable|string',
+        'clasificacion_hta' => 'nullable|string',
+        'clasificacion_dm' => 'nullable|string',
+        'clasificacion_erc_estado' => 'nullable|string',
+        'clasificacion_erc_categoria_ambulatoria_persistente' => 'nullable|string',
+        'clasificacion_rcv' => 'nullable|string',
+        
+        // ✅ CAMPOS DE TABLA COMPLEMENTARIA (CONTROL)
+        'descripcion_sistema_nervioso' => 'nullable|string',
+        'sistema_hemolinfatico' => 'nullable|string',
+        'descripcion_sistema_hemolinfatico' => 'nullable|string',
+        'aparato_digestivo' => 'nullable|string',
+        'descripcion_aparato_digestivo' => 'nullable|string',
+        'organo_sentido' => 'nullable|string',
+        'descripcion_organos_sentidos' => 'nullable|string',
+        'endocrino_metabolico' => 'nullable|string',
+        'descripcion_endocrino_metabolico' => 'nullable|string',
+        'inmunologico' => 'nullable|string',
+        'descripcion_inmunologico' => 'nullable|string',
+        'cancer_tumores_radioterapia_quimio' => 'nullable|string',
+        'descripcion_cancer_tumores_radio_quimioterapia' => 'nullable|string',
+        'glandula_mamaria' => 'nullable|string',
+        'descripcion_glandulas_mamarias' => 'nullable|string',
+        'hipertension_diabetes_erc' => 'nullable|string',
+        'descripcion_hipertension_diabetes_erc' => 'nullable|string',
+        'reacciones_alergica' => 'nullable|string',
+        'descripcion_reacion_alergica' => 'nullable|string',
+        'cardio_vasculares' => 'nullable|string',
+        'descripcion_cardio_vasculares' => 'nullable|string',
+        'respiratorios' => 'nullable|string',
+        'descripcion_respiratorios' => 'nullable|string',
+        'urinarias' => 'nullable|string',
+        'descripcion_urinarias' => 'nullable|string',
+        'osteoarticulares' => 'nullable|string',
+        'descripcion_osteoarticulares' => 'nullable|string',
+        'infecciosos' => 'nullable|string',
+        'descripcion_infecciosos' => 'nullable|string',
+        'cirugia_trauma' => 'nullable|string',
+        'descripcion_cirugias_traumas' => 'nullable|string',
+        'tratamiento_medicacion' => 'nullable|string',
+        'descripcion_tratamiento_medicacion' => 'nullable|string',
+        'antecedente_quirurgico' => 'nullable|string',
+        'descripcion_antecedentes_quirurgicos' => 'nullable|string',
+        'antecedentes_familiares' => 'nullable|string',
+        'descripcion_antecedentes_familiares' => 'nullable|string',
+        'consumo_tabaco' => 'nullable|string',
+        'descripcion_consumo_tabaco' => 'nullable|string',
+        'antecedentes_alcohol' => 'nullable|string',
+        'descripcion_antecedentes_alcohol' => 'nullable|string',
+        'sedentarismo' => 'nullable|string',
+        'descripcion_sedentarismo' => 'nullable|string',
+        'ginecologico' => 'nullable|string',
+        'descripcion_ginecologicos' => 'nullable|string',
+        'citologia_vaginal' => 'nullable|string',
+        'descripcion_citologia_vaginal' => 'nullable|string',
+        'menarquia' => 'nullable|string',
+        'gestaciones' => 'nullable|integer',
+        'parto' => 'nullable|integer',
+        'aborto' => 'nullable|integer',
+        'cesarea' => 'nullable|integer',
+        'metodo_conceptivo' => 'nullable|string',
+        'metodo_conceptivo_cual' => 'nullable|string',
+        'antecedente_personal' => 'nullable|string',
+        'neurologico_estado_mental' => 'nullable|string',
+        'obs_neurologico_estado_mental' => 'nullable|string',
+    ];
+
+    $request->validate($validationRules);
+
+    DB::beginTransaction();
+    try {
+        \Log::info('🩺 Guardando historia de INTERNISTA', [
+            'cita_uuid' => $cita->uuid,
+            'tipo_consulta' => $request->tipo_consulta,
+            'paciente_uuid' => $request->paciente_uuid,
+            'diagnosticos_count' => $request->diagnosticos ? count($request->diagnosticos) : 0,
+            'medicamentos_count' => $request->medicamentos ? count($request->medicamentos) : 0,
+            'remisiones_count' => $request->remisiones ? count($request->remisiones) : 0,
+            'cups_count' => $request->cups ? count($request->cups) : 0,
+        ]);
+
+        // ✅ CREAR HISTORIA BASE (CONTROL)
+        $historia = HistoriaClinica::create([
+            'uuid' => $request->uuid ?? Str::uuid(),
+            'sede_id' => $request->sede_id,
+            'cita_id' => $cita->id,
+            
+            // Campos básicos
+            'finalidad' => $request->finalidad ?? 'CONSULTA',
+            'causa_externa' => $request->causa_externa,
+            'motivo_consulta' => $request->motivo_consulta ?? '',
+            'enfermedad_actual' => $request->enfermedad_actual,
+            
+            // Acompañante
+            'acompanante' => $request->acompanante,
+            'acu_telefono' => $request->acu_telefono,
+            'acu_parentesco' => $request->acu_parentesco,
+            
+            // Medidas antropométricas
+            'peso' => $request->peso,
+            'talla' => $request->talla,
+            'imc' => $request->imc,
+            'clasificacion' => $request->clasificacion,
+            'perimetro_abdominal' => $request->perimetro_abdominal,
+            
+            // Signos vitales
+            'presion_arterial_sistolica_sentado_pie' => $request->presion_arterial_sistolica_sentado_pie,
+            'presion_arterial_distolica_sentado_pie' => $request->presion_arterial_distolica_sentado_pie,
+            'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
+            'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
+            
+            // Examen físico
+            'sistema_nervioso' => $request->sistema_nervioso,
+            'ef_cabeza' => $request->ef_cabeza,
+            'obs_cabeza' => $request->obs_cabeza,
+            'cuello' => $request->cuello,
+            'obs_cuello' => $request->obs_cuello,
+            'torax' => $request->torax,
+            'obs_torax' => $request->obs_torax,
+            'abdomen' => $request->abdomen,
+            'obs_abdomen' => $request->obs_abdomen,
+            'extremidades' => $request->extremidades,
+            'obs_extremidades' => $request->obs_extremidades,
+            
+            // Clasificaciones
+            'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
+            'hipertension_arterial_personal' => $request->hipertension_arterial_personal,
+            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal,
+            'clasificacion_hta' => $request->clasificacion_hta,
+            'clasificacion_dm' => $request->clasificacion_dm,
+            'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
+            'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+            'clasificacion_rcv' => $request->clasificacion_rcv,
+            
+            // Observaciones
+            'observaciones_generales' => $request->observaciones_generales,
+        ]);
+
+        \Log::info('✅ Historia clínica base creada', [
+            'historia_id' => $historia->id,
+            'historia_uuid' => $historia->uuid
+        ]);
+
+        // ✅ CREAR TABLA COMPLEMENTARIA (CONTROL - TODOS LOS ANTECEDENTES)
+        \App\Models\HistoriaClinicaComplementaria::create([
+            'uuid' => Str::uuid(),
+            'historia_clinica_id' => $historia->id,
+            
+            // Sistema nervioso
+            'descripcion_sistema_nervioso' => $request->descripcion_sistema_nervioso,
+            
+            // Sistema hemolinfático
+            'sistema_hemolinfatico' => $request->sistema_hemolinfatico,
+            'descripcion_sistema_hemolinfatico' => $request->descripcion_sistema_hemolinfatico,
+            
+            // Aparato digestivo
+            'aparato_digestivo' => $request->aparato_digestivo,
+            'descripcion_aparato_digestivo' => $request->descripcion_aparato_digestivo,
+            
+            // Órganos de los sentidos
+            'organo_sentido' => $request->organo_sentido,
+            'descripcion_organos_sentidos' => $request->descripcion_organos_sentidos,
+            
+            // Endocrino metabólico
+            'endocrino_metabolico' => $request->endocrino_metabolico,
+            'descripcion_endocrino_metabolico' => $request->descripcion_endocrino_metabolico,
+            
+            // Inmunológico
+            'inmunologico' => $request->inmunologico,
+            'descripcion_inmunologico' => $request->descripcion_inmunologico,
+            
+            // Cáncer/tumores
+            'cancer_tumores_radioterapia_quimio' => $request->cancer_tumores_radioterapia_quimio,
+            'descripcion_cancer_tumores_radio_quimioterapia' => $request->descripcion_cancer_tumores_radio_quimioterapia,
+            
+            // Glándula mamaria
+            'glandula_mamaria' => $request->glandula_mamaria,
+            'descripcion_glandulas_mamarias' => $request->descripcion_glandulas_mamarias,
+            
+            // HTA/DM/ERC
+            'hipertension_diabetes_erc' => $request->hipertension_diabetes_erc,
+            'descripcion_hipertension_diabetes_erc' => $request->descripcion_hipertension_diabetes_erc,
+            
+            // Reacciones alérgicas
+            'reacciones_alergica' => $request->reacciones_alergica,
+            'descripcion_reacion_alergica' => $request->descripcion_reacion_alergica,
+            
+            // Cardiovasculares
+            'cardio_vasculares' => $request->cardio_vasculares,
+            'descripcion_cardio_vasculares' => $request->descripcion_cardio_vasculares,
+            
+            // Respiratorios
+            'respiratorios' => $request->respiratorios,
+            'descripcion_respiratorios' => $request->descripcion_respiratorios,
+            
+            // Urinarias
+            'urinarias' => $request->urinarias,
+            'descripcion_urinarias' => $request->descripcion_urinarias,
+            
+            // Osteoarticulares
+            'osteoarticulares' => $request->osteoarticulares,
+            'descripcion_osteoarticulares' => $request->descripcion_osteoarticulares,
+            
+            // Infecciosos
+            'infecciosos' => $request->infecciosos,
+            'descripcion_infecciosos' => $request->descripcion_infecciosos,
+            
+            // Cirugía/trauma
+            'cirugia_trauma' => $request->cirugia_trauma,
+            'descripcion_cirugias_traumas' => $request->descripcion_cirugias_traumas,
+            
+            // Tratamiento/medicación
+            'tratamiento_medicacion' => $request->tratamiento_medicacion,
+            'descripcion_tratamiento_medicacion' => $request->descripcion_tratamiento_medicacion,
+            
+            // Antecedentes quirúrgicos
+            'antecedente_quirurgico' => $request->antecedente_quirurgico,
+            'descripcion_antecedentes_quirurgicos' => $request->descripcion_antecedentes_quirurgicos,
+            
+            // Antecedentes familiares
+            'antecedentes_familiares' => $request->antecedentes_familiares,
+            'descripcion_antecedentes_familiares' => $request->descripcion_antecedentes_familiares,
+            
+            // Hábitos
+            'consumo_tabaco' => $request->consumo_tabaco,
+            'descripcion_consumo_tabaco' => $request->descripcion_consumo_tabaco,
+            'antecedentes_alcohol' => $request->antecedentes_alcohol,
+            'descripcion_antecedentes_alcohol' => $request->descripcion_antecedentes_alcohol,
+            'sedentarismo' => $request->sedentarismo,
+            'descripcion_sedentarismo' => $request->descripcion_sedentarismo,
+            
+            // Ginecológicos
+            'ginecologico' => $request->ginecologico,
+            'descripcion_ginecologicos' => $request->descripcion_ginecologicos,
+            'citologia_vaginal' => $request->citologia_vaginal,
+            'descripcion_citologia_vaginal' => $request->descripcion_citologia_vaginal,
+            'menarquia' => $request->menarquia,
+            'gestaciones' => $request->gestaciones,
+            'parto' => $request->parto,
+            'aborto' => $request->aborto,
+            'cesarea' => $request->cesarea,
+            'metodo_conceptivo' => $request->metodo_conceptivo,
+            'metodo_conceptivo_cual' => $request->metodo_conceptivo_cual,
+            
+            // Antecedentes personales
+            'antecedente_personal' => $request->antecedente_personal,
+            
+            // Neurológico/estado mental
+            'neurologico_estado_mental' => $request->neurologico_estado_mental,
+            'obs_neurologico_estado_mental' => $request->obs_neurologico_estado_mental,
+        ]);
+
+        \Log::info('✅ Tabla complementaria creada (INTERNISTA - CONTROL)');
+
+        // ✅ PROCESAR DIAGNÓSTICOS
+        $diagnosticosProcesados = [];
+        
+        if ($request->has('diagnosticos') && is_array($request->diagnosticos)) {
+            \Log::info('🔍 Procesando array diagnosticos INTERNISTA', [
+                'count' => count($request->diagnosticos)
+            ]);
+            
+            foreach ($request->diagnosticos as $index => $diag) {
+                if (!empty($diag['diagnostico_id'])) {
+                    $diagnostico = \App\Models\Diagnostico::where('uuid', $diag['diagnostico_id'])
+                        ->orWhere('id', $diag['diagnostico_id'])
+                        ->first();
+                    
+                    if ($diagnostico && !in_array($diagnostico->id, $diagnosticosProcesados)) {
+                        \App\Models\HistoriaDiagnostico::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'diagnostico_id' => $diagnostico->id,
+                            'tipo' => $diag['tipo'] ?? ($index === 0 ? 'PRINCIPAL' : 'SECUNDARIO'),
+                            'tipo_diagnostico' => $diag['tipo_diagnostico'] ?? 'IMPRESION_DIAGNOSTICA',
+                        ]);
+                        $diagnosticosProcesados[] = $diagnostico->id;
+                        \Log::info('✅ Diagnóstico INTERNISTA guardado', [
+                            'diagnostico_id' => $diagnostico->id,
+                            'codigo' => $diagnostico->codigo
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR MEDICAMENTOS
+        if ($request->has('medicamentos') && is_array($request->medicamentos)) {
+            \Log::info('🔍 Procesando medicamentos INTERNISTA', [
+                'count' => count($request->medicamentos)
+            ]);
+            
+            foreach ($request->medicamentos as $med) {
+                $medicamentoId = $med['medicamento_id'] ?? null;
+                
+                if (!empty($medicamentoId)) {
+                    $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
+                        ->orWhere('id', $medicamentoId)
+                        ->first();
+                    
+                    if ($medicamento) {
+                        \App\Models\HistoriaMedicamento::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'medicamento_id' => $medicamento->id,
+                            'cantidad' => $med['cantidad'] ?? '1',
+                            'dosis' => $med['dosis'] ?? 'Según indicación médica',
+                        ]);
+                        \Log::info('✅ Medicamento INTERNISTA guardado', [
+                            'medicamento_id' => $medicamento->id,
+                            'nombre' => $medicamento->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR REMISIONES
+        if ($request->has('remisiones') && is_array($request->remisiones)) {
+            \Log::info('🔍 Procesando remisiones INTERNISTA', [
+                'count' => count($request->remisiones)
+            ]);
+            
+            foreach ($request->remisiones as $rem) {
+                $remisionId = $rem['remision_id'] ?? null;
+                
+                if (!empty($remisionId)) {
+                    $remision = \App\Models\Remision::where('uuid', $remisionId)
+                        ->orWhere('id', $remisionId)
+                        ->first();
+                    
+                    if ($remision) {
+                        \App\Models\HistoriaRemision::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'remision_id' => $remision->id,
+                            'observacion' => $rem['observacion'] ?? null,
+                        ]);
+                        \Log::info('✅ Remisión INTERNISTA guardada', [
+                            'remision_id' => $remision->id,
+                            'nombre' => $remision->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // ✅ PROCESAR CUPS
+        if ($request->has('cups') && is_array($request->cups)) {
+            \Log::info('🔍 Procesando CUPS INTERNISTA', [
+                'count' => count($request->cups)
+            ]);
+            
+            foreach ($request->cups as $cup) {
+                $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
+                
+                if (!empty($cupsId)) {
+                    $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
+                        ->orWhere('id', $cupsId)
+                        ->first();
+                    
+                    if ($cupsModel) {
+                        \App\Models\HistoriaCups::create([
+                            'uuid' => Str::uuid(),
+                            'historia_clinica_id' => $historia->id,
+                            'cups_id' => $cupsModel->id,
+                            'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
+                        ]);
+                        \Log::info('✅ CUPS INTERNISTA guardado', [
+                            'cups_id' => $cupsModel->id,
+                            'codigo' => $cupsModel->codigo,
+                            'nombre' => $cupsModel->nombre
+                        ]);
+                    }
+                }
+            }
+        }
+
+        DB::commit();
+
+        // ✅ CARGAR RELACIONES
+        $historia->load([
+            'sede', 
+            'cita.paciente', 
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups',
+            'complementaria'
+        ]);
+
+        \Log::info('✅ Historia de internista guardada exitosamente', [
+            'tipo_consulta' => $request->tipo_consulta,
+            'historia_uuid' => $historia->uuid,
+            'tiene_complementaria' => true,
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'medicamentos_count' => $historia->historiaMedicamentos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count(),
+            'cups_count' => $historia->historiaCups->count(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Historia clínica de internista (CONTROL) guardada exitosamente",
+            'data' => $historia
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        \Log::error('❌ Error guardando historia de internista', [
+            'error' => $e->getMessage(),
+            'tipo_consulta' => $request->tipo_consulta,
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear historia clínica de internista',
             'error' => $e->getMessage(),
             'line' => $e->getLine()
         ], 500);
