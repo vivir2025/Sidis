@@ -3100,10 +3100,23 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
 }
 
 /**
- * ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD
+ * ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD - VERSIÓN CORREGIDA
  */
 private function determinarVistaSegunEspecialidad(string $especialidad, string $tipoConsulta): array
 {
+    // ✅ ESPECIALIDADES QUE SOLO TIENEN CONTROL (SIN PRIMERA VEZ)
+    $especialidadesSoloControl = ['NEFROLOGIA', 'INTERNISTA'];
+    
+    // ✅ SI ES UNA ESPECIALIDAD SOLO-CONTROL, FORZAR TIPO CONTROL
+    if (in_array($especialidad, $especialidadesSoloControl)) {
+        $tipoConsulta = 'CONTROL';
+        
+        Log::info('🔒 Especialidad solo-control detectada', [
+            'especialidad' => $especialidad,
+            'tipo_consulta_forzado' => 'CONTROL'
+        ]);
+    }
+    
     $especialidadesConComplementaria = [
         'REFORMULACION', 'NUTRICIONISTA', 'PSICOLOGIA', 'NEFROLOGIA', 
         'INTERNISTA', 'FISIOTERAPIA', 'TRABAJO SOCIAL'
@@ -3111,7 +3124,7 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
 
     $usaComplementaria = in_array($especialidad, $especialidadesConComplementaria);
 
-    // ✅ MAPEO DE VISTAS
+    // ✅ MAPEO DE VISTAS - CORREGIDO
     $vistas = [
         'MEDICINA GENERAL' => [
             'PRIMERA VEZ' => 'medicina-general.primera-vez',
@@ -3130,11 +3143,13 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
             'CONTROL' => 'psicologia.control'
         ],
         'NEFROLOGIA' => [
-            'PRIMERA VEZ' => 'nefrologia.primera-vez',
+            // ✅ SOLO CONTROL - AMBOS APUNTAN A LA MISMA VISTA
+            'PRIMERA VEZ' => 'nefrologia.control',
             'CONTROL' => 'nefrologia.control'
         ],
         'INTERNISTA' => [
-            'PRIMERA VEZ' => 'internista.primera-vez',
+            // ✅ SOLO CONTROL - AMBOS APUNTAN A LA MISMA VISTA
+            'PRIMERA VEZ' => 'internista.control',
             'CONTROL' => 'internista.control'
         ],
         'FISIOTERAPIA' => [
@@ -3153,9 +3168,11 @@ private function determinarVistaSegunEspecialidad(string $especialidad, string $
         'vista' => $vistaEspecifica,
         'usa_complementaria' => $usaComplementaria,
         'especialidad' => $especialidad,
-        'tipo_consulta' => $tipoConsulta
+        'tipo_consulta' => $tipoConsulta, // ✅ Retorna el tipo forzado
+        'solo_control' => in_array($especialidad, $especialidadesSoloControl) // ✅ NUEVO FLAG
     ];
 }
+
 /**
  * ✅ MÉTODO DE DEBUG - VERIFICAR DATOS DEL PACIENTE - CORREGIDO
  */
