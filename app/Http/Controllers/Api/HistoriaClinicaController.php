@@ -1667,7 +1667,7 @@ private function storeInternista(Request $request, $cita)
         'gestaciones' => 'nullable|integer',
         'parto' => 'nullable|integer',
         'aborto' => 'nullable|integer',
-        'cesarea' => 'nullable|integer',
+        'cesaria' => 'nullable|integer',
         'metodo_conceptivo' => 'nullable|string',
         'metodo_conceptivo_cual' => 'nullable|string',
         'antecedente_personal' => 'nullable|string',
@@ -1848,7 +1848,7 @@ private function storeInternista(Request $request, $cita)
             'gestaciones' => $request->gestaciones,
             'parto' => $request->parto,
             'aborto' => $request->aborto,
-            'cesarea' => $request->cesarea,
+            'cesaria' => $request->cesaria,
             'metodo_conceptivo' => $request->metodo_conceptivo,
             'metodo_conceptivo_cual' => $request->metodo_conceptivo_cual,
             
