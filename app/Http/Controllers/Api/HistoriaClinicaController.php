@@ -1620,6 +1620,8 @@ private function storeInternista(Request $request, $cita)
         'clasificacion_erc_estado' => 'nullable|string',
         'clasificacion_erc_categoria_ambulatoria_persistente' => 'nullable|string',
         'clasificacion_rcv' => 'nullable|string',
+        'tasa_filtracion_glomerular_ckd_epi' => 'nullable|numeric',
+        'tasa_filtracion_glomerular_gockcroft_gault' => 'nullable|numeric',
         
         // ✅ CAMPOS DE TABLA COMPLEMENTARIA (CONTROL)
         'descripcion_sistema_nervioso' => 'nullable|string',
@@ -2112,7 +2114,9 @@ private function storeNefrologia(Request $request, $cita)
         'clasificacion_erc_estado' => 'nullable|string',
         'clasificacion_erc_categoria_ambulatoria_persistente' => 'nullable|string',
         'clasificacion_rcv' => 'nullable|string',
-        
+        'tasa_filtracion_glomerular_ckd_epi' => 'nullable|numeric',
+        'tasa_filtracion_glomerular_gockcroft_gault' => 'nullable|numeric',
+
         // ✅ CAMPOS DE TABLA COMPLEMENTARIA (CONTROL)
         'descripcion_sistema_nervioso' => 'nullable|string',
         'sistema_hemolinfatico' => 'nullable|string',
