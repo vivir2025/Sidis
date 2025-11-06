@@ -1739,16 +1739,20 @@ private function storeInternista(Request $request, $cita)
             'obs_extremidades' => $request->obs_extremidades,
             
             // Clasificaciones
-            'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
-            'hipertension_arterial_personal' => $request->hipertension_arterial_personal,
-            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal,
-            'clasificacion_hta' => $request->clasificacion_hta,
-            'clasificacion_dm' => $request->clasificacion_dm,
-            'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
-            'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
-            'clasificacion_rcv' => $request->clasificacion_rcv,
-            
-            // Observaciones
+             'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
+             'clasificacion_hta' => $request->clasificacion_hta,
+             'clasificacion_dm' => $request->clasificacion_dm,
+             'clasificacion_rcv' => $request->clasificacion_rcv,
+             'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
+             'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+        
+             // Tasas de filtración
+            'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
+            'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+            // Antecedentes personales
+            'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
+            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
+                // Observaciones
             'observaciones_generales' => $request->observaciones_generales,
         ]);
 
@@ -2227,16 +2231,20 @@ private function storeNefrologia(Request $request, $cita)
             'obs_extremidades' => $request->obs_extremidades,
             
             // Clasificaciones
-            'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
-            'hipertension_arterial_personal' => $request->hipertension_arterial_personal,
-            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal,
-            'clasificacion_hta' => $request->clasificacion_hta,
-            'clasificacion_dm' => $request->clasificacion_dm,
-            'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
-            'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
-            'clasificacion_rcv' => $request->clasificacion_rcv,
-            
-            // Observaciones
+             'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
+             'clasificacion_hta' => $request->clasificacion_hta,
+             'clasificacion_dm' => $request->clasificacion_dm,
+             'clasificacion_rcv' => $request->clasificacion_rcv,
+             'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
+             'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+        
+             // Tasas de filtración
+            'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
+            'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+            // Antecedentes personales
+            'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
+            'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
+                // Observaciones
             'observaciones_generales' => $request->observaciones_generales,
         ]);
 
