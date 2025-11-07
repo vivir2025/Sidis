@@ -3894,122 +3894,238 @@ public function obtenerUltimaHistoriaMedicinaGeneral(Request $request, string $p
 }
 
 
-  /**
- * ✅ PROCESAR HISTORIA PARA FRONTEND - SOLO CON LOS DATOS QUE TIENES
+ /**
+ * ✅ PROCESAR HISTORIA PARA FRONTEND - VERSIÓN ULTRA PROTEGIDA
  */
 private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $historia): array
 {
     try {
         Log::info('🔧 Procesando historia para frontend', [
             'historia_uuid' => $historia->uuid,
-            'medicamentos_count' => $historia->historiaMedicamentos->count(),
-            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
-            'remisiones_count' => $historia->historiaRemisiones->count(),
-            'cups_count' => $historia->historiaCups->count()
+            'historia_id' => $historia->id
         ]);
 
+        // ✅ CARGAR RELACIONES SI NO ESTÁN CARGADAS (PROTECCIÓN DOBLE)
+        if (!$historia->relationLoaded('historiaMedicamentos')) {
+            $historia->load('historiaMedicamentos.medicamento');
+        }
+        if (!$historia->relationLoaded('historiaDiagnosticos')) {
+            $historia->load('historiaDiagnosticos.diagnostico');
+        }
+        if (!$historia->relationLoaded('historiaRemisiones')) {
+            $historia->load('historiaRemisiones.remision');
+        }
+        if (!$historia->relationLoaded('historiaCups')) {
+            $historia->load('historiaCups.cups');
+        }
+
+        // ✅ PROCESAR MEDICAMENTOS CON PROTECCIÓN TRIPLE
+        $medicamentos = [];
+        if ($historia->historiaMedicamentos && $historia->historiaMedicamentos->isNotEmpty()) {
+            foreach ($historia->historiaMedicamentos as $item) {
+                try {
+                    // ✅ VERIFICAR QUE EXISTE LA RELACIÓN
+                    if (!$item->medicamento) {
+                        Log::warning('⚠️ Medicamento sin relación', [
+                            'historia_medicamento_id' => $item->id
+                        ]);
+                        continue;
+                    }
+
+                    $medicamentos[] = [
+                        'uuid' => $item->uuid ?? null,
+                        'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
+                        'cantidad' => $item->cantidad ?? '1',
+                        'dosis' => $item->dosis ?? 'Según indicación',
+                        'medicamento' => [
+                            'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
+                            'id' => $item->medicamento->id,
+                            'nombre' => $item->medicamento->nombre ?? 'Sin nombre',
+                            'principio_activo' => $item->medicamento->principio_activo ?? ''
+                        ]
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('❌ Error procesando medicamento individual', [
+                        'error' => $e->getMessage(),
+                        'item_id' => $item->id ?? 'N/A'
+                    ]);
+                }
+            }
+        }
+
+        // ✅ PROCESAR DIAGNÓSTICOS CON PROTECCIÓN TRIPLE
+        $diagnosticos = [];
+        if ($historia->historiaDiagnosticos && $historia->historiaDiagnosticos->isNotEmpty()) {
+            foreach ($historia->historiaDiagnosticos as $item) {
+                try {
+                    // ✅ VERIFICAR QUE EXISTE LA RELACIÓN
+                    if (!$item->diagnostico) {
+                        Log::warning('⚠️ Diagnóstico sin relación', [
+                            'historia_diagnostico_id' => $item->id
+                        ]);
+                        continue;
+                    }
+
+                    $diagnosticos[] = [
+                        'uuid' => $item->uuid ?? null,
+                        'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                        'tipo' => $item->tipo ?? 'PRINCIPAL',
+                        'tipo_diagnostico' => $item->tipo_diagnostico ?? 'IMPRESION_DIAGNOSTICA',
+                        'diagnostico' => [
+                            'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                            'id' => $item->diagnostico->id,
+                            'codigo' => $item->diagnostico->codigo ?? 'Sin código',
+                            'nombre' => $item->diagnostico->nombre ?? 'Sin nombre'
+                        ]
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('❌ Error procesando diagnóstico individual', [
+                        'error' => $e->getMessage(),
+                        'item_id' => $item->id ?? 'N/A'
+                    ]);
+                }
+            }
+        }
+
+        // ✅ PROCESAR REMISIONES CON PROTECCIÓN TRIPLE
+        $remisiones = [];
+        if ($historia->historiaRemisiones && $historia->historiaRemisiones->isNotEmpty()) {
+            foreach ($historia->historiaRemisiones as $item) {
+                try {
+                    // ✅ VERIFICAR QUE EXISTE LA RELACIÓN
+                    if (!$item->remision) {
+                        Log::warning('⚠️ Remisión sin relación', [
+                            'historia_remision_id' => $item->id
+                        ]);
+                        continue;
+                    }
+
+                    $remisiones[] = [
+                        'uuid' => $item->uuid ?? null,
+                        'remision_id' => $item->remision->uuid ?? $item->remision->id,
+                        'observacion' => $item->observacion ?? '',
+                        'remision' => [
+                            'uuid' => $item->remision->uuid ?? $item->remision->id,
+                            'id' => $item->remision->id,
+                            'nombre' => $item->remision->nombre ?? 'Sin nombre',
+                            'tipo' => $item->remision->tipo ?? ''
+                        ]
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('❌ Error procesando remisión individual', [
+                        'error' => $e->getMessage(),
+                        'item_id' => $item->id ?? 'N/A'
+                    ]);
+                }
+            }
+        }
+
+        // ✅ PROCESAR CUPS CON PROTECCIÓN TRIPLE
+        $cups = [];
+        if ($historia->historiaCups && $historia->historiaCups->isNotEmpty()) {
+            foreach ($historia->historiaCups as $item) {
+                try {
+                    // ✅ VERIFICAR QUE EXISTE LA RELACIÓN
+                    if (!$item->cups) {
+                        Log::warning('⚠️ CUPS sin relación', [
+                            'historia_cups_id' => $item->id
+                        ]);
+                        continue;
+                    }
+
+                    $cups[] = [
+                        'uuid' => $item->uuid ?? null,
+                        'cups_id' => $item->cups->uuid ?? $item->cups->id,
+                        'observacion' => $item->observacion ?? '',
+                        'cups' => [
+                            'uuid' => $item->cups->uuid ?? $item->cups->id,
+                            'id' => $item->cups->id,
+                            'codigo' => $item->cups->codigo ?? 'Sin código',
+                            'nombre' => $item->cups->nombre ?? 'Sin nombre'
+                        ]
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('❌ Error procesando CUPS individual', [
+                        'error' => $e->getMessage(),
+                        'item_id' => $item->id ?? 'N/A'
+                    ]);
+                }
+            }
+        }
+
+        // ✅ LOG DE RESULTADO FINAL
+        Log::info('✅ Historia procesada exitosamente', [
+            'historia_uuid' => $historia->uuid,
+            'medicamentos_count' => count($medicamentos),
+            'diagnosticos_count' => count($diagnosticos),
+            'remisiones_count' => count($remisiones),
+            'cups_count' => count($cups)
+        ]);
+
+        // ✅ RETORNAR ESTRUCTURA COMPLETA CON VALORES SEGUROS
         return [
-            // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
-            'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
-                return [
-                    'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
-                    'cantidad' => $item->cantidad,
-                    'dosis' => $item->dosis,
-                    'medicamento' => [
-                        'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
-                        'nombre' => $item->medicamento->nombre,
-                        'principio_activo' => $item->medicamento->principio_activo ?? ''
-                    ]
-                ];
-            })->toArray(),
+            // ✅ ARRAYS PROCESADOS (SIEMPRE ARRAYS, NUNCA NULL)
+            'medicamentos' => $medicamentos,
+            'remisiones' => $remisiones,
+            'diagnosticos' => $diagnosticos,
+            'cups' => $cups,
 
-            // ✅ REMISIONES - ESTRUCTURA CORREGIDA
-            'remisiones' => $historia->historiaRemisiones->map(function($item) {
-                return [
-                    'remision_id' => $item->remision->uuid ?? $item->remision->id,
-                    'observacion' => $item->observacion,
-                    'remision' => [
-                        'uuid' => $item->remision->uuid ?? $item->remision->id,
-                        'nombre' => $item->remision->nombre,
-                        'tipo' => $item->remision->tipo ?? ''
-                    ]
-                ];
-            })->toArray(),
-
-            // ✅ DIAGNÓSTICOS - ESTRUCTURA CORREGIDA
-            'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
-                return [
-                    'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                    'tipo' => $item->tipo,
-                    'tipo_diagnostico' => $item->tipo_diagnostico,
-                    'diagnostico' => [
-                        'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                        'codigo' => $item->diagnostico->codigo,
-                        'nombre' => $item->diagnostico->nombre
-                    ]
-                ];
-            })->toArray(),
-
-            // ✅ CUPS - ESTRUCTURA CORREGIDA
-            'cups' => $historia->historiaCups->map(function($item) {
-                return [
-                    'cups_id' => $item->cups->uuid ?? $item->cups->id,
-                    'observacion' => $item->observacion,
-                    'cups' => [
-                        'uuid' => $item->cups->uuid ?? $item->cups->id,
-                        'codigo' => $item->cups->codigo,
-                        'nombre' => $item->cups->nombre
-                    ]
-                ];
-            })->toArray(),
-
-            // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
-            'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
-            'clasificacion_hta' => $historia->clasificacion_hta,
-            'clasificacion_dm' => $historia->clasificacion_dm,
-            'clasificacion_rcv' => $historia->clasificacion_rcv,
-            'clasificacion_erc_estado' => $historia->clasificacion_erc_estado,
-            'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente,
+            // ✅ CLASIFICACIONES (CON ?? NULL PARA SEGURIDAD)
+            'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico ?? null,
+            'clasificacion_hta' => $historia->clasificacion_hta ?? null,
+            'clasificacion_dm' => $historia->clasificacion_dm ?? null,
+            'clasificacion_rcv' => $historia->clasificacion_rcv ?? null,
+            'clasificacion_erc_estado' => $historia->clasificacion_erc_estado ?? null,
+            'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente ?? null,
 
             // ✅ TASAS DE FILTRACIÓN
-            'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
-            'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
+            'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi ?? null,
+            'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault ?? null,
 
-            // ✅ ANTECEDENTES PERSONALES - NOMBRES CORRECTOS SEGÚN TU MODELO
+            // ✅ ANTECEDENTES PERSONALES
             'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
-            'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
+            'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial ?? null,
             'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
-            'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus,
+            'obs_diabetes_mellitus_personal' => $historia->obs_personal_mellitus ?? null,
 
             // ✅ TALLA
-            'talla' => $historia->talla,
+            'talla' => $historia->talla ?? null,
 
-            // ✅ TEST DE MORISKY - NOMBRES CORRECTOS SEGÚN TU MODELO
-            'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
-            'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
-            'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
-            'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos,
-            'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
-            'adherente' => $historia->adherente,
+            // ✅ TEST DE MORISKY
+            'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos ?? null,
+            'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada ?? null,
+            'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos ?? null,
+            'test_morisky_siente_mal_deja_tomarlos' => $historia->siente_mal_deja_tomarlos ?? null,
+            'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia ?? null,
+            'adherente' => $historia->adherente ?? null,
 
-                // ✅ EDUCACIÓN EN SALUD
-            'alimentacion' => $historia->alimentacion,
-            'disminucion_consumo_sal_azucar' => $historia->disminucion_consumo_sal_azucar,
-            'fomento_actividad_fisica' => $historia->fomento_actividad_fisica,
-            'importancia_adherencia_tratamiento' => $historia->importancia_adherencia_tratamiento,
-            'consumo_frutas_verduras' => $historia->consumo_frutas_verduras,
-            'manejo_estres' => $historia->manejo_estres,
-            'disminucion_consumo_cigarrillo' => $historia->disminucion_consumo_cigarrillo,
-            'disminucion_peso' => $historia->disminucion_peso,
+            // ✅ EDUCACIÓN EN SALUD
+            'alimentacion' => $historia->alimentacion ?? null,
+            'disminucion_consumo_sal_azucar' => $historia->disminucion_consumo_sal_azucar ?? null,
+            'fomento_actividad_fisica' => $historia->fomento_actividad_fisica ?? null,
+            'importancia_adherencia_tratamiento' => $historia->importancia_adherencia_tratamiento ?? null,
+            'consumo_frutas_verduras' => $historia->consumo_frutas_verduras ?? null,
+            'manejo_estres' => $historia->manejo_estres ?? null,
+            'disminucion_consumo_cigarrillo' => $historia->disminucion_consumo_cigarrillo ?? null,
+            'disminucion_peso' => $historia->disminucion_peso ?? null,
+
+            // ✅ METADATOS
+            'historia_uuid' => $historia->uuid,
+            'historia_id' => $historia->id,
+            'created_at' => $historia->created_at ? $historia->created_at->toIso8601String() : null,
         ];
 
     } catch (\Exception $e) {
         Log::error('❌ Error procesando historia para frontend', [
             'error' => $e->getMessage(),
             'historia_id' => $historia->id ?? 'N/A',
-            'line' => $e->getLine()
+            'historia_uuid' => $historia->uuid ?? 'N/A',
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile()),
+            'trace' => $e->getTraceAsString()
         ]);
         
+        // ✅ RETORNAR ESTRUCTURA VACÍA PERO VÁLIDA
         return [
             'medicamentos' => [],
             'remisiones' => [],
@@ -4045,6 +4161,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
         ];
     }
 }
+
 
 /**
  * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO - CORREGIDO
