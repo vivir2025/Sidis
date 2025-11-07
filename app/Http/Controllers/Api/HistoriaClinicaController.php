@@ -162,8 +162,6 @@ public function store(Request $request)
 
         // ✅ CREAR HISTORIA
         $historia = HistoriaClinica::create($datosHistoria);
-        
-        $this->limpiarCacheHistoria($request->paciente_uuid);
 
         // ✅ PROCESAR DIAGNÓSTICOS (sin cambios)
         $this->procesarDiagnosticos($request, $historia);
@@ -3559,7 +3557,7 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
     }
 }
 /**
- * ✅ OBTENER ÚLTIMA HISTORIA - VERSIÓN CORREGIDA CON EAGER LOADING Y CACHÉ
+ * ✅ OBTENER ÚLTIMA HISTORIA - VERSIÓN CORREGIDA COMPLETA
  */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
@@ -3577,22 +3575,18 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return null;
         }
 
-        // ✅ PASO 2: Usar caché para evitar consultas repetidas
-        $cacheKey = "ultima_historia_{$paciente->uuid}_{$especialidad}";
-        
-        $ultimaHistoria = \Cache::remember($cacheKey, 1800, function() use ($paciente) {
-            return \App\Models\HistoriaClinica::with([
-                'historiaDiagnosticos.diagnostico:id,uuid,codigo,nombre', // ✅ SELECT ESPECÍFICO
-                'historiaMedicamentos.medicamento:id,uuid,nombre,principio_activo',
-                'historiaRemisiones.remision:id,uuid,nombre,tipo',
-                'historiaCups.cups:id,uuid,codigo,nombre'
-            ])
-            ->whereHas('cita', function($query) use ($paciente) {
-                $query->where('paciente_uuid', $paciente->uuid);
-            })
-            ->orderBy('created_at', 'desc')
-            ->first();
-        });
+        // ✅ PASO 2: Buscar la última historia CON RELACIONES CARGADAS
+        $ultimaHistoria = \App\Models\HistoriaClinica::with([
+            'historiaDiagnosticos.diagnostico',
+            'historiaMedicamentos.medicamento',
+            'historiaRemisiones.remision',
+            'historiaCups.cups'
+        ])
+        ->whereHas('cita', function($query) use ($paciente) {
+            $query->where('paciente_uuid', $paciente->uuid);
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
 
         if (!$ultimaHistoria) {
             Log::info('ℹ️ No se encontró historia previa', [
@@ -3601,20 +3595,15 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return null;
         }
 
-        // ✅ VERIFICAR QUE LAS RELACIONES SE CARGARON
         Log::info('✅ Historia encontrada con relaciones', [
             'historia_uuid' => $ultimaHistoria->uuid,
-            'diagnosticos_loaded' => $ultimaHistoria->relationLoaded('historiaDiagnosticos'),
-            'medicamentos_loaded' => $ultimaHistoria->relationLoaded('historiaMedicamentos'),
-            'remisiones_loaded' => $ultimaHistoria->relationLoaded('historiaRemisiones'),
-            'cups_loaded' => $ultimaHistoria->relationLoaded('historiaCups'),
             'diagnosticos_count' => $ultimaHistoria->historiaDiagnosticos->count(),
             'medicamentos_count' => $ultimaHistoria->historiaMedicamentos->count(),
             'remisiones_count' => $ultimaHistoria->historiaRemisiones->count(),
             'cups_count' => $ultimaHistoria->historiaCups->count()
         ]);
 
-        // ✅ PASO 3: PROCESAR CON EL MÉTODO CORREGIDO
+        // ✅ PASO 3: PROCESAR CON EL MÉTODO QUE FUNCIONA
         $historiaFormateada = $this->procesarHistoriaParaFrontend($ultimaHistoria);
 
         Log::info('✅ Historia procesada para frontend', [
@@ -3913,187 +3902,68 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
     try {
         Log::info('🔧 Procesando historia para frontend', [
             'historia_uuid' => $historia->uuid,
-            'historia_id' => $historia->id
-        ]);
-
-        // ✅ CARGAR RELACIONES SI NO ESTÁN CARGADAS (PROTECCIÓN)
-        if (!$historia->relationLoaded('historiaMedicamentos')) {
-            $historia->load('historiaMedicamentos.medicamento');
-            Log::info('⚠️ Cargando relación historiaMedicamentos (no estaba cargada)');
-        }
-        if (!$historia->relationLoaded('historiaDiagnosticos')) {
-            $historia->load('historiaDiagnosticos.diagnostico');
-            Log::info('⚠️ Cargando relación historiaDiagnosticos (no estaba cargada)');
-        }
-        if (!$historia->relationLoaded('historiaRemisiones')) {
-            $historia->load('historiaRemisiones.remision');
-            Log::info('⚠️ Cargando relación historiaRemisiones (no estaba cargada)');
-        }
-        if (!$historia->relationLoaded('historiaCups')) {
-            $historia->load('historiaCups.cups');
-            Log::info('⚠️ Cargando relación historiaCups (no estaba cargada)');
-        }
-
-        // ✅ CONTAR ELEMENTOS ANTES DE PROCESAR
-        $medicamentosCount = $historia->historiaMedicamentos->count();
-        $diagnosticosCount = $historia->historiaDiagnosticos->count();
-        $remisionesCount = $historia->historiaRemisiones->count();
-        $cupsCount = $historia->historiaCups->count();
-
-        Log::info('📊 Conteo de relaciones cargadas', [
-            'medicamentos' => $medicamentosCount,
-            'diagnosticos' => $diagnosticosCount,
-            'remisiones' => $remisionesCount,
-            'cups' => $cupsCount
-        ]);
-
-        // ✅ PROCESAR MEDICAMENTOS CON PROTECCIÓN
-        $medicamentos = [];
-        foreach ($historia->historiaMedicamentos as $item) {
-            try {
-                if (!$item->medicamento) {
-                    Log::warning('⚠️ Medicamento sin relación', [
-                        'historia_medicamento_id' => $item->id,
-                        'medicamento_id' => $item->medicamento_id
-                    ]);
-                    continue;
-                }
-
-                $medicamentos[] = [
-                    'uuid' => $item->uuid,
-                    'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
-                    'cantidad' => $item->cantidad ?? '1',
-                    'dosis' => $item->dosis ?? 'Según indicación',
-                    'medicamento' => [
-                        'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
-                        'id' => $item->medicamento->id,
-                        'nombre' => $item->medicamento->nombre ?? 'Sin nombre',
-                        'principio_activo' => $item->medicamento->principio_activo ?? ''
-                    ]
-                ];
-            } catch (\Exception $e) {
-                Log::error('❌ Error procesando medicamento individual', [
-                    'error' => $e->getMessage(),
-                    'historia_medicamento_id' => $item->id ?? 'N/A'
-                ]);
-            }
-        }
-
-        // ✅ PROCESAR DIAGNÓSTICOS CON PROTECCIÓN
-        $diagnosticos = [];
-        foreach ($historia->historiaDiagnosticos as $item) {
-            try {
-                if (!$item->diagnostico) {
-                    Log::warning('⚠️ Diagnóstico sin relación', [
-                        'historia_diagnostico_id' => $item->id,
-                        'diagnostico_id' => $item->diagnostico_id
-                    ]);
-                    continue;
-                }
-
-                $diagnosticos[] = [
-                    'uuid' => $item->uuid,
-                    'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                    'tipo' => $item->tipo ?? 'PRINCIPAL',
-                    'tipo_diagnostico' => $item->tipo_diagnostico ?? 'IMPRESION_DIAGNOSTICA',
-                    'diagnostico' => [
-                        'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
-                        'id' => $item->diagnostico->id,
-                        'codigo' => $item->diagnostico->codigo ?? 'Sin código',
-                        'nombre' => $item->diagnostico->nombre ?? 'Sin nombre'
-                    ]
-                ];
-            } catch (\Exception $e) {
-                Log::error('❌ Error procesando diagnóstico individual', [
-                    'error' => $e->getMessage(),
-                    'historia_diagnostico_id' => $item->id ?? 'N/A'
-                ]);
-            }
-        }
-
-        // ✅ PROCESAR REMISIONES CON PROTECCIÓN
-        $remisiones = [];
-        foreach ($historia->historiaRemisiones as $item) {
-            try {
-                if (!$item->remision) {
-                    Log::warning('⚠️ Remisión sin relación', [
-                        'historia_remision_id' => $item->id,
-                        'remision_id' => $item->remision_id
-                    ]);
-                    continue;
-                }
-
-                $remisiones[] = [
-                    'uuid' => $item->uuid,
-                    'remision_id' => $item->remision->uuid ?? $item->remision->id,
-                    'observacion' => $item->observacion ?? '',
-                    'remision' => [
-                        'uuid' => $item->remision->uuid ?? $item->remision->id,
-                        'id' => $item->remision->id,
-                        'nombre' => $item->remision->nombre ?? 'Sin nombre',
-                        'tipo' => $item->remision->tipo ?? ''
-                    ]
-                ];
-            } catch (\Exception $e) {
-                Log::error('❌ Error procesando remisión individual', [
-                    'error' => $e->getMessage(),
-                    'historia_remision_id' => $item->id ?? 'N/A'
-                ]);
-            }
-        }
-
-        // ✅ PROCESAR CUPS CON PROTECCIÓN
-        $cups = [];
-        foreach ($historia->historiaCups as $item) {
-            try {
-                if (!$item->cups) {
-                    Log::warning('⚠️ CUPS sin relación', [
-                        'historia_cups_id' => $item->id,
-                        'cups_id' => $item->cups_id
-                    ]);
-                    continue;
-                }
-
-                $cups[] = [
-                    'uuid' => $item->uuid,
-                    'cups_id' => $item->cups->uuid ?? $item->cups->id,
-                    'observacion' => $item->observacion ?? '',
-                    'cups' => [
-                        'uuid' => $item->cups->uuid ?? $item->cups->id,
-                        'id' => $item->cups->id,
-                        'codigo' => $item->cups->codigo ?? 'Sin código',
-                        'nombre' => $item->cups->nombre ?? 'Sin nombre'
-                    ]
-                ];
-            } catch (\Exception $e) {
-                Log::error('❌ Error procesando CUPS individual', [
-                    'error' => $e->getMessage(),
-                    'historia_cups_id' => $item->id ?? 'N/A'
-                ]);
-            }
-        }
-
-        // ✅ LOG DE RESULTADO FINAL
-        Log::info('✅ Historia procesada exitosamente', [
-            'historia_uuid' => $historia->uuid,
-            'medicamentos_originales' => $medicamentosCount,
-            'medicamentos_procesados' => count($medicamentos),
-            'diagnosticos_originales' => $diagnosticosCount,
-            'diagnosticos_procesados' => count($diagnosticos),
-            'remisiones_originales' => $remisionesCount,
-            'remisiones_procesadas' => count($remisiones),
-            'cups_originales' => $cupsCount,
-            'cups_procesados' => count($cups)
+            'medicamentos_count' => $historia->historiaMedicamentos->count(),
+            'diagnosticos_count' => $historia->historiaDiagnosticos->count(),
+            'remisiones_count' => $historia->historiaRemisiones->count(),
+            'cups_count' => $historia->historiaCups->count()
         ]);
 
         return [
-            // ✅ ARRAYS PROCESADOS
-            'medicamentos' => $medicamentos,
-            'remisiones' => $remisiones,
-            'diagnosticos' => $diagnosticos,
-            'cups' => $cups,
+            // ✅ MEDICAMENTOS - ESTRUCTURA CORREGIDA
+            'medicamentos' => $historia->historiaMedicamentos->map(function($item) {
+                return [
+                    'medicamento_id' => $item->medicamento->uuid ?? $item->medicamento->id,
+                    'cantidad' => $item->cantidad,
+                    'dosis' => $item->dosis,
+                    'medicamento' => [
+                        'uuid' => $item->medicamento->uuid ?? $item->medicamento->id,
+                        'nombre' => $item->medicamento->nombre,
+                        'principio_activo' => $item->medicamento->principio_activo ?? ''
+                    ]
+                ];
+            })->toArray(),
 
-            // ✅ CLASIFICACIONES
+            // ✅ REMISIONES - ESTRUCTURA CORREGIDA
+            'remisiones' => $historia->historiaRemisiones->map(function($item) {
+                return [
+                    'remision_id' => $item->remision->uuid ?? $item->remision->id,
+                    'observacion' => $item->observacion,
+                    'remision' => [
+                        'uuid' => $item->remision->uuid ?? $item->remision->id,
+                        'nombre' => $item->remision->nombre,
+                        'tipo' => $item->remision->tipo ?? ''
+                    ]
+                ];
+            })->toArray(),
+
+            // ✅ DIAGNÓSTICOS - ESTRUCTURA CORREGIDA
+            'diagnosticos' => $historia->historiaDiagnosticos->map(function($item) {
+                return [
+                    'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                    'tipo' => $item->tipo,
+                    'tipo_diagnostico' => $item->tipo_diagnostico,
+                    'diagnostico' => [
+                        'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                        'codigo' => $item->diagnostico->codigo,
+                        'nombre' => $item->diagnostico->nombre
+                    ]
+                ];
+            })->toArray(),
+
+            // ✅ CUPS - ESTRUCTURA CORREGIDA
+            'cups' => $historia->historiaCups->map(function($item) {
+                return [
+                    'cups_id' => $item->cups->uuid ?? $item->cups->id,
+                    'observacion' => $item->observacion,
+                    'cups' => [
+                        'uuid' => $item->cups->uuid ?? $item->cups->id,
+                        'codigo' => $item->cups->codigo,
+                        'nombre' => $item->cups->nombre
+                    ]
+                ];
+            })->toArray(),
+
+            // ✅ CLASIFICACIONES - NOMBRES CORRECTOS SEGÚN TU MIGRACIÓN
             'clasificacion_estado_metabolico' => $historia->clasificacion_estado_metabolico,
             'clasificacion_hta' => $historia->clasificacion_hta,
             'clasificacion_dm' => $historia->clasificacion_dm,
@@ -4105,7 +3975,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'tasa_filtracion_glomerular_ckd_epi' => $historia->tasa_filtracion_glomerular_ckd_epi,
             'tasa_filtracion_glomerular_gockcroft_gault' => $historia->tasa_filtracion_glomerular_gockcroft_gault,
 
-            // ✅ ANTECEDENTES PERSONALES
+            // ✅ ANTECEDENTES PERSONALES - NOMBRES CORRECTOS SEGÚN TU MODELO
             'hipertension_arterial_personal' => $historia->hipertension_arterial_personal ?? 'NO',
             'obs_hipertension_arterial_personal' => $historia->obs_personal_hipertension_arterial,
             'diabetes_mellitus_personal' => $historia->diabetes_mellitus_personal ?? 'NO',
@@ -4114,7 +3984,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             // ✅ TALLA
             'talla' => $historia->talla,
 
-            // ✅ TEST DE MORISKY
+            // ✅ TEST DE MORISKY - NOMBRES CORRECTOS SEGÚN TU MODELO
             'test_morisky_olvida_tomar_medicamentos' => $historia->olvida_tomar_medicamentos,
             'test_morisky_toma_medicamentos_hora_indicada' => $historia->toma_medicamentos_hora_indicada,
             'test_morisky_cuando_esta_bien_deja_tomar_medicamentos' => $historia->cuando_esta_bien_deja_tomar_medicamentos,
@@ -4122,7 +3992,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'test_morisky_valoracio_psicologia' => $historia->valoracion_psicologia,
             'adherente' => $historia->adherente,
 
-            // ✅ EDUCACIÓN EN SALUD
+                // ✅ EDUCACIÓN EN SALUD
             'alimentacion' => $historia->alimentacion,
             'disminucion_consumo_sal_azucar' => $historia->disminucion_consumo_sal_azucar,
             'fomento_actividad_fisica' => $historia->fomento_actividad_fisica,
@@ -4131,20 +4001,13 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'manejo_estres' => $historia->manejo_estres,
             'disminucion_consumo_cigarrillo' => $historia->disminucion_consumo_cigarrillo,
             'disminucion_peso' => $historia->disminucion_peso,
-
-            // ✅ METADATOS
-            'historia_uuid' => $historia->uuid,
-            'historia_id' => $historia->id,
-            'created_at' => $historia->created_at->toIso8601String(),
         ];
 
     } catch (\Exception $e) {
         Log::error('❌ Error procesando historia para frontend', [
             'error' => $e->getMessage(),
             'historia_id' => $historia->id ?? 'N/A',
-            'historia_uuid' => $historia->uuid ?? 'N/A',
-            'line' => $e->getLine(),
-            'file' => basename($e->getFile())
+            'line' => $e->getLine()
         ]);
         
         return [
@@ -4183,24 +4046,6 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
     }
 }
 
-/**
- * ✅ LIMPIAR CACHÉ DE HISTORIA DESPUÉS DE CREAR/ACTUALIZAR
- */
-private function limpiarCacheHistoria(string $pacienteUuid)
-{
-    try {
-        // Limpiar caché de historias del paciente
-        \Cache::forget("ultima_historia_{$pacienteUuid}_*");
-        
-        Log::info('✅ Caché limpiado', [
-            'paciente_uuid' => $pacienteUuid
-        ]);
-    } catch (\Exception $e) {
-        Log::warning('⚠️ Error limpiando caché', [
-            'error' => $e->getMessage()
-        ]);
-    }
-}
 /**
  * ✅ FORMATEAR HISTORIA PREVIA DESDE API PARA EL FORMULARIO - CORREGIDO
  */
