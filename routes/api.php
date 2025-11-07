@@ -79,6 +79,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/search/document', [PacienteController::class, 'searchByDocument']);
         Route::get('/buscar-documento', [PacienteController::class, 'searchByDocument']);
         Route::get('/{pacienteUuid}/ultima-historia', [HistoriaClinicaController::class, 'obtenerUltimaHistoriaMedicinaGeneral']);
+        Route::get('/{pacienteUuid}/historias-clinicas', [HistoriaClinicaController::class, 'historiasPaciente']);
+        Route::get('/{pacienteUuid}/ultima-historia', [HistoriaClinicaController::class, 'obtenerUltimaHistoriaMedicinaGeneral']);
+        Route::get('/{pacienteUuid}/ultima-historia-medicina-general', [HistoriaClinicaController::class, 'obtenerUltimaHistoriaMedicinaGeneral']);
         
         // Rutas con parámetros UUID (DESPUÉS de las rutas específicas)
         Route::get('/{uuid}', [PacienteController::class, 'show']);
