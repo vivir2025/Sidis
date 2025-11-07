@@ -216,7 +216,7 @@ public function store(Request $request)
 }
 
 /**
- * ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
+ * ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA - VERSIÓN CORREGIDA CON valorONull()
  */
 private function prepararDatosHistoriaSegunTipo(Request $request, $cita)
 {
@@ -229,233 +229,233 @@ private function prepararDatosHistoriaSegunTipo(Request $request, $cita)
         'enfermedad_actual' => $request->enfermedad_actual ?? '',
     ];
 
-    // ✅ CAMPOS COMUNES A PRIMERA VEZ Y CONTROL (CON VALORES POR DEFECTO)
+    // ✅ CAMPOS COMUNES A PRIMERA VEZ Y CONTROL - TODOS CON valorONull()
     $camposComunes = [
         'finalidad' => $request->finalidad ?? 'CONSULTA',
-        'causa_externa' => $request->causa_externa,
-        'acompanante' => $request->acompanante,
-        'acu_parentesco' => $request->acu_parentesco,
-        'acu_telefono' => $request->acu_telefono,
+        'causa_externa' => $this->valorONull($request->causa_externa),
+        'acompanante' => $this->valorONull($request->acompanante),
+        'acu_parentesco' => $this->valorONull($request->acu_parentesco),
+        'acu_telefono' => $this->valorONull($request->acu_telefono),
         
         // Medidas antropométricas
-        'peso' => $request->peso,
-        'talla' => $request->talla,
-        'imc' => $request->imc,
-        'clasificacion' => $request->clasificacion,
-        'perimetro_abdominal' => $request->perimetro_abdominal,
-        'obs_perimetro_abdominal' => $request->obs_perimetro_abdominal,
+        'peso' => $this->valorONull($request->peso),
+        'talla' => $this->valorONull($request->talla),
+        'imc' => $this->valorONull($request->imc),
+        'clasificacion' => $this->valorONull($request->clasificacion),
+        'perimetro_abdominal' => $this->valorONull($request->perimetro_abdominal),
+        'obs_perimetro_abdominal' => $this->valorONull($request->obs_perimetro_abdominal),
         
         // Test de Morisky
-        'olvida_tomar_medicamentos' => $request->olvida_tomar_medicamentos ?? 'NO',
-        'toma_medicamentos_hora_indicada' => $request->toma_medicamentos_hora_indicada ?? 'SI',
-        'cuando_esta_bien_deja_tomar_medicamentos' => $request->cuando_esta_bien_deja_tomar_medicamentos ?? 'NO',
-        'siente_mal_deja_tomarlos' => $request->siente_mal_deja_tomarlos ?? 'NO',
-        'valoracion_psicologia' => $request->valoracion_psicologia ?? 'NO',
-        'adherente' => $request->adherente,
+        'olvida_tomar_medicamentos' => $this->valorONull($request->olvida_tomar_medicamentos) ?? 'NO',
+        'toma_medicamentos_hora_indicada' => $this->valorONull($request->toma_medicamentos_hora_indicada) ?? 'SI',
+        'cuando_esta_bien_deja_tomar_medicamentos' => $this->valorONull($request->cuando_esta_bien_deja_tomar_medicamentos) ?? 'NO',
+        'siente_mal_deja_tomarlos' => $this->valorONull($request->siente_mal_deja_tomarlos) ?? 'NO',
+        'valoracion_psicologia' => $this->valorONull($request->valoracion_psicologia) ?? 'NO',
+        'adherente' => $this->valorONull($request->adherente),
         
         // Revisión por sistemas
-        'general' => $request->general,
-        'cabeza' => $request->cabeza ?? 'NORMAL',
-        'respiratorio' => $request->respiratorio,
-        'cardiovascular' => $request->cardiovascular ?? 'NORMAL',
-        'gastrointestinal' => $request->gastrointestinal ?? 'NORMAL',
-        'osteoatromuscular' => $request->osteoatromuscular ?? 'NORMAL',
-        'snc' => $request->snc ?? 'NORMAL',
+        'general' => $this->valorONull($request->general),
+        'cabeza' => $this->valorONull($request->cabeza) ?? 'NORMAL',
+        'respiratorio' => $this->valorONull($request->respiratorio),
+        'cardiovascular' => $this->valorONull($request->cardiovascular) ?? 'NORMAL',
+        'gastrointestinal' => $this->valorONull($request->gastrointestinal) ?? 'NORMAL',
+        'osteoatromuscular' => $this->valorONull($request->osteoatromuscular) ?? 'NORMAL',
+        'snc' => $this->valorONull($request->snc) ?? 'NORMAL',
         
         // Signos vitales
-        'presion_arterial_sistolica_sentado_pie' => $request->presion_arterial_sistolica_sentado_pie,
-        'presion_arterial_distolica_sentado_pie' => $request->presion_arterial_distolica_sentado_pie,
-        'frecuencia_cardiaca' => $request->frecuencia_cardiaca,
-        'frecuencia_respiratoria' => $request->frecuencia_respiratoria,
+        'presion_arterial_sistolica_sentado_pie' => $this->valorONull($request->presion_arterial_sistolica_sentado_pie),
+        'presion_arterial_distolica_sentado_pie' => $this->valorONull($request->presion_arterial_distolica_sentado_pie),
+        'frecuencia_cardiaca' => $this->valorONull($request->frecuencia_cardiaca),
+        'frecuencia_respiratoria' => $this->valorONull($request->frecuencia_respiratoria),
         
         // Examen físico
-        'ef_cabeza' => $request->ef_cabeza ?? 'NORMAL',
-        'agudeza_visual' => $request->agudeza_visual ?? 'NORMAL',
-        'oidos' => $request->oidos ?? 'NORMAL',
-        'nariz_senos_paranasales' => $request->nariz_senos_paranasales ?? 'NORMAL',
-        'cavidad_oral' => $request->cavidad_oral ?? 'NORMAL',
-        'cuello' => $request->cuello ?? 'NORMAL',
-        'cardio_respiratorio' => $request->cardio_respiratorio ?? 'NORMAL',
-        'mamas' => $request->mamas ?? 'NORMAL',
-        'genito_urinario' => $request->genito_urinario ?? 'NORMAL',
-        'musculo_esqueletico' => $request->musculo_esqueletico ?? 'NORMAL',
-        'piel_anexos_pulsos' => $request->piel_anexos_pulsos ?? 'NORMAL',
-        'inspeccion_sensibilidad_pies' => $request->inspeccion_sensibilidad_pies ?? 'NORMAL',
-        'sistema_nervioso' => $request->sistema_nervioso ?? 'NORMAL',
-        'capacidad_cognitiva_orientacion' => $request->capacidad_cognitiva_orientacion ?? 'NORMAL',
-        'reflejo_aquiliar' => $request->reflejo_aquiliar ?? 'NORMAL',
-        'reflejo_patelar' => $request->reflejo_patelar ?? 'NORMAL',
+        'ef_cabeza' => $this->valorONull($request->ef_cabeza) ?? 'NORMAL',
+        'agudeza_visual' => $this->valorONull($request->agudeza_visual) ?? 'NORMAL',
+        'oidos' => $this->valorONull($request->oidos) ?? 'NORMAL',
+        'nariz_senos_paranasales' => $this->valorONull($request->nariz_senos_paranasales) ?? 'NORMAL',
+        'cavidad_oral' => $this->valorONull($request->cavidad_oral) ?? 'NORMAL',
+        'cuello' => $this->valorONull($request->cuello) ?? 'NORMAL',
+        'cardio_respiratorio' => $this->valorONull($request->cardio_respiratorio) ?? 'NORMAL',
+        'mamas' => $this->valorONull($request->mamas) ?? 'NORMAL',
+        'genito_urinario' => $this->valorONull($request->genito_urinario) ?? 'NORMAL',
+        'musculo_esqueletico' => $this->valorONull($request->musculo_esqueletico) ?? 'NORMAL',
+        'piel_anexos_pulsos' => $this->valorONull($request->piel_anexos_pulsos) ?? 'NORMAL',
+        'inspeccion_sensibilidad_pies' => $this->valorONull($request->inspeccion_sensibilidad_pies) ?? 'NORMAL',
+        'sistema_nervioso' => $this->valorONull($request->sistema_nervioso) ?? 'NORMAL',
+        'capacidad_cognitiva_orientacion' => $this->valorONull($request->capacidad_cognitiva_orientacion) ?? 'NORMAL',
+        'reflejo_aquiliar' => $this->valorONull($request->reflejo_aquiliar) ?? 'NORMAL',
+        'reflejo_patelar' => $this->valorONull($request->reflejo_patelar) ?? 'NORMAL',
         
         // Observaciones examen físico
-        'obs_cabeza' => $request->obs_cabeza,
-        'obs_agudeza_visual' => $request->obs_agudeza_visual,
-        'obs_cuello' => $request->obs_cuello,
-        'obs_torax' => $request->obs_torax,
-        'obs_mamas' => $request->obs_mamas,
-        'obs_abdomen' => $request->obs_abdomen,
-        'obs_genito_urinario' => $request->obs_genito_urinario,
-        'obs_extremidades' => $request->obs_extremidades,
-        'obs_piel_anexos_pulsos' => $request->obs_piel_anexos_pulsos,
-        'obs_sistema_nervioso' => $request->obs_sistema_nervioso,
-        'obs_orientacion' => $request->obs_orientacion,
-        'hallazgo_positivo_examen_fisico' => $request->hallazgo_positivo_examen_fisico,
+        'obs_cabeza' => $this->valorONull($request->obs_cabeza),
+        'obs_agudeza_visual' => $this->valorONull($request->obs_agudeza_visual),
+        'obs_cuello' => $this->valorONull($request->obs_cuello),
+        'obs_torax' => $this->valorONull($request->obs_torax),
+        'obs_mamas' => $this->valorONull($request->obs_mamas),
+        'obs_abdomen' => $this->valorONull($request->obs_abdomen),
+        'obs_genito_urinario' => $this->valorONull($request->obs_genito_urinario),
+        'obs_extremidades' => $this->valorONull($request->obs_extremidades),
+        'obs_piel_anexos_pulsos' => $this->valorONull($request->obs_piel_anexos_pulsos),
+        'obs_sistema_nervioso' => $this->valorONull($request->obs_sistema_nervioso),
+        'obs_orientacion' => $this->valorONull($request->obs_orientacion),
+        'hallazgo_positivo_examen_fisico' => $this->valorONull($request->hallazgo_positivo_examen_fisico),
         
         // Factores de riesgo
-        'dislipidemia' => $request->dislipidemia ?? 'NO',
-        'lesion_organo_blanco' => $request->lesion_organo_blanco ?? 'NO',
-        'descripcion_lesion_organo_blanco' => $request->descripcion_lesion_organo_blanco,
+        'dislipidemia' => $this->valorONull($request->dislipidemia) ?? 'NO',
+        'lesion_organo_blanco' => $this->valorONull($request->lesion_organo_blanco) ?? 'NO',
+        'descripcion_lesion_organo_blanco' => $this->valorONull($request->descripcion_lesion_organo_blanco),
         
         // Exámenes complementarios
-        'fex_es' => $request->fex_es,
-        'electrocardiograma' => $request->electrocardiograma,
-        'fex_es1' => $request->fex_es1,
-        'ecocardiograma' => $request->ecocardiograma,
-        'fex_es2' => $request->fex_es2,
-        'ecografia_renal' => $request->ecografia_renal,
+        'fex_es' => $this->valorONull($request->fex_es),
+        'electrocardiograma' => $this->valorONull($request->electrocardiograma),
+        'fex_es1' => $this->valorONull($request->fex_es1),
+        'ecocardiograma' => $this->valorONull($request->ecocardiograma),
+        'fex_es2' => $this->valorONull($request->fex_es2),
+        'ecografia_renal' => $this->valorONull($request->ecografia_renal),
         
-        // Clasificaciones
-        'clasificacion_estado_metabolico' => $request->clasificacion_estado_metabolico,
-        'clasificacion_hta' => $request->clasificacion_hta,
-        'clasificacion_dm' => $request->clasificacion_dm,
-        'clasificacion_rcv' => $request->clasificacion_rcv,
-        'clasificacion_erc_estado' => $request->clasificacion_erc_estado,
-        'clasificacion_erc_categoria_ambulatoria_persistente' => $request->clasificacion_erc_categoria_ambulatoria_persistente,
+        // ✅✅✅ CLASIFICACIONES - AHORA CON valorONull ✅✅✅
+        'clasificacion_estado_metabolico' => $this->valorONull($request->clasificacion_estado_metabolico),
+        'clasificacion_hta' => $this->valorONull($request->clasificacion_hta),
+        'clasificacion_dm' => $this->valorONull($request->clasificacion_dm),
+        'clasificacion_rcv' => $this->valorONull($request->clasificacion_rcv),
+        'clasificacion_erc_estado' => $this->valorONull($request->clasificacion_erc_estado),
+        'clasificacion_erc_categoria_ambulatoria_persistente' => $this->valorONull($request->clasificacion_erc_categoria_ambulatoria_persistente),
         
-        // Tasas de filtración
-        'tasa_filtracion_glomerular_ckd_epi' => $request->tasa_filtracion_glomerular_ckd_epi,
-        'tasa_filtracion_glomerular_gockcroft_gault' => $request->tasa_filtracion_glomerular_gockcroft_gault,
+        // ✅✅✅ TASAS DE FILTRACIÓN - AHORA CON valorONull ✅✅✅
+        'tasa_filtracion_glomerular_ckd_epi' => $this->valorONull($request->tasa_filtracion_glomerular_ckd_epi),
+        'tasa_filtracion_glomerular_gockcroft_gault' => $this->valorONull($request->tasa_filtracion_glomerular_gockcroft_gault),
         
-        // Antecedentes personales
-        'hipertension_arterial_personal' => $request->hipertension_arterial_personal ?? 'NO',
-        'obs_personal_hipertension_arterial' => $request->obs_personal_hipertension_arterial,
-        'diabetes_mellitus_personal' => $request->diabetes_mellitus_personal ?? 'NO',
-        'obs_personal_mellitus' => $request->obs_personal_mellitus,
+        // ✅✅✅ ANTECEDENTES PERSONALES - AHORA CON valorONull ✅✅✅
+        'hipertension_arterial_personal' => $this->valorONull($request->hipertension_arterial_personal) ?? 'NO',
+        'obs_personal_hipertension_arterial' => $this->valorONull($request->obs_personal_hipertension_arterial),
+        'diabetes_mellitus_personal' => $this->valorONull($request->diabetes_mellitus_personal) ?? 'NO',
+        'obs_personal_mellitus' => $this->valorONull($request->obs_personal_mellitus),
         
-        // Educación en salud
-        'alimentacion' => $request->alimentacion ?? 'NO',
-        'disminucion_consumo_sal_azucar' => $request->disminucion_consumo_sal_azucar ?? 'NO',
-        'fomento_actividad_fisica' => $request->fomento_actividad_fisica ?? 'NO',
-        'importancia_adherencia_tratamiento' => $request->importancia_adherencia_tratamiento ?? 'NO',
-        'consumo_frutas_verduras' => $request->consumo_frutas_verduras ?? 'NO',
-        'manejo_estres' => $request->manejo_estres ?? 'NO',
-        'disminucion_consumo_cigarrillo' => $request->disminucion_consumo_cigarrillo ?? 'NO',
-        'disminucion_peso' => $request->disminucion_peso ?? 'NO',
+        // ✅✅✅ EDUCACIÓN EN SALUD - AHORA CON valorONull ✅✅✅
+        'alimentacion' => $this->valorONull($request->alimentacion) ?? 'NO',
+        'disminucion_consumo_sal_azucar' => $this->valorONull($request->disminucion_consumo_sal_azucar) ?? 'NO',
+        'fomento_actividad_fisica' => $this->valorONull($request->fomento_actividad_fisica) ?? 'NO',
+        'importancia_adherencia_tratamiento' => $this->valorONull($request->importancia_adherencia_tratamiento) ?? 'NO',
+        'consumo_frutas_verduras' => $this->valorONull($request->consumo_frutas_verduras) ?? 'NO',
+        'manejo_estres' => $this->valorONull($request->manejo_estres) ?? 'NO',
+        'disminucion_consumo_cigarrillo' => $this->valorONull($request->disminucion_consumo_cigarrillo) ?? 'NO',
+        'disminucion_peso' => $this->valorONull($request->disminucion_peso) ?? 'NO',
         
-        'observaciones_generales' => $request->observaciones_generales,
+        'observaciones_generales' => $this->valorONull($request->observaciones_generales),
     ];
 
     // ✅ AGREGAR CAMPOS COMUNES
     $datos = array_merge($datos, $camposComunes);
 
-    // ✅ CAMPOS EXCLUSIVOS DE PRIMERA VEZ (CON VALORES POR DEFECTO)
+    // ✅ CAMPOS EXCLUSIVOS DE PRIMERA VEZ - TODOS CON valorONull()
     if ($request->tipo_consulta === 'PRIMERA VEZ') {
         $camposPrimeraVez = [
             // Discapacidades
-            'discapacidad_fisica' => $request->discapacidad_fisica ?? 'NO',
-            'discapacidad_visual' => $request->discapacidad_visual ?? 'NO',
-            'discapacidad_mental' => $request->discapacidad_mental ?? 'NO',
-            'discapacidad_auditiva' => $request->discapacidad_auditiva ?? 'NO',
-            'discapacidad_intelectual' => $request->discapacidad_intelectual ?? 'NO',
+            'discapacidad_fisica' => $this->valorONull($request->discapacidad_fisica) ?? 'NO',
+            'discapacidad_visual' => $this->valorONull($request->discapacidad_visual) ?? 'NO',
+            'discapacidad_mental' => $this->valorONull($request->discapacidad_mental) ?? 'NO',
+            'discapacidad_auditiva' => $this->valorONull($request->discapacidad_auditiva) ?? 'NO',
+            'discapacidad_intelectual' => $this->valorONull($request->discapacidad_intelectual) ?? 'NO',
             
             // Drogodependencia
-            'drogo_dependiente' => $request->drogo_dependiente ?? 'NO',
-            'drogo_dependiente_cual' => $request->drogo_dependiente_cual,
+            'drogo_dependiente' => $this->valorONull($request->drogo_dependiente) ?? 'NO',
+            'drogo_dependiente_cual' => $this->valorONull($request->drogo_dependiente_cual),
             
             // Antecedentes Familiares
-            'hipertension_arterial' => $request->hipertension_arterial ?? 'NO',
-            'parentesco_hipertension' => $request->parentesco_hipertension,
-            'diabetes_mellitus' => $request->diabetes_mellitus ?? 'NO',
-            'parentesco_mellitus' => $request->parentesco_mellitus,
-            'artritis' => $request->artritis ?? 'NO',
-            'parentesco_artritis' => $request->parentesco_artritis,
-            'enfermedad_cardiovascular' => $request->enfermedad_cardiovascular ?? 'NO',
-            'parentesco_cardiovascular' => $request->parentesco_cardiovascular,
-            'antecedente_metabolico' => $request->antecedente_metabolico ?? 'NO',
-            'parentesco_metabolico' => $request->parentesco_metabolico,
-            'cancer_mama_estomago_prostata_colon' => $request->cancer_mama_estomago_prostata_colon ?? 'NO',
-            'parentesco_cancer' => $request->parentesco_cancer,
-            'leucemia' => $request->leucemia ?? 'NO',
-            'parentesco_leucemia' => $request->parentesco_leucemia,
-            'vih' => $request->vih ?? 'NO',
-            'parentesco_vih' => $request->parentesco_vih,
-            'otro' => $request->otro ?? 'NO',
-            'parentesco_otro' => $request->parentesco_otro,
+            'hipertension_arterial' => $this->valorONull($request->hipertension_arterial) ?? 'NO',
+            'parentesco_hipertension' => $this->valorONull($request->parentesco_hipertension),
+            'diabetes_mellitus' => $this->valorONull($request->diabetes_mellitus) ?? 'NO',
+            'parentesco_mellitus' => $this->valorONull($request->parentesco_mellitus),
+            'artritis' => $this->valorONull($request->artritis) ?? 'NO',
+            'parentesco_artritis' => $this->valorONull($request->parentesco_artritis),
+            'enfermedad_cardiovascular' => $this->valorONull($request->enfermedad_cardiovascular) ?? 'NO',
+            'parentesco_cardiovascular' => $this->valorONull($request->parentesco_cardiovascular),
+            'antecedente_metabolico' => $this->valorONull($request->antecedente_metabolico) ?? 'NO',
+            'parentesco_metabolico' => $this->valorONull($request->parentesco_metabolico),
+            'cancer_mama_estomago_prostata_colon' => $this->valorONull($request->cancer_mama_estomago_prostata_colon) ?? 'NO',
+            'parentesco_cancer' => $this->valorONull($request->parentesco_cancer),
+            'leucemia' => $this->valorONull($request->leucemia) ?? 'NO',
+            'parentesco_leucemia' => $this->valorONull($request->parentesco_leucemia),
+            'vih' => $this->valorONull($request->vih) ?? 'NO',
+            'parentesco_vih' => $this->valorONull($request->parentesco_vih),
+            'otro' => $this->valorONull($request->otro) ?? 'NO',
+            'parentesco_otro' => $this->valorONull($request->parentesco_otro),
             
             // Antecedentes Personales Adicionales
-            'enfermedad_cardiovascular_personal' => $request->enfermedad_cardiovascular_personal ?? 'NO',
-            'obs_personal_enfermedad_cardiovascular' => $request->obs_personal_enfermedad_cardiovascular,
-            'arterial_periferica_personal' => $request->arterial_periferica_personal ?? 'NO',
-            'obs_personal_arterial_periferica' => $request->obs_personal_arterial_periferica,
-            'carotidea_personal' => $request->carotidea_personal ?? 'NO',
-            'obs_personal_carotidea' => $request->obs_personal_carotidea,
-            'aneurisma_aorta_personal' => $request->aneurisma_aorta_personal ?? 'NO',
-            'obs_personal_aneurisma_aorta' => $request->obs_personal_aneurisma_aorta,
-            'sindrome_coronario_agudo_angina_personal' => $request->sindrome_coronario_agudo_angina_personal ?? 'NO',
-            'obs_personal_sindrome_coronario' => $request->obs_personal_sindrome_coronario,
-            'artritis_personal' => $request->artritis_personal ?? 'NO',
-            'obs_personal_artritis' => $request->obs_personal_artritis,
-            'iam_personal' => $request->iam_personal ?? 'NO',
-            'obs_personal_iam' => $request->obs_personal_iam,
-            'revascul_coronaria_personal' => $request->revascul_coronaria_personal ?? 'NO',
-            'obs_personal_revascul_coronaria' => $request->obs_personal_revascul_coronaria,
-            'insuficiencia_cardiaca_personal' => $request->insuficiencia_cardiaca_personal ?? 'NO',
-            'obs_personal_insuficiencia_cardiaca' => $request->obs_personal_insuficiencia_cardiaca,
-            'amputacion_pie_diabetico_personal' => $request->amputacion_pie_diabetico_personal ?? 'NO',
-            'obs_personal_amputacion_pie_diabetico' => $request->obs_personal_amputacion_pie_diabetico,
-            'enfermedad_pulmonar_personal' => $request->enfermedad_pulmonar_personal ?? 'NO',
-            'obs_personal_enfermedad_pulmonar' => $request->obs_personal_enfermedad_pulmonar,
-            'victima_maltrato_personal' => $request->victima_maltrato_personal ?? 'NO',
-            'obs_personal_maltrato_personal' => $request->obs_personal_maltrato_personal,
-            'antecedentes_quirurgicos' => $request->antecedentes_quirurgicos ?? 'NO',
-            'obs_personal_antecedentes_quirurgicos' => $request->obs_personal_antecedentes_quirurgicos,
-            'acontosis_personal' => $request->acontosis_personal ?? 'NO',
-            'obs_personal_acontosis' => $request->obs_personal_acontosis,
-            'otro_personal' => $request->otro_personal ?? 'NO',
-            'obs_personal_otro' => $request->obs_personal_otro,
+            'enfermedad_cardiovascular_personal' => $this->valorONull($request->enfermedad_cardiovascular_personal) ?? 'NO',
+            'obs_personal_enfermedad_cardiovascular' => $this->valorONull($request->obs_personal_enfermedad_cardiovascular),
+            'arterial_periferica_personal' => $this->valorONull($request->arterial_periferica_personal) ?? 'NO',
+            'obs_personal_arterial_periferica' => $this->valorONull($request->obs_personal_arterial_periferica),
+            'carotidea_personal' => $this->valorONull($request->carotidea_personal) ?? 'NO',
+            'obs_personal_carotidea' => $this->valorONull($request->obs_personal_carotidea),
+            'aneurisma_aorta_personal' => $this->valorONull($request->aneurisma_aorta_personal) ?? 'NO',
+            'obs_personal_aneurisma_aorta' => $this->valorONull($request->obs_personal_aneurisma_aorta),
+            'sindrome_coronario_agudo_angina_personal' => $this->valorONull($request->sindrome_coronario_agudo_angina_personal) ?? 'NO',
+            'obs_personal_sindrome_coronario' => $this->valorONull($request->obs_personal_sindrome_coronario),
+            'artritis_personal' => $this->valorONull($request->artritis_personal) ?? 'NO',
+            'obs_personal_artritis' => $this->valorONull($request->obs_personal_artritis),
+            'iam_personal' => $this->valorONull($request->iam_personal) ?? 'NO',
+            'obs_personal_iam' => $this->valorONull($request->obs_personal_iam),
+            'revascul_coronaria_personal' => $this->valorONull($request->revascul_coronaria_personal) ?? 'NO',
+            'obs_personal_revascul_coronaria' => $this->valorONull($request->obs_personal_revascul_coronaria),
+            'insuficiencia_cardiaca_personal' => $this->valorONull($request->insuficiencia_cardiaca_personal) ?? 'NO',
+            'obs_personal_insuficiencia_cardiaca' => $this->valorONull($request->obs_personal_insuficiencia_cardiaca),
+            'amputacion_pie_diabetico_personal' => $this->valorONull($request->amputacion_pie_diabetico_personal) ?? 'NO',
+            'obs_personal_amputacion_pie_diabetico' => $this->valorONull($request->obs_personal_amputacion_pie_diabetico),
+            'enfermedad_pulmonar_personal' => $this->valorONull($request->enfermedad_pulmonar_personal) ?? 'NO',
+            'obs_personal_enfermedad_pulmonar' => $this->valorONull($request->obs_personal_enfermedad_pulmonar),
+            'victima_maltrato_personal' => $this->valorONull($request->victima_maltrato_personal) ?? 'NO',
+            'obs_personal_maltrato_personal' => $this->valorONull($request->obs_personal_maltrato_personal),
+            'antecedentes_quirurgicos' => $this->valorONull($request->antecedentes_quirurgicos) ?? 'NO',
+            'obs_personal_antecedentes_quirurgicos' => $this->valorONull($request->obs_personal_antecedentes_quirurgicos),
+            'acontosis_personal' => $this->valorONull($request->acontosis_personal) ?? 'NO',
+            'obs_personal_acontosis' => $this->valorONull($request->obs_personal_acontosis),
+            'otro_personal' => $this->valorONull($request->otro_personal) ?? 'NO',
+            'obs_personal_otro' => $this->valorONull($request->obs_personal_otro),
             
             // Revisión por sistemas adicional
-            'orl' => $request->orl ?? 'NORMAL',
-            'revision_sistemas' => $request->revision_sistemas,
+            'orl' => $this->valorONull($request->orl) ?? 'NORMAL',
+            'revision_sistemas' => $this->valorONull($request->revision_sistemas),
             
             // Examen físico adicional
-            'presion_arterial_sistolica_acostado' => $request->presion_arterial_sistolica_acostado,
-            'presion_arterial_distolica_acostado' => $request->presion_arterial_distolica_acostado,
-            'fundoscopia' => $request->fundoscopia ?? 'NORMAL',
-            'obs_fundoscopia' => $request->obs_fundoscopia,
-            'torax' => $request->torax ?? 'NORMAL',
-            'abdomen' => $request->abdomen ?? 'NORMAL',
-            'extremidades' => $request->extremidades ?? 'NORMAL',
-            'capacidad_cognitiva' => $request->capacidad_cognitiva ?? 'NORMAL',
-            'obs_capacidad_cognitiva' => $request->obs_capacidad_cognitiva,
-            'orientacion' => $request->orientacion ?? 'NORMAL',
-            'obs_reflejo_aquiliar' => $request->obs_reflejo_aquiliar,
-            'obs_reflejo_patelar' => $request->obs_reflejo_patelar,
+            'presion_arterial_sistolica_acostado' => $this->valorONull($request->presion_arterial_sistolica_acostado),
+            'presion_arterial_distolica_acostado' => $this->valorONull($request->presion_arterial_distolica_acostado),
+            'fundoscopia' => $this->valorONull($request->fundoscopia) ?? 'NORMAL',
+            'obs_fundoscopia' => $this->valorONull($request->obs_fundoscopia),
+            'torax' => $this->valorONull($request->torax) ?? 'NORMAL',
+            'abdomen' => $this->valorONull($request->abdomen) ?? 'NORMAL',
+            'extremidades' => $this->valorONull($request->extremidades) ?? 'NORMAL',
+            'capacidad_cognitiva' => $this->valorONull($request->capacidad_cognitiva) ?? 'NORMAL',
+            'obs_capacidad_cognitiva' => $this->valorONull($request->obs_capacidad_cognitiva),
+            'orientacion' => $this->valorONull($request->orientacion) ?? 'NORMAL',
+            'obs_reflejo_aquiliar' => $this->valorONull($request->obs_reflejo_aquiliar),
+            'obs_reflejo_patelar' => $this->valorONull($request->obs_reflejo_patelar),
             
             // Factores de riesgo adicionales
-            'tabaquismo' => $request->tabaquismo ?? 'NO',
-            'obs_tabaquismo' => $request->obs_tabaquismo,
-            'obs_dislipidemia' => $request->obs_dislipidemia,
-            'menor_cierta_edad' => $request->menor_cierta_edad ?? 'NO',
-            'obs_menor_cierta_edad' => $request->obs_menor_cierta_edad,
-            'condicion_clinica_asociada' => $request->condicion_clinica_asociada ?? 'NO',
-            'obs_condicion_clinica_asociada' => $request->obs_condicion_clinica_asociada,
-            'obs_lesion_organo_blanco' => $request->obs_lesion_organo_blanco,
+            'tabaquismo' => $this->valorONull($request->tabaquismo) ?? 'NO',
+            'obs_tabaquismo' => $this->valorONull($request->obs_tabaquismo),
+            'obs_dislipidemia' => $this->valorONull($request->obs_dislipidemia),
+            'menor_cierta_edad' => $this->valorONull($request->menor_cierta_edad) ?? 'NO',
+            'obs_menor_cierta_edad' => $this->valorONull($request->obs_menor_cierta_edad),
+            'condicion_clinica_asociada' => $this->valorONull($request->condicion_clinica_asociada) ?? 'NO',
+            'obs_condicion_clinica_asociada' => $this->valorONull($request->obs_condicion_clinica_asociada),
+            'obs_lesion_organo_blanco' => $this->valorONull($request->obs_lesion_organo_blanco),
             
             // Otros campos de primera vez
-            'insulina_requiriente' => $request->insulina_requiriente,
-            'recibe_tratamiento_alternativo' => $request->recibe_tratamiento_alternativo ?? 'NO',
-            'recibe_tratamiento_con_plantas_medicinales' => $request->recibe_tratamiento_con_plantas_medicinales ?? 'NO',
-            'recibe_ritual_medicina_tradicional' => $request->recibe_ritual_medicina_tradicional ?? 'NO',
-            'numero_frutas_diarias' => $request->numero_frutas_diarias ?? 0,
-            'elevado_consumo_grasa_saturada' => $request->elevado_consumo_grasa_saturada ?? 'NO',
-            'adiciona_sal_despues_preparar_comida' => $request->adiciona_sal_despues_preparar_comida ?? 'NO',
+            'insulina_requiriente' => $this->valorONull($request->insulina_requiriente),
+            'recibe_tratamiento_alternativo' => $this->valorONull($request->recibe_tratamiento_alternativo) ?? 'NO',
+            'recibe_tratamiento_con_plantas_medicinales' => $this->valorONull($request->recibe_tratamiento_con_plantas_medicinales) ?? 'NO',
+            'recibe_ritual_medicina_tradicional' => $this->valorONull($request->recibe_ritual_medicina_tradicional) ?? 'NO',
+            'numero_frutas_diarias' => $this->valorONull($request->numero_frutas_diarias) ?? 0,
+            'elevado_consumo_grasa_saturada' => $this->valorONull($request->elevado_consumo_grasa_saturada) ?? 'NO',
+            'adiciona_sal_despues_preparar_comida' => $this->valorONull($request->adiciona_sal_despues_preparar_comida) ?? 'NO',
             
             // Reformulación
-            'razon_reformulacion' => $request->razon_reformulacion,
-            'motivo_reformulacion' => $request->motivo_reformulacion,
-            'reformulacion_quien_reclama' => $request->reformulacion_quien_reclama,
-            'reformulacion_nombre_reclama' => $request->reformulacion_nombre_reclama,
-            'adicional' => $request->adicional,
+            'razon_reformulacion' => $this->valorONull($request->razon_reformulacion),
+            'motivo_reformulacion' => $this->valorONull($request->motivo_reformulacion),
+            'reformulacion_quien_reclama' => $this->valorONull($request->reformulacion_quien_reclama),
+            'reformulacion_nombre_reclama' => $this->valorONull($request->reformulacion_nombre_reclama),
+            'adicional' => $this->valorONull($request->adicional),
         ];
         
         $datos = array_merge($datos, $camposPrimeraVez);
@@ -463,6 +463,31 @@ private function prepararDatosHistoriaSegunTipo(Request $request, $cita)
 
     return $datos;
 }
+
+/**
+ * ✅ MÉTODO AUXILIAR - RETORNA NULL SI EL VALOR ESTÁ VACÍO
+ */
+private function valorONull($valor)
+{
+    // Lista de valores que se consideran "vacíos"
+    $valoresVacios = [null, '', 'null', 'undefined', 'NaN', 'false'];
+    
+    // Si está en la lista o es solo espacios
+    if (in_array($valor, $valoresVacios, true) || 
+        (is_string($valor) && trim($valor) === '')) {
+        return null;
+    }
+    
+    // Si es 0 o "0", lo mantiene
+    if ($valor === 0 || $valor === '0') {
+        return $valor;
+    }
+    
+    return $valor;
+}
+
+
+
 
 /**
  * ✅ PROCESAR DIAGNÓSTICOS
