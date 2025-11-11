@@ -48,24 +48,25 @@ class HistoriaClinicaController extends Controller
                 $query->where('sede_id', $request->sede_id);
             }
 
+            // ✅ CORREGIDO: Usar created_at en lugar de fecha_atencion
             if ($request->has('fecha_desde')) {
-                $query->whereDate('fecha_atencion', '>=', $request->fecha_desde);
+                $query->whereDate('created_at', '>=', $request->fecha_desde);
             }
 
             if ($request->has('fecha_hasta')) {
-                $query->whereDate('fecha_atencion', '<=', $request->fecha_hasta);
+                $query->whereDate('created_at', '<=', $request->fecha_hasta);
             }
 
             if ($request->has('search')) {
                 $search = $request->search;
                 $query->whereHas('paciente', function($q) use ($search) {
                     $q->where('nombre_completo', 'like', "%{$search}%")
-                      ->orWhere('numero_identificacion', 'like', "%{$search}%");
+                    ->orWhere('numero_identificacion', 'like', "%{$search}%");
                 });
             }
 
-            // Ordenamiento
-            $query->orderBy('fecha_atencion', 'desc');
+            // ✅ CORREGIDO: Ordenamiento usando created_at
+            $query->orderBy('created_at', 'desc');
 
             // Paginación
             $perPage = $request->get('per_page', 15);
@@ -81,7 +82,7 @@ class HistoriaClinicaController extends Controller
                 'success' => false,
                 'message' => 'Error al obtener historias clínicas',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500); 
         }
     }
 
