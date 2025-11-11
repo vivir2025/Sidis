@@ -3539,7 +3539,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         // 🔥 PASO 3: VERIFICAR SI ES PRIMERA VEZ O CONTROL
         Log::info('🔍 PASO 3: Verificando tipo de consulta (PRIMERA VEZ o CONTROL)...');
         
-        $esPrimeraVez = $this->esPrimeraConsultaDeEspecialidad($cita->paciente_uuid, $especialidad);
+        $esPrimeraVez = $this->esPrimeraConsultaDeEspecialidad($cita->paciente_uuid, $especialidad, $cita->id);
         $tipoConsulta = $esPrimeraVez ? 'PRIMERA VEZ' : 'CONTROL';
 
         Log::info('✅ PASO 3: Tipo de consulta determinado', [
