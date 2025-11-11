@@ -3469,12 +3469,12 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'timestamp' => now()->toDateTimeString()
         ]);
 
-        // ✅ PASO 1: Obtener la cita
+        // ✅ PASO 1: Obtener la cita (SIN historiaClinica)
         Log::info('🔍 PASO 1: Buscando cita...');
         $cita = \App\Models\Cita::with([
             'paciente',
-            'agenda.usuarioMedico.especialidad',
-            'historiaClinica'
+            'agenda.usuarioMedico.especialidad'
+            // ❌ ELIMINADO: 'historiaClinica' (no existe esta relación)
         ])->where('uuid', $citaUuid)->first();
 
         if (!$cita) {
@@ -3509,7 +3509,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
         ]);
 
-        // 🔥 PASO 3: VERIFICAR SI ES PRIMERA VEZ O CONTROL (NUEVO MÉTODO)
+        // 🔥 PASO 3: VERIFICAR SI ES PRIMERA VEZ O CONTROL
         Log::info('🔍 PASO 3: Verificando tipo de consulta (PRIMERA VEZ o CONTROL)...');
         
         $esPrimeraVez = $this->esPrimeraConsultaDeEspecialidad($cita->paciente_uuid, $especialidad);
@@ -3586,7 +3586,6 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         ], 500);
     }
 }
-
 /**
  * ✅ VERIFICAR HISTORIAS ANTERIORES - FILTRADO POR ESPECIALIDAD
  */
