@@ -19,7 +19,8 @@ use PDF;
 
 class HistoriaClinicaController extends Controller
 {
-  public function index(Request $request)
+ 
+public function index(Request $request)
     {
         try {
             Log::info('📋 API GET Request - Historias Clínicas', [
@@ -29,6 +30,7 @@ class HistoriaClinicaController extends Controller
             // ✅ CARGAR AMBAS RELACIONES DE USUARIO EN AGENDA
             $query = HistoriaClinica::with([
                 'sede',
+                'cita',
                 'cita.paciente',
                 'cita.agenda.usuario',        // ✅ Usuario gestor
                 'cita.agenda.usuarioMedico',  // ✅ Médico asignado
@@ -46,13 +48,19 @@ class HistoriaClinicaController extends Controller
                 });
             }
 
-            if ($request->filled('fecha_desde')) {
-                $query->whereDate('fecha', '>=', $request->fecha_desde);
+                // ✅ FILTROS POR FECHA DE LA CITA
+            if ($request->has('fecha_desde')) {
+                $query->whereHas('cita', function($q) use ($request) {
+                    $q->whereDate('fecha', '>=', $request->fecha_desde);
+                });
             }
 
-            if ($request->filled('fecha_hasta')) {
-                $query->whereDate('fecha', '<=', $request->fecha_hasta);
+            if ($request->has('fecha_hasta')) {
+                $query->whereHas('cita', function($q) use ($request) {
+                    $q->whereDate('fecha', '<=', $request->fecha_hasta);
+                });
             }
+
 
             if ($request->filled('especialidad')) {
                 $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
