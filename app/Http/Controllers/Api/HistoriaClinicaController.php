@@ -19,73 +19,89 @@ use PDF;
 
 class HistoriaClinicaController extends Controller
 {
-    /**
-     * Listar historias clínicas con filtros
-     */
-    public function index(Request $request)
-    {
-        try {
-            $query = HistoriaClinica::with([
-                'paciente',
-                'medico',
-                'sede',
-                'historiaDiagnosticos.diagnostico',    
-                'historiaMedicamentos.medicamento',   
-                'historiaRemisiones.remision',         
-                'historiaCups.cups'            
-            ]);
+   public function index(Request $request)
+{
+    try {
+        $query = HistoriaClinica::with([
+            'paciente',
+            'medico',
+            'sede',
+            'cita',  // ✅ IMPORTANTE
+            'historiaDiagnosticos.diagnostico',    
+            'historiaMedicamentos.medicamento',   
+            'historiaRemisiones.remision',         
+            'historiaCups.cups'            
+        ]);
 
-            // Filtros
-            if ($request->has('paciente_id')) {
-                $query->where('paciente_id', $request->paciente_id);
-            }
-
-            if ($request->has('medico_id')) {
-                $query->where('medico_id', $request->medico_id);
-            }
-
-            if ($request->has('sede_id')) {
-                $query->where('sede_id', $request->sede_id);
-            }
-
-            // ✅ CORREGIDO: Usar created_at en lugar de fecha_atencion
-            if ($request->has('fecha_desde')) {
-                $query->whereDate('created_at', '>=', $request->fecha_desde);
-            }
-
-            if ($request->has('fecha_hasta')) {
-                $query->whereDate('created_at', '<=', $request->fecha_hasta);
-            }
-
-            if ($request->has('search')) {
-                $search = $request->search;
-                $query->whereHas('paciente', function($q) use ($search) {
-                    $q->where('nombre_completo', 'like', "%{$search}%")
-                    ->orWhere('numero_identificacion', 'like', "%{$search}%");
-                });
-            }
-
-            // ✅ CORREGIDO: Ordenamiento usando created_at
-            $query->orderBy('created_at', 'desc');
-
-            // Paginación
-            $perPage = $request->get('per_page', 15);
-            $historias = $query->paginate($perPage);
-
-            return response()->json([
-                'success' => true,
-                'data' => $historias
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener historias clínicas',
-                'error' => $e->getMessage()
-            ], 500); 
+        // Filtros
+        if ($request->has('paciente_id')) {
+            $query->where('paciente_id', $request->paciente_id);
         }
-    }
 
+        if ($request->has('medico_id')) {
+            $query->where('medico_id', $request->medico_id);
+        }
+
+        if ($request->has('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
+        // ✅ FILTROS POR FECHA DE LA CITA
+        if ($request->has('fecha_desde')) {
+            $query->whereHas('cita', function($q) use ($request) {
+                $q->whereDate('fecha', '>=', $request->fecha_desde);
+            });
+        }
+
+        if ($request->has('fecha_hasta')) {
+            $query->whereHas('cita', function($q) use ($request) {
+                $q->whereDate('fecha', '<=', $request->fecha_hasta);
+            });
+        }
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->whereHas('paciente', function($q) use ($search) {
+                $q->where('nombre_completo', 'like', "%{$search}%")
+                  ->orWhere('numero_identificacion', 'like', "%{$search}%");
+            });
+        }
+
+        // ✅ OBTENER TODAS LAS HISTORIAS
+        $perPage = $request->get('per_page', 15);
+        $historias = $query->get();
+
+        // ✅ ORDENAR POR FECHA DE CITA EN PHP
+        $historias = $historias->sortByDesc(function($historia) {
+            return $historia->cita->fecha ?? '1900-01-01';
+        })->values();
+
+        // ✅ PAGINAR MANUALMENTE
+        $page = $request->get('page', 1);
+        $total = $historias->count();
+        $historiasPaginadas = $historias->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'data' => $historiasPaginadas,
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
+                'from' => (($page - 1) * $perPage) + 1,
+                'to' => min($page * $perPage, $total)
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener historias clínicas',
+            'error' => $e->getMessage()
+        ], 500); 
+    }
+}
 
 
 public function store(Request $request)
@@ -3421,15 +3437,17 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'agenda_id' => $cita->agenda->id ?? 'N/A'
         ]);
 
-        // ✅ PASO 3: VERIFICAR HISTORIAS ANTERIORES
+        // ✅ PASO 3: VERIFICAR HISTORIAS ANTERIORES (EXCLUYENDO LA CITA ACTUAL)
         Log::info('🔍 PASO 3: Verificando historias anteriores...', [
             'paciente_uuid' => $cita->paciente->uuid,
-            'especialidad' => $especialidad
+            'especialidad' => $especialidad,
+            'cita_actual_id' => $cita->id // 🔥 LOG
         ]);
 
         $tieneHistoriasAnteriores = $this->verificarHistoriasAnterioresPorEspecialidad(
             $cita->paciente->uuid, 
-            $especialidad
+            $especialidad,
+            $cita->id // 🔥 PASAR EL ID DE LA CITA ACTUAL
         );
 
         Log::info('✅ PASO 3: Resultado de verificación', [
@@ -3454,7 +3472,8 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             
             $historiaPrevia = $this->obtenerUltimaHistoriaPorEspecialidad(
                 $cita->paciente->uuid, 
-                $especialidad
+                $especialidad,
+                $cita->id // 🔥 PASAR EL ID DE LA CITA ACTUAL
             );
             
             if ($historiaPrevia) {
@@ -3519,15 +3538,21 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
     }
 }
 
+
 /**
  * ✅ VERIFICAR HISTORIAS ANTERIORES - FILTRADO POR ESPECIALIDAD
  */
-private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUuid, string $especialidad): bool
+private function verificarHistoriasAnterioresPorEspecialidad(
+    string $pacienteUuid, 
+    string $especialidad,
+    ?int $citaActualId = null // 🔥 NUEVO PARÁMETRO
+): bool
 {
     try {
         Log::info('🔍 Verificando historias anteriores POR ESPECIALIDAD', [
             'paciente_uuid' => $pacienteUuid,
-            'especialidad' => $especialidad
+            'especialidad' => $especialidad,
+            'cita_actual_id' => $citaActualId // 🔥 LOG
         ]);
 
         // ✅ PASO 1: Buscar paciente por UUID
@@ -3565,16 +3590,26 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
         // ✅ PASO 3: Buscar historias DE ESA ESPECIALIDAD ESPECÍFICA
         $citasIds = $citasDelPaciente->pluck('id')->toArray();
         
-        // 🔥 AQUÍ ESTÁ EL CAMBIO: FILTRAR POR ESPECIALIDAD
-        $historiasDeEspecialidad = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)
+        // 🔥 FILTRAR POR ESPECIALIDAD Y EXCLUIR CITA ACTUAL
+        $query = \App\Models\HistoriaClinica::whereIn('cita_id', $citasIds)
             ->whereHas('cita.agenda.usuarioMedico.especialidad', function($query) use ($especialidad) {
                 $query->where('nombre', $especialidad);
-            })
-            ->get();
+            });
+
+        // 🔥 EXCLUIR LA CITA ACTUAL
+        if ($citaActualId) {
+            $query->where('cita_id', '!=', $citaActualId);
+            Log::info('🔥 Excluyendo cita actual de la búsqueda', [
+                'cita_actual_id' => $citaActualId
+            ]);
+        }
+
+        $historiasDeEspecialidad = $query->get();
 
         Log::info('🔍 Historias DE LA ESPECIALIDAD encontradas', [
             'paciente_uuid' => $paciente->uuid,
             'especialidad' => $especialidad,
+            'cita_actual_excluida' => $citaActualId,
             'total_historias_especialidad' => $historiasDeEspecialidad->count(),
             'historias_ids' => $historiasDeEspecialidad->pluck('id')->toArray()
         ]);
@@ -3586,6 +3621,7 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
         Log::info('✅ RESULTADO FINAL POR ESPECIALIDAD', [
             'paciente_uuid' => $pacienteUuid,
             'especialidad' => $especialidad,
+            'cita_actual_excluida' => $citaActualId,
             'total_historias_especialidad' => $historiasDeEspecialidad->count(),
             'tiene_historias_especialidad' => $tieneHistoriasDeEspecialidad,
             'tipo_consulta' => $tipoConsulta
@@ -3608,12 +3644,17 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
 /**
  * ✅ OBTENER ÚLTIMA HISTORIA - FILTRADO POR ESPECIALIDAD
  */
-private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
+private function obtenerUltimaHistoriaPorEspecialidad(
+    string $pacienteUuid, 
+    string $especialidad,
+    ?int $citaActualId = null // 🔥 NUEVO PARÁMETRO
+): ?array
 {
     try {
         Log::info('🔍 Obteniendo última historia DE LA ESPECIALIDAD', [
             'paciente_uuid' => $pacienteUuid,
-            'especialidad' => $especialidad
+            'especialidad' => $especialidad,
+            'cita_actual_id' => $citaActualId // 🔥 LOG
         ]);
 
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
@@ -3624,7 +3665,7 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         }
 
         // ✅ OBTENER LA ÚLTIMA HISTORIA DE ESA ESPECIALIDAD ESPECÍFICA
-        $ultimaHistoria = \App\Models\HistoriaClinica::with([
+        $query = \App\Models\HistoriaClinica::with([
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento',
             'historiaRemisiones.remision',
@@ -3636,14 +3677,23 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         // 🔥 FILTRO POR ESPECIALIDAD
         ->whereHas('cita.agenda.usuarioMedico.especialidad', function($query) use ($especialidad) {
             $query->where('nombre', $especialidad);
-        })
-        ->orderBy('created_at', 'desc')
-        ->first();
+        });
+
+        // 🔥 EXCLUIR LA CITA ACTUAL
+        if ($citaActualId) {
+            $query->where('cita_id', '!=', $citaActualId);
+            Log::info('🔥 Excluyendo cita actual de la búsqueda de historia previa', [
+                'cita_actual_id' => $citaActualId
+            ]);
+        }
+
+        $ultimaHistoria = $query->orderBy('created_at', 'desc')->first();
 
         if (!$ultimaHistoria) {
             Log::info('ℹ️ No se encontró historia previa DE ESTA ESPECIALIDAD', [
                 'paciente_uuid' => $paciente->uuid,
-                'especialidad' => $especialidad
+                'especialidad' => $especialidad,
+                'cita_actual_excluida' => $citaActualId
             ]);
             return null;
         }
@@ -3654,13 +3704,14 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         Log::info('📊 Historia DE LA ESPECIALIDAD procesada', [
             'historia_uuid' => $ultimaHistoria->uuid,
             'especialidad' => $especialidad,
+            'cita_actual_excluida' => $citaActualId,
             'medicamentos_count' => count($historiaFormateada['medicamentos'] ?? []),
             'diagnosticos_count' => count($historiaFormateada['diagnosticos'] ?? []),
             'clasificacion_metabolica' => $historiaFormateada['clasificacion_estado_metabolico'] ?? 'vacío'
         ]);
 
         // ✅ COMPLETAR DATOS FALTANTES (AHORA CON ESPECIALIDAD)
-        $historiaFormateada = $this->completarDatosFaltantes($paciente->uuid, $historiaFormateada, $especialidad);
+        $historiaFormateada = $this->completarDatosFaltantes($paciente->uuid, $historiaFormateada, $especialidad, $citaActualId);
 
         Log::info('✅ Historia COMPLETA después de rellenar', [
             'especialidad' => $especialidad,
