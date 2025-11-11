@@ -20,148 +20,162 @@ use PDF;
 class HistoriaClinicaController extends Controller
 {
  
-    public function index(Request $request)
-    {
-        try {
-            Log::info('📋 API GET Request - Historias Clínicas', [
-                'filters' => $request->all()
+   public function index(Request $request)
+{
+    try {
+        Log::info('📋 API GET Request - Historias Clínicas', [
+            'filters' => $request->all()
+        ]);
+
+        // ✅ JOIN con citas para poder ordenar por su fecha
+        $query = HistoriaClinica::query()
+            ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
+            ->select('historias_clinicas.*', 'citas.fecha as cita_fecha')
+            ->with([
+                'sede',
+                'cita',
+                'cita.paciente',
+                'cita.agenda.usuario',
+                'cita.agenda.usuarioMedico',
+                'cita.agenda.proceso', // ✅ AGREGAR RELACIÓN PROCESO
+                'historiaDiagnosticos.diagnostico',
+                'historiaMedicamentos.medicamento',
+                'historiaRemisiones.remision',
+                'historiaCups.cups',
+                'complementaria'
             ]);
 
-            // ✅ JOIN con citas para poder ordenar por su fecha
-            $query = HistoriaClinica::query()
-                ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
-                ->select('historias_clinicas.*', 'citas.fecha as cita_fecha')
-                ->with([
-                    'sede',
-                    'cita',
-                    'cita.paciente',
-                    'cita.agenda.usuario',
-                    'cita.agenda.usuarioMedico',
-                    'historiaDiagnosticos.diagnostico',
-                    'historiaMedicamentos.medicamento',
-                    'historiaRemisiones.remision',
-                    'historiaCups.cups',
-                    'complementaria'
-                ]);
-
-            // Filtros
-            if ($request->filled('documento')) {
-                $query->whereHas('cita.paciente', function ($q) use ($request) {
-                    $q->where('documento', $request->documento);
-                });
-            }
-
-            if ($request->has('fecha_desde')) {
-                $query->whereDate('citas.fecha', '>=', $request->fecha_desde);
-            }
-
-            if ($request->has('fecha_hasta')) {
-                $query->whereDate('citas.fecha', '<=', $request->fecha_hasta);
-            }
-
-            if ($request->filled('especialidad')) {
-                $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
-                    $q->where('nombre', 'like', '%' . $request->especialidad . '%');
-                });
-            }
-
-            if ($request->filled('tipo_consulta')) {
-                $query->where('historias_clinicas.tipo_consulta', $request->tipo_consulta);
-            }
-
-            // Paginación
-            $perPage = $request->get('per_page', 15);
-            $perPage = max(5, min(100, (int) $perPage));
-            
-            $historias = $query->orderBy('citas.fecha', 'desc')
-                            ->paginate($perPage);
-
-            // ✅ TRANSFORMAR DATOS PARA ASEGURAR QUE LAS RELACIONES ESTÉN DISPONIBLES
-            $historiasTransformadas = $historias->getCollection()->map(function ($historia) {
-                return [
-                    'uuid' => $historia->uuid,
-                    'cita_id' => $historia->cita_id,
-                    'sede_id' => $historia->sede_id,
-                    'especialidad' => $historia->especialidad,
-                    'tipo_consulta' => $historia->tipo_consulta,
-                    'diagnostico_principal' => $historia->diagnostico_principal,
-                    'motivo_consulta' => $historia->motivo_consulta,
-                    'enfermedad_actual' => $historia->enfermedad_actual,
-                    'created_at' => $historia->created_at,
-                    'updated_at' => $historia->updated_at,
-                    
-                    // ✅ CITA CON FECHA
-                    'cita' => [
-                        'uuid' => $historia->cita->uuid ?? null,
-                        'fecha' => $historia->cita->fecha ?? null,
-                        'hora' => $historia->cita->hora ?? null,
-                        'estado' => $historia->cita->estado ?? null,
-                        
-                        // ✅ PACIENTE (asegurar que existe)
-                        'paciente' => $historia->cita && $historia->cita->paciente ? [
-                            'uuid' => $historia->cita->paciente->uuid,
-                            'nombre_completo' => $historia->cita->paciente->nombre_completo ?? 
-                                                trim(($historia->cita->paciente->primer_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->paciente->segundo_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->paciente->primer_apellido ?? '') . ' ' . 
-                                                    ($historia->cita->paciente->segundo_apellido ?? '')),
-                            'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
-                            'documento' => $historia->cita->paciente->documento ?? 'N/A',
-                            'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
-                            'sexo' => $historia->cita->paciente->sexo ?? null,
-                        ] : null,
-                        
-                        // ✅ AGENDA CON PROFESIONAL
-                        'agenda' => $historia->cita && $historia->cita->agenda ? [
-                            'uuid' => $historia->cita->agenda->uuid,
-                            
-                            // ✅ PROFESIONAL (puede ser usuario o usuarioMedico)
-                            'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
-                                'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
-                                'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
-                                                    trim(($historia->cita->agenda->usuarioMedico->primer_nombre ?? '') . ' ' . 
-                                                        ($historia->cita->agenda->usuarioMedico->primer_apellido ?? '')),
-                            ] : ($historia->cita->agenda->usuario ? [
-                                'uuid' => $historia->cita->agenda->usuario->uuid,
-                                'nombre_completo' => $historia->cita->agenda->usuario->nombre_completo ?? 
-                                                    trim(($historia->cita->agenda->usuario->primer_nombre ?? '') . ' ' . 
-                                                        ($historia->cita->agenda->usuario->primer_apellido ?? '')),
-                            ] : null),
-                        ] : null,
-                    ],
-                    
-                    // ✅ SEDE
-                    'sede' => $historia->sede ? [
-                        'uuid' => $historia->sede->uuid,
-                        'nombre' => $historia->sede->nombre ?? 'N/A',
-                    ] : null,
-                ];
+        // Filtros
+        if ($request->filled('documento')) {
+            $query->whereHas('cita.paciente', function ($q) use ($request) {
+                $q->where('documento', $request->documento);
             });
-
-            // ✅ REEMPLAZAR LA COLECCIÓN TRANSFORMADA
-            $historias->setCollection($historiasTransformadas);
-
-            return response()->json([
-                'success' => true,
-                'data' => $historias,
-                'message' => 'Historias clínicas obtenidas exitosamente'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error en HistoriaClinicaController', [
-                'error' => $e->getMessage(),
-                'line' => $e->getLine(),
-                'file' => $e->getFile(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener historias clínicas',
-                'error' => $e->getMessage()
-            ], 500);
         }
+
+        if ($request->has('fecha_desde')) {
+            $query->whereDate('citas.fecha', '>=', $request->fecha_desde);
+        }
+
+        if ($request->has('fecha_hasta')) {
+            $query->whereDate('citas.fecha', '<=', $request->fecha_hasta);
+        }
+
+        if ($request->filled('especialidad')) {
+            $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
+                $q->where('nombre', 'like', '%' . $request->especialidad . '%');
+            });
+        }
+
+        if ($request->filled('tipo_consulta')) {
+            $query->where('historias_clinicas.tipo_consulta', $request->tipo_consulta);
+        }
+
+        // Paginación
+        $perPage = $request->get('per_page', 15);
+        $perPage = max(5, min(100, (int) $perPage));
+        
+        $historias = $query->orderBy('citas.fecha', 'desc')
+                        ->paginate($perPage);
+
+        // ✅ TRANSFORMAR DATOS CON ESPECIALIDAD DESDE PROCESO
+        $historiasTransformadas = $historias->getCollection()->map(function ($historia) {
+            // ✅ OBTENER ESPECIALIDAD DESDE AGENDA → PROCESO
+            $especialidad = 'N/A';
+            if ($historia->cita && $historia->cita->agenda && $historia->cita->agenda->proceso) {
+                $especialidad = $historia->cita->agenda->proceso->nombre ?? 'N/A';
+            }
+
+            return [
+                'uuid' => $historia->uuid,
+                'cita_id' => $historia->cita_id,
+                'sede_id' => $historia->sede_id,
+                'especialidad' => $especialidad, // ✅ DESDE PROCESO
+                'tipo_consulta' => $historia->tipo_consulta,
+                'diagnostico_principal' => $historia->diagnostico_principal,
+                'motivo_consulta' => $historia->motivo_consulta,
+                'enfermedad_actual' => $historia->enfermedad_actual,
+                'created_at' => $historia->created_at,
+                'updated_at' => $historia->updated_at,
+                
+                // ✅ CITA CON FECHA
+                'cita' => [
+                    'uuid' => $historia->cita->uuid ?? null,
+                    'fecha' => $historia->cita->fecha ?? null,
+                    'hora' => $historia->cita->hora ?? null,
+                    'estado' => $historia->cita->estado ?? null,
+                    
+                    // ✅ PACIENTE
+                    'paciente' => $historia->cita && $historia->cita->paciente ? [
+                        'uuid' => $historia->cita->paciente->uuid,
+                        'nombre_completo' => $historia->cita->paciente->nombre_completo ?? 
+                                            trim(($historia->cita->paciente->primer_nombre ?? '') . ' ' . 
+                                                ($historia->cita->paciente->segundo_nombre ?? '') . ' ' . 
+                                                ($historia->cita->paciente->primer_apellido ?? '') . ' ' . 
+                                                ($historia->cita->paciente->segundo_apellido ?? '')),
+                        'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
+                        'documento' => $historia->cita->paciente->documento ?? 'N/A',
+                        'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
+                        'sexo' => $historia->cita->paciente->sexo ?? null,
+                    ] : null,
+                    
+                    // ✅ AGENDA CON PROFESIONAL Y PROCESO
+                    'agenda' => $historia->cita && $historia->cita->agenda ? [
+                        'uuid' => $historia->cita->agenda->uuid,
+                        
+                        // ✅ PROCESO (ESPECIALIDAD)
+                        'proceso' => $historia->cita->agenda->proceso ? [
+                            'uuid' => $historia->cita->agenda->proceso->uuid,
+                            'nombre' => $historia->cita->agenda->proceso->nombre ?? 'N/A',
+                        ] : null,
+                        
+                        // ✅ PROFESIONAL
+                        'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
+                            'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
+                            'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
+                                                trim(($historia->cita->agenda->usuarioMedico->primer_nombre ?? '') . ' ' . 
+                                                    ($historia->cita->agenda->usuarioMedico->primer_apellido ?? '')),
+                        ] : ($historia->cita->agenda->usuario ? [
+                            'uuid' => $historia->cita->agenda->usuario->uuid,
+                            'nombre_completo' => $historia->cita->agenda->usuario->nombre_completo ?? 
+                                                trim(($historia->cita->agenda->usuario->primer_nombre ?? '') . ' ' . 
+                                                    ($historia->cita->agenda->usuario->primer_apellido ?? '')),
+                        ] : null),
+                    ] : null,
+                ],
+                
+                // ✅ SEDE
+                'sede' => $historia->sede ? [
+                    'uuid' => $historia->sede->uuid,
+                    'nombre' => $historia->sede->nombre ?? 'N/A',
+                ] : null,
+            ];
+        });
+
+        // ✅ REEMPLAZAR LA COLECCIÓN TRANSFORMADA
+        $historias->setCollection($historiasTransformadas);
+
+        return response()->json([
+            'success' => true,
+            'data' => $historias,
+            'message' => 'Historias clínicas obtenidas exitosamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error en HistoriaClinicaController', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener historias clínicas',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 
 
 public function store(Request $request)
