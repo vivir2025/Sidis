@@ -4180,8 +4180,8 @@ private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $e
                   ->whereIn('estado', ['ATENDIDA', 'CONFIRMADA']);
         })
         ->with([
-            'cita.agenda.usuarioMedico', // ← Usuario (médico)
-            'cita.agenda.especialidad'   // ← Especialidad directa desde Agenda
+            'cita.agenda.usuarioMedico',
+            'cita.agenda.especialidad'
         ])
         ->get();
 
@@ -4219,8 +4219,8 @@ private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $e
             })->toArray()
         ]);
 
-        // ✅ FILTRAR POR ESPECIALIDAD
-        $historiasDeEspecialidad = $historias->filter(function($historia) use ($especialidadNormalizada) {
+        // ✅ FILTRAR POR ESPECIALIDAD (USANDO use() PARA PASAR LA VARIABLE)
+        $historiasDeEspecialidad = $historias->filter(function($historia) use ($especialidadNormalizada, $especialidad) {
             $cita = $historia->cita;
             $agenda = $cita->agenda ?? null;
             
@@ -4232,7 +4232,6 @@ private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $e
                 return false;
             }
             
-            // ✅ USAR LA RELACIÓN especialidad() DIRECTA DE AGENDA
             $especialidadObj = $agenda->especialidad;
             
             if (!$especialidadObj) {
@@ -4248,7 +4247,6 @@ private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $e
             
             $coincide = $especialidadHistoriaNormalizada === $especialidadNormalizada;
             
-            // ✅ LOG DE CADA COMPARACIÓN
             Log::info('🔍 Comparando especialidades', [
                 'historia_uuid' => $historia->uuid,
                 'cita_id' => $historia->cita_id,
@@ -4287,7 +4285,6 @@ private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $e
             'trace' => $e->getTraceAsString()
         ]);
         
-        // ✅ En caso de error, asumir PRIMERA VEZ (más seguro)
         return true;
     }
 }
