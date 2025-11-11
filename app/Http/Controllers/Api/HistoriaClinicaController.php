@@ -3636,13 +3636,14 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
 }
 
 /**
- * Completa TODOS los datos faltantes buscando en historias anteriores
+ * ✅ COMPLETAR DATOS FALTANTES - FILTRADO POR ESPECIALIDAD
  */
-private function completarDatosFaltantes(string $pacienteUuid, array $historiaBase): array
+private function completarDatosFaltantes(string $pacienteUuid, array $historiaBase, string $especialidad): array
 {
     try {
-        Log::info('🔍 Buscando datos faltantes en historias anteriores', [
-            'paciente_uuid' => $pacienteUuid
+        Log::info('🔍 Buscando datos faltantes en historias anteriores DE LA ESPECIALIDAD', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
         ]);
 
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
@@ -3707,7 +3708,7 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
             return $historiaBase;
         }
 
-        // ✅ BUSCAR EN HISTORIAS ANTERIORES
+        // ✅ BUSCAR EN HISTORIAS ANTERIORES DE LA MISMA ESPECIALIDAD
         $historiasAnteriores = \App\Models\HistoriaClinica::with([
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento',
@@ -3717,12 +3718,17 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
         ->whereHas('cita', function($query) use ($paciente) {
             $query->where('paciente_uuid', $paciente->uuid);
         })
+        // 🔥 FILTRO POR ESPECIALIDAD
+        ->whereHas('cita.agenda.usuarioMedico.especialidad', function($query) use ($especialidad) {
+            $query->where('nombre', $especialidad);
+        })
         ->orderBy('created_at', 'desc')
         ->skip(1) // SALTAR LA PRIMERA (YA LA TENEMOS)
         ->take(20) // REVISAR ÚLTIMAS 20 HISTORIAS
         ->get();
 
-        Log::info('🔍 Historias anteriores encontradas', [
+        Log::info('🔍 Historias anteriores DE LA ESPECIALIDAD encontradas', [
+            'especialidad' => $especialidad,
             'count' => $historiasAnteriores->count()
         ]);
 
@@ -3753,8 +3759,9 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
                 if (!empty($medicamentos)) {
                     $historiaBase['medicamentos'] = $medicamentos;
                     $camposPorCompletar['medicamentos'] = false;
-                    Log::info('✅ Medicamentos completados', [
+                    Log::info('✅ Medicamentos completados DE LA ESPECIALIDAD', [
                         'historia_uuid' => $historia->uuid,
+                        'especialidad' => $especialidad,
                         'count' => count($medicamentos)
                     ]);
                 }
@@ -3783,7 +3790,10 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
                 if (!empty($remisiones)) {
                     $historiaBase['remisiones'] = $remisiones;
                     $camposPorCompletar['remisiones'] = false;
-                    Log::info('✅ Remisiones completadas', ['historia_uuid' => $historia->uuid]);
+                    Log::info('✅ Remisiones completadas DE LA ESPECIALIDAD', [
+                        'historia_uuid' => $historia->uuid,
+                        'especialidad' => $especialidad
+                    ]);
                 }
             }
 
@@ -3810,7 +3820,10 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
                 if (!empty($cups)) {
                     $historiaBase['cups'] = $cups;
                     $camposPorCompletar['cups'] = false;
-                    Log::info('✅ CUPS completados', ['historia_uuid' => $historia->uuid]);
+                    Log::info('✅ CUPS completados DE LA ESPECIALIDAD', [
+                        'historia_uuid' => $historia->uuid,
+                        'especialidad' => $especialidad
+                    ]);
                 }
             }
 
@@ -3968,7 +3981,8 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
             }
         }
 
-        Log::info('📊 Resultado final de completar datos', [
+        Log::info('📊 Resultado final de completar datos DE LA ESPECIALIDAD', [
+            'especialidad' => $especialidad,
             'medicamentos_final' => count($historiaBase['medicamentos'] ?? []),
             'remisiones_final' => count($historiaBase['remisiones'] ?? []),
             'cups_final' => count($historiaBase['cups'] ?? []),
@@ -3988,6 +4002,7 @@ private function completarDatosFaltantes(string $pacienteUuid, array $historiaBa
         return $historiaBase;
     }
 }
+
 
 /**
  * ✅ DETERMINAR VISTA SEGÚN ESPECIALIDAD - VERSIÓN CORREGIDA
