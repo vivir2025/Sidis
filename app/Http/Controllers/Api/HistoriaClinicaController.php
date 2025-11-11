@@ -3465,94 +3465,88 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
 {
     try {
         Log::info('🔍 ===== INICIO: Determinando vista de historia clínica =====', [
-            'cita_uuid' => $citaUuid
+            'cita_uuid' => $citaUuid,
+            'timestamp' => now()->toDateTimeString()
         ]);
 
-        // ✅ PASO 1: OBTENER DATOS DE LA CITA
+        // ✅ PASO 1: Obtener la cita
+        Log::info('🔍 PASO 1: Buscando cita...');
         $cita = \App\Models\Cita::with([
             'paciente',
-            'agenda.usuarioMedico.especialidad'
+            'agenda.usuarioMedico.especialidad',
+            'historiaClinica'
         ])->where('uuid', $citaUuid)->first();
 
         if (!$cita) {
             Log::error('❌ Cita no encontrada', ['cita_uuid' => $citaUuid]);
             return response()->json([
-                'success' => false,
-                'message' => 'Cita no encontrada'
+                'error' => 'Cita no encontrada'
             ], 404);
         }
 
         Log::info('✅ PASO 1: Cita encontrada', [
             'cita_id' => $cita->id,
-            'paciente_uuid' => $cita->paciente->uuid ?? 'N/A',
+            'paciente_uuid' => $cita->paciente_uuid,
             'paciente_nombre' => $cita->paciente->nombre_completo ?? 'N/A'
         ]);
 
-        // ✅ PASO 2: OBTENER ESPECIALIDAD
-        $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? 'MEDICINA GENERAL';
-        
-        Log::info('✅ PASO 2: Especialidad detectada', [
-            'especialidad' => $especialidad,
-            'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A',
-            'agenda_id' => $cita->agenda->id ?? 'N/A'
-        ]);
+        // ✅ PASO 2: Obtener especialidad
+        Log::info('🔍 PASO 2: Obteniendo especialidad...');
+        $especialidad = $cita->agenda->usuarioMedico->especialidad->nombre ?? null;
 
-        // ✅ PASO 3: VERIFICAR HISTORIAS ANTERIORES
-        Log::info('🔍 PASO 3: Verificando historias anteriores...', [
-            'paciente_uuid' => $cita->paciente->uuid,
-            'especialidad' => $especialidad
-        ]);
-
-        $tieneHistoriasAnteriores = $this->verificarHistoriasAnterioresPorEspecialidad(
-            $cita->paciente->uuid, 
-            $especialidad
-        );
-
-        Log::info('✅ PASO 3: Resultado de verificación', [
-            'tiene_historias_anteriores' => $tieneHistoriasAnteriores,
-            'tipo_boolean' => gettype($tieneHistoriasAnteriores),
-            'valor_exacto' => var_export($tieneHistoriasAnteriores, true)
-        ]);
-
-        // ✅ PASO 4: DETERMINAR TIPO DE CONSULTA
-        $tipoConsulta = $tieneHistoriasAnteriores ? 'CONTROL' : 'PRIMERA VEZ';
-
-        Log::info('✅ PASO 4: Tipo de consulta determinado', [
-            'tiene_historias_anteriores' => $tieneHistoriasAnteriores,
-            'tipo_consulta' => $tipoConsulta,
-            'logica_aplicada' => $tieneHistoriasAnteriores ? 'TRUE → CONTROL' : 'FALSE → PRIMERA VEZ'
-        ]);
-
-        // ✅ PASO 5: OBTENER HISTORIA PREVIA (SOLO SI ES CONTROL)
-        $historiaPrevia = null;
-        if ($tipoConsulta === 'CONTROL') {
-            Log::info('🔍 PASO 5: Obteniendo historia previa (es CONTROL)...');
-            
-            $historiaPrevia = $this->obtenerUltimaHistoriaPorEspecialidad(
-                $cita->paciente->uuid, 
-                $especialidad
-            );
-            
-            if ($historiaPrevia) {
-                Log::info('✅ PASO 5: Historia previa obtenida', [
-                    'medicamentos_count' => count($historiaPrevia['medicamentos'] ?? []),
-                    'diagnosticos_count' => count($historiaPrevia['diagnosticos'] ?? []),
-                    'remisiones_count' => count($historiaPrevia['remisiones'] ?? []),
-                    'cups_count' => count($historiaPrevia['cups'] ?? [])
-                ]);
-            } else {
-                Log::warning('⚠️ PASO 5: Historia previa es NULL (no se encontró)');
-            }
-        } else {
-            Log::info('ℹ️ PASO 5: Saltado (es PRIMERA VEZ, no hay historia previa)');
+        if (!$especialidad) {
+            Log::error('❌ Especialidad no encontrada', [
+                'cita_id' => $cita->id,
+                'agenda_id' => $cita->agenda_id ?? 'N/A'
+            ]);
+            return response()->json([
+                'error' => 'Especialidad no encontrada'
+            ], 404);
         }
 
-        // ✅ PASO 6: DETERMINAR VISTA
-        Log::info('🔍 PASO 6: Determinando vista según especialidad...');
+        Log::info('✅ PASO 2: Especialidad obtenida', [
+            'especialidad' => $especialidad,
+            'medico' => $cita->agenda->usuarioMedico->nombre_completo ?? 'N/A'
+        ]);
+
+        // 🔥 PASO 3: VERIFICAR SI ES PRIMERA VEZ O CONTROL (NUEVO MÉTODO)
+        Log::info('🔍 PASO 3: Verificando tipo de consulta (PRIMERA VEZ o CONTROL)...');
         
+        $esPrimeraVez = $this->esPrimeraConsultaDeEspecialidad($cita->paciente_uuid, $especialidad);
+        $tipoConsulta = $esPrimeraVez ? 'PRIMERA VEZ' : 'CONTROL';
+
+        Log::info('✅ PASO 3: Tipo de consulta determinado', [
+            'es_primera_vez' => $esPrimeraVez,
+            'tipo_consulta' => $tipoConsulta,
+            'logica' => $esPrimeraVez ? '0 historias → PRIMERA VEZ' : '>0 historias → CONTROL'
+        ]);
+
+        // ✅ PASO 4: Obtener historia previa (si es CONTROL)
+        $historiaPreviaData = null;
+        
+        if (!$esPrimeraVez) {
+            Log::info('🔍 PASO 4: Obteniendo historia previa (es CONTROL)...');
+            $historiaPreviaData = $this->obtenerUltimaHistoriaPorEspecialidad($cita->paciente_uuid, $especialidad);
+            
+            if ($historiaPreviaData) {
+                Log::info('✅ PASO 4: Historia previa obtenida', [
+                    'medicamentos_count' => count($historiaPreviaData['medicamentos'] ?? []),
+                    'diagnosticos_count' => count($historiaPreviaData['diagnosticos'] ?? []),
+                    'remisiones_count' => count($historiaPreviaData['remisiones'] ?? []),
+                    'cups_count' => count($historiaPreviaData['cups'] ?? [])
+                ]);
+            } else {
+                Log::warning('⚠️ PASO 4: No se encontró historia previa (aunque es CONTROL)');
+            }
+        } else {
+            Log::info('ℹ️ PASO 4: Saltando obtención de historia (es PRIMERA VEZ)');
+        }
+
+        // ✅ PASO 5: Determinar vista según especialidad
+        Log::info('🔍 PASO 5: Determinando vista según especialidad...');
         $vistaInfo = $this->determinarVistaSegunEspecialidad($especialidad, $tipoConsulta);
 
-        Log::info('✅ PASO 6: Vista determinada', [
+        Log::info('✅ PASO 5: Vista determinada', [
             'vista' => $vistaInfo['vista'] ?? 'N/A',
             'usa_complementaria' => $vistaInfo['usa_complementaria'] ?? false,
             'solo_control' => $vistaInfo['solo_control'] ?? false
@@ -3562,7 +3556,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         Log::info('✅ ===== FIN: Vista determinada exitosamente =====', [
             'especialidad' => $especialidad,
             'tipo_consulta' => $tipoConsulta,
-            'tiene_historias' => $tieneHistoriasAnteriores,
+            'es_primera_vez' => $esPrimeraVez,
             'vista' => $vistaInfo['vista'] ?? 'N/A'
         ]);
 
@@ -3572,25 +3566,23 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
                 'cita' => $cita,
                 'especialidad' => $especialidad,
                 'tipo_consulta' => $tipoConsulta,
+                'es_primera_vez' => $esPrimeraVez,
                 'vista_recomendada' => $vistaInfo,
-                'historia_previa' => $historiaPrevia,
-                'tiene_historias_anteriores' => $tieneHistoriasAnteriores
+                'historia_previa' => $historiaPreviaData
             ]
         ]);
 
     } catch (\Exception $e) {
-        Log::error('❌ ===== ERROR FATAL =====', [
+        Log::error('❌ ===== ERROR: Determinando vista de historia clínica =====', [
             'error' => $e->getMessage(),
-            'cita_uuid' => $citaUuid,
-            'line' => $e->getLine(),
             'file' => basename($e->getFile()),
+            'line' => $e->getLine(),
             'trace' => $e->getTraceAsString()
         ]);
 
         return response()->json([
-            'success' => false,
-            'message' => 'Error determinando vista de historia clínica',
-            'error' => $e->getMessage()
+            'error' => 'Error al determinar la vista de historia clínica',
+            'message' => $e->getMessage()
         ], 500);
     }
 }
@@ -4145,6 +4137,56 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
         ]);
         
         return $historiaBase;
+    }
+}
+/**
+ * ✅ VERIFICAR SI ES LA PRIMERA CONSULTA DE LA ESPECIALIDAD (VERSIÓN CORREGIDA)
+ */
+private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $especialidad): bool
+{
+    try {
+        Log::info('🔍 Verificando si es PRIMERA CONSULTA de la especialidad', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
+        ]);
+
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
+            Log::warning('⚠️ Paciente no encontrado', ['paciente_uuid' => $pacienteUuid]);
+            return true; // Si no existe el paciente, es primera vez
+        }
+
+        // ✅ CONTAR HISTORIAS COMPLETADAS DE ESA ESPECIALIDAD
+        $historiasDeEspecialidad = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente) {
+            $query->where('paciente_uuid', $paciente->uuid)
+                  ->where('estado', '!=', 'CANCELADA');
+        })
+        ->whereHas('cita.agenda.usuarioMedico.especialidad', function($query) use ($especialidad) {
+            $query->where('nombre', $especialidad);
+        })
+        ->count();
+
+        $esPrimeraVez = $historiasDeEspecialidad === 0;
+
+        Log::info('✅ Resultado: Verificación de primera consulta', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad,
+            'total_historias' => $historiasDeEspecialidad,
+            'es_primera_vez' => $esPrimeraVez,
+            'tipo_consulta' => $esPrimeraVez ? 'PRIMERA VEZ' : 'CONTROL'
+        ]);
+
+        return $esPrimeraVez;
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error verificando primera consulta', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad
+        ]);
+        
+        return true; // En caso de error, asumir primera vez
     }
 }
 
