@@ -19,89 +19,78 @@ use PDF;
 
 class HistoriaClinicaController extends Controller
 {
-   public function index(Request $request)
-{
-    try {
-        $query = HistoriaClinica::with([
-            'paciente',
-            'usuarioMedico',
-            'sede',
-            'cita',  // ✅ IMPORTANTE
-            'historiaDiagnosticos.diagnostico',    
-            'historiaMedicamentos.medicamento',   
-            'historiaRemisiones.remision',         
-            'historiaCups.cups'            
-        ]);
+  public function index(Request $request)
+    {
+        try {
+            Log::info('📋 API GET Request - Historias Clínicas', [
+                'filters' => $request->all()
+            ]);
 
-        // Filtros
-        if ($request->has('paciente_id')) {
-            $query->where('paciente_id', $request->paciente_id);
+            // ✅ CARGAR AMBAS RELACIONES DE USUARIO EN AGENDA
+            $query = HistoriaClinica::with([
+                'sede',
+                'cita.paciente',
+                'cita.agenda.usuario',        // ✅ Usuario gestor
+                'cita.agenda.usuarioMedico',  // ✅ Médico asignado
+                'historiaDiagnosticos.diagnostico',
+                'historiaMedicamentos.medicamento',
+                'historiaRemisiones.remision',
+                'historiaCups.cups',
+                'complementaria'
+            ]);
+
+            // Filtros
+            if ($request->filled('documento')) {
+                $query->whereHas('cita.paciente', function ($q) use ($request) {
+                    $q->where('documento', $request->documento);
+                });
+            }
+
+            if ($request->filled('fecha_desde')) {
+                $query->whereDate('fecha', '>=', $request->fecha_desde);
+            }
+
+            if ($request->filled('fecha_hasta')) {
+                $query->whereDate('fecha', '<=', $request->fecha_hasta);
+            }
+
+            if ($request->filled('especialidad')) {
+                $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
+                    $q->where('nombre', 'like', '%' . $request->especialidad . '%');
+                });
+            }
+
+            if ($request->filled('tipo_consulta')) {
+                $query->where('tipo_consulta', $request->tipo_consulta);
+            }
+
+            // Paginación
+            $perPage = $request->get('per_page', 15);
+            $perPage = max(5, min(100, (int) $perPage));
+            
+            $historias = $query->orderBy('fecha', 'desc')
+                               ->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $historias,
+                'message' => 'Historias clínicas obtenidas exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en HistoriaClinicaController', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener historias clínicas',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        if ($request->has('usuario_medico_id')) {
-            $query->where('usuario_medico_id', $request->usuario_medico_id);
-        }
-        if ($request->has('sede_id')) {
-            $query->where('sede_id', $request->sede_id);
-        }
-
-        // ✅ FILTROS POR FECHA DE LA CITA
-        if ($request->has('fecha_desde')) {
-            $query->whereHas('cita', function($q) use ($request) {
-                $q->whereDate('fecha', '>=', $request->fecha_desde);
-            });
-        }
-
-        if ($request->has('fecha_hasta')) {
-            $query->whereHas('cita', function($q) use ($request) {
-                $q->whereDate('fecha', '<=', $request->fecha_hasta);
-            });
-        }
-
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->whereHas('paciente', function($q) use ($search) {
-                $q->where('nombre_completo', 'like', "%{$search}%")
-                  ->orWhere('numero_identificacion', 'like', "%{$search}%");
-            });
-        }
-
-        // ✅ OBTENER TODAS LAS HISTORIAS
-        $perPage = $request->get('per_page', 15);
-        $historias = $query->get();
-
-        // ✅ ORDENAR POR FECHA DE CITA EN PHP
-        $historias = $historias->sortByDesc(function($historia) {
-            return $historia->cita->fecha ?? '1900-01-01';
-        })->values();
-
-        // ✅ PAGINAR MANUALMENTE
-        $page = $request->get('page', 1);
-        $total = $historias->count();
-        $historiasPaginadas = $historias->slice(($page - 1) * $perPage, $perPage)->values();
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'data' => $historiasPaginadas,
-                'current_page' => $page,
-                'per_page' => $perPage,
-                'total' => $total,
-                'last_page' => ceil($total / $perPage),
-                'from' => (($page - 1) * $perPage) + 1,
-                'to' => min($page * $perPage, $total)
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al obtener historias clínicas',
-            'error' => $e->getMessage()
-        ], 500); 
     }
-}
-
 
 public function store(Request $request)
 {
