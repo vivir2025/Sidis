@@ -20,7 +20,7 @@ use PDF;
 class HistoriaClinicaController extends Controller
 {
  
-  public function index(Request $request)
+   public function index(Request $request)
     {
         try {
             Log::info('📋 API GET Request - Historias Clínicas', [
@@ -37,7 +37,12 @@ class HistoriaClinicaController extends Controller
                     'cita.paciente',
                     'cita.agenda.usuario',
                     'cita.agenda.usuarioMedico',
-                    'cita.agenda.proceso', // ✅ AGREGAR RELACIÓN PROCESO
+                    'cita.agenda.proceso',
+                    
+                    // ✅ AGREGAR ESTAS 2 LÍNEAS PARA TIPO DE CONSULTA
+                    'cita.cupsContratado',
+                    'cita.cupsContratado.categoriaCups',
+                    
                     'historiaDiagnosticos.diagnostico',
                     'historiaMedicamentos.medicamento',
                     'historiaRemisiones.remision',
@@ -66,8 +71,17 @@ class HistoriaClinicaController extends Controller
                 });
             }
 
+            // ✅ AGREGAR FILTRO POR TIPO DE CONSULTA
             if ($request->filled('tipo_consulta')) {
-                $query->where('historias_clinicas.tipo_consulta', $request->tipo_consulta);
+                $tipoConsulta = strtoupper($request->tipo_consulta);
+                
+                $query->whereHas('cita.cupsContratado.categoriaCups', function ($q) use ($tipoConsulta) {
+                    if ($tipoConsulta === 'PRIMERA VEZ' || $tipoConsulta === 'PRIMERA_VEZ') {
+                        $q->where('id', 1);
+                    } elseif ($tipoConsulta === 'CONTROL') {
+                        $q->where('id', 2);
+                    }
+                });
             }
 
             // Paginación
@@ -77,7 +91,7 @@ class HistoriaClinicaController extends Controller
             $historias = $query->orderBy('citas.fecha', 'desc')
                             ->paginate($perPage);
 
-            // ✅ TRANSFORMAR DATOS CON ESPECIALIDAD DESDE PROCESO
+            // ✅ TRANSFORMAR DATOS CON ESPECIALIDAD Y TIPO DE CONSULTA
             $historiasTransformadas = $historias->getCollection()->map(function ($historia) {
                 // ✅ OBTENER ESPECIALIDAD DESDE AGENDA → PROCESO
                 $especialidad = 'N/A';
@@ -85,12 +99,18 @@ class HistoriaClinicaController extends Controller
                     $especialidad = $historia->cita->agenda->proceso->nombre ?? 'N/A';
                 }
 
+                // ✅ OBTENER TIPO DE CONSULTA DESDE CUPS CONTRATADO → CATEGORÍA CUPS
+                $tipoConsulta = $this->obtenerTipoConsulta($historia);
+
                 return [
                     'uuid' => $historia->uuid,
                     'cita_id' => $historia->cita_id,
                     'sede_id' => $historia->sede_id,
-                    'especialidad' => $especialidad, // ✅ DESDE PROCESO
-                    'tipo_consulta' => $historia->tipo_consulta,
+                    'especialidad' => $especialidad,
+                    
+                    // ✅ AGREGAR TIPO DE CONSULTA
+                    'tipo_consulta' => $tipoConsulta,
+                    
                     'diagnostico_principal' => $historia->diagnostico_principal,
                     'motivo_consulta' => $historia->motivo_consulta,
                     'enfermedad_actual' => $historia->enfermedad_actual,
@@ -173,6 +193,38 @@ class HistoriaClinicaController extends Controller
                 'message' => 'Error al obtener historias clínicas',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * ✅ MÉTODO AUXILIAR PARA OBTENER TIPO DE CONSULTA
+     * Navega: Historia → Cita → CupsContratado → CategoriaCups
+     */
+    private function obtenerTipoConsulta($historia): ?string
+    {
+        try {
+            // Verificar si existe la cadena de relaciones
+            if (!$historia->cita || 
+                !$historia->cita->cupsContratado || 
+                !$historia->cita->cupsContratado->categoriaCups) {
+                return null;
+            }
+
+            $categoriaCups = $historia->cita->cupsContratado->categoriaCups;
+            
+            // Determinar tipo según el ID de la categoría
+            return match ($categoriaCups->id) {
+                1 => 'PRIMERA VEZ',
+                2 => 'CONTROL',
+                default => $categoriaCups->nombre ?? null
+            };
+            
+        } catch (\Exception $e) {
+            Log::warning('⚠️ Error obteniendo tipo consulta', [
+                'historia_id' => $historia->id ?? null,
+                'error' => $e->getMessage()
+            ]);
+            return null;
         }
     }
 
