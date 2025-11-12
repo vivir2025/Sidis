@@ -3523,10 +3523,7 @@ private function getCitaIdFromUuid($citaUuid)
             ], 500);
         }
     }
- /**
- * ✅ DETERMINAR VISTA - VERSIÓN CON LOGS DETALLADOS
- */
-public function determinarVistaHistoriaClinica(Request $request, string $citaUuid)
+ public function determinarVistaHistoriaClinica(Request $request, string $citaUuid)
 {
     try {
         Log::info('🔍 ===== INICIO: Determinando vista de historia clínica =====', [
@@ -3539,7 +3536,6 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         $cita = \App\Models\Cita::with([
             'paciente',
             'agenda.usuarioMedico.especialidad'
-            // ❌ ELIMINADO: 'historiaClinica' (no existe esta relación)
         ])->where('uuid', $citaUuid)->first();
 
         if (!$cita) {
@@ -3586,25 +3582,27 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'logica' => $esPrimeraVez ? '0 historias → PRIMERA VEZ' : '>0 historias → CONTROL'
         ]);
 
-        // ✅ PASO 4: Obtener historia previa (si es CONTROL)
-        $historiaPreviaData = null;
-        
-        if (!$esPrimeraVez) {
-            Log::info('🔍 PASO 4: Obteniendo historia previa (es CONTROL)...');
-            $historiaPreviaData = $this->obtenerUltimaHistoriaPorEspecialidad($cita->paciente_uuid, $especialidad);
-            
-            if ($historiaPreviaData) {
-                Log::info('✅ PASO 4: Historia previa obtenida', [
-                    'medicamentos_count' => count($historiaPreviaData['medicamentos'] ?? []),
-                    'diagnosticos_count' => count($historiaPreviaData['diagnosticos'] ?? []),
-                    'remisiones_count' => count($historiaPreviaData['remisiones'] ?? []),
-                    'cups_count' => count($historiaPreviaData['cups'] ?? [])
-                ]);
-            } else {
-                Log::warning('⚠️ PASO 4: No se encontró historia previa (aunque es CONTROL)');
-            }
+        // ✅✅✅ PASO 4: Obtener historia previa (SIEMPRE - tanto PRIMERA VEZ como CONTROL) ✅✅✅
+        Log::info('🔍 PASO 4: Obteniendo historia previa (para ambos tipos de consulta)...');
+        $historiaPreviaData = $this->obtenerUltimaHistoriaPorEspecialidad($cita->paciente_uuid, $especialidad);
+
+        if ($historiaPreviaData) {
+            Log::info('✅ PASO 4: Historia previa obtenida', [
+                'tipo_consulta' => $tipoConsulta,
+                'es_primera_vez' => $esPrimeraVez,
+                'medicamentos_count' => count($historiaPreviaData['medicamentos'] ?? []),
+                'diagnosticos_count' => count($historiaPreviaData['diagnosticos'] ?? []),
+                'remisiones_count' => count($historiaPreviaData['remisiones'] ?? []),
+                'cups_count' => count($historiaPreviaData['cups'] ?? []),
+                'tiene_clasificaciones' => !empty($historiaPreviaData['clasificacion_estado_metabolico']),
+                'tiene_talla' => !empty($historiaPreviaData['talla'])
+            ]);
         } else {
-            Log::info('ℹ️ PASO 4: Saltando obtención de historia (es PRIMERA VEZ)');
+            Log::info('ℹ️ PASO 4: No se encontró historia previa', [
+                'tipo_consulta' => $tipoConsulta,
+                'es_primera_vez' => $esPrimeraVez,
+                'razon' => 'Paciente nuevo o sin historias anteriores'
+            ]);
         }
 
         // ✅ PASO 5: Determinar vista según especialidad
@@ -3622,7 +3620,8 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
             'especialidad' => $especialidad,
             'tipo_consulta' => $tipoConsulta,
             'es_primera_vez' => $esPrimeraVez,
-            'vista' => $vistaInfo['vista'] ?? 'N/A'
+            'vista' => $vistaInfo['vista'] ?? 'N/A',
+            'tiene_datos_previos' => !is_null($historiaPreviaData)
         ]);
 
         return response()->json([
@@ -3633,7 +3632,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
                 'tipo_consulta' => $tipoConsulta,
                 'es_primera_vez' => $esPrimeraVez,
                 'vista_recomendada' => $vistaInfo,
-                'historia_previa' => $historiaPreviaData
+                'historia_previa' => $historiaPreviaData // ✅ SIEMPRE SE ENVÍA (puede ser null)
             ]
         ]);
 
@@ -3651,6 +3650,7 @@ public function determinarVistaHistoriaClinica(Request $request, string $citaUui
         ], 500);
     }
 }
+
 /**
  * ✅ VERIFICAR HISTORIAS ANTERIORES - FILTRADO POR ESPECIALIDAD
  */
