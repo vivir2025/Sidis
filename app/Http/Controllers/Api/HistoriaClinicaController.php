@@ -2736,11 +2736,26 @@ private function getCitaIdFromUuid($citaUuid)
                 
                 // ✅ CITA (CON FECHA Y HORA)
                 'cita',
-                'cita.paciente', // Datos del paciente
+                'cita.paciente',
+                'cita.paciente.empresa',                    // 🏥 Empresa/EPS
+                'cita.paciente.regimen',                    // 🏛️ Régimen
+                'cita.paciente.ocupacion',                  // 💼 Ocupación
+                'cita.paciente.departamento',               // 🗺️ Departamento residencia
+                'cita.paciente.municipio',                  // 🗺️ Municipio residencia
+                'cita.paciente.departamento_nacimiento',    // 🗺️ Departamento nacimiento
+                'cita.paciente.municipio_nacimiento',       // 🗺️ Municipio nacimiento
+                'cita.paciente.tipo_afiliacion',            // 📋 Tipo afiliación
+                'cita.paciente.parentesco',                 // 👥 Parentesco
+                'cita.paciente.raza',                       // 🌍 Raza/Etnia
+                'cita.paciente.escolaridad',                // 🎓 Escolaridad
+                'cita.paciente.zona_residencia',   // Datos del paciente
                 'cita.agenda', // Agenda de la cita
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
                 'cita.agenda.usuarioMedico.especialidad', // Especialidad del médico
+                'cita.agenda.usuarioMedico.sede',
+                'cita.agenda.usuarioMedico.rol',
+
                 'cita.agenda.proceso', // Proceso/Especialidad de la cita
                 'cita.cupsContratado', // CUPS contratado
                 'cita.cupsContratado.categoriaCups', // Categoría CUPS (PRIMERA VEZ/CONTROL)
