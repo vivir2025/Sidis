@@ -633,4 +633,104 @@ public function getCitasCount(string $uuid): JsonResponse
     }
 }
 
+/**
+ * ✅ NUEVO: Obtener proceso automático según especialidad del usuario médico
+ */
+public function getProcesoByUsuarioMedico(string $usuarioUuid): JsonResponse
+{
+    try {
+        Log::info('🔍 Obteniendo proceso por usuario médico', [
+            'usuario_uuid' => $usuarioUuid
+        ]);
+
+        // Buscar el usuario
+        $usuario = \App\Models\Usuario::where('uuid', $usuarioUuid)
+            ->with('especialidad')
+            ->first();
+
+        if (!$usuario) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no encontrado'
+            ], 404);
+        }
+
+        // Verificar si tiene especialidad
+        if (!$usuario->especialidad_id) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'Usuario sin especialidad asignada'
+            ]);
+        }
+
+        // Obtener mapeo de especialidad a proceso
+        $mapeo = config('especialidad_proceso.mapeo');
+        $especialidadId = (string) $usuario->especialidad_id;
+
+        Log::info('📋 Datos de especialidad', [
+            'especialidad_id' => $especialidadId,
+            'especialidad_nombre' => $usuario->especialidad->nombre ?? 'N/A',
+            'tiene_mapeo' => isset($mapeo[$especialidadId])
+        ]);
+
+        // Buscar el proceso correspondiente
+        if (!isset($mapeo[$especialidadId])) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay proceso configurado para esta especialidad'
+            ]);
+        }
+
+        $nCups = $mapeo[$especialidadId];
+        
+        // Buscar el proceso por N_CUPS
+        $proceso = \App\Models\Proceso::where('n_cups', $nCups)->first();
+
+        if (!$proceso) {
+            Log::warning('⚠️ Proceso no encontrado para N_CUPS', [
+                'n_cups' => $nCups,
+                'especialidad_id' => $especialidadId
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Proceso no encontrado en el sistema'
+            ], 404);
+        }
+
+        Log::info('✅ Proceso encontrado automáticamente', [
+            'proceso_uuid' => $proceso->uuid,
+            'proceso_nombre' => $proceso->nombre,
+            'n_cups' => $proceso->n_cups
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'proceso' => $proceso,
+                'especialidad' => $usuario->especialidad,
+                'usuario' => [
+                    'uuid' => $usuario->uuid,
+                    'nombre_completo' => $usuario->nombre_completo
+                ]
+            ],
+            'message' => 'Proceso obtenido automáticamente'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo proceso por usuario médico', [
+            'usuario_uuid' => $usuarioUuid,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error interno del servidor'
+        ], 500);
+    }
+}
+
 }

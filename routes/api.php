@@ -134,6 +134,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
    
     });
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
+Route::get('/agendas/proceso-by-usuario/{usuario_uuid}', [AgendaController::class, 'getProcesoByUsuarioMedico']);
  Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
 
  // ✅ Y ASEGÚRATE que estas líneas estén FUERA de cualquier grupo:
