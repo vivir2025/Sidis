@@ -51,9 +51,10 @@ class CupsContratado extends Model
     }
 
     public function categoriaCups(): BelongsTo
-    {
-        return $this->belongsTo(CategoriaCups::class);
-    }
+{
+    return $this->belongsTo(CategoriaCups::class, 'categoria_cups_id');
+}
+
 
     public function cups(): BelongsTo
     {
