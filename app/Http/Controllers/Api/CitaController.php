@@ -663,15 +663,15 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             ], 404);
         }
 
-        // ✅ OBTENER CITAS CON RELACIONES MÍNIMAS
+        // ✅ OBTENER CITAS SIN ESPECIFICAR CAMPOS (deja que Laravel maneje todo)
         $citas = Cita::with([
-            'paciente:id,uuid,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,documento',
+            'paciente',
             'agenda.proceso',
             'agenda.usuarioMedico.especialidad',
             'cupsContratado.categoriaCups',
             'cupsContratado.cups',
-            'usuarioCreador:id,uuid,primer_nombre,primer_apellido',
-            'sede:id,nombre'
+            'usuarioCreador',  // ✅ SIN :id,uuid,primer_nombre...
+            'sede'
         ])
         ->where('paciente_uuid', $paciente->uuid)
         ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA', 'EN_ATENCION'])
@@ -705,26 +705,27 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                 'consultorio' => $cita->agenda?->consultorio,
                 'proceso_nombre' => $cita->agenda?->proceso?->nombre ?? 'N/A',
                 
-                // MÉDICO
+                // MÉDICO (usando nombre_completo si existe)
                 'medico_uuid' => $cita->agenda?->usuarioMedico?->uuid,
-                'medico_nombre' => $cita->agenda?->usuarioMedico 
-                    ? trim("{$cita->agenda->usuarioMedico->primer_nombre} {$cita->agenda->usuarioMedico->segundo_nombre} {$cita->agenda->usuarioMedico->primer_apellido} {$cita->agenda->usuarioMedico->segundo_apellido}")
-                    : 'N/A',
+                'medico_nombre' => $cita->agenda?->usuarioMedico?->nombre_completo 
+                    ?? $cita->agenda?->usuarioMedico?->name 
+                    ?? 'N/A',
                 'medico_especialidad' => $cita->agenda?->usuarioMedico?->especialidad?->nombre ?? 'N/A',
                 
                 // CUPS Y CATEGORÍA
                 'cups_contratado_uuid' => $cita->cupsContratado?->uuid,
                 'cups_codigo' => $cita->cupsContratado?->cups?->codigo ?? 'N/A',
                 'cups_nombre' => $cita->cupsContratado?->cups?->nombre ?? 'N/A',
+                'categoria_cups_id' => $cita->cupsContratado?->categoriaCups?->id,
                 'categoria_cups_nombre' => $cita->cupsContratado?->categoriaCups?->nombre ?? 'N/A',
                 
                 // SEDE
                 'sede_nombre' => $cita->sede?->nombre ?? 'N/A',
                 
-                // CREADOR
-                'creado_por' => $cita->usuarioCreador 
-                    ? trim("{$cita->usuarioCreador->primer_nombre} {$cita->usuarioCreador->primer_apellido}")
-                    : 'Sistema',
+                // CREADOR (usando nombre_completo o name)
+                'creado_por' => $cita->usuarioCreador?->nombre_completo 
+                    ?? $cita->usuarioCreador?->name 
+                    ?? 'Sistema',
                 
                 'created_at' => $cita->created_at?->toISOString(),
             ];
@@ -746,7 +747,8 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
         Log::error('❌ Error obteniendo citas del paciente', [
             'paciente_uuid' => $pacienteUuid,
             'error' => $e->getMessage(),
-            'line' => $e->getLine()
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
         ]);
 
         return response()->json([
