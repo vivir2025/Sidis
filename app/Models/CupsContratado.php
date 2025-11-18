@@ -15,6 +15,9 @@ class CupsContratado extends Model
     use HasFactory, SoftDeletes;
 
     protected $table = 'cups_contratados';
+     protected $primaryKey = 'uuid';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'uuid',
