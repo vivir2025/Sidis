@@ -663,14 +663,14 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             ], 404);
         }
 
-        // ✅ OBTENER CITAS SIN ESPECIFICAR CAMPOS (deja que Laravel maneje todo)
+        // ✅ EAGER LOADING CON SNAKE_CASE
         $citas = Cita::with([
             'paciente',
             'agenda.proceso',
             'agenda.usuarioMedico.especialidad',
-            'cupsContratado.categoriaCups',
-            'cupsContratado.cups',
-            'usuarioCreador',  // ✅ SIN :id,uuid,primer_nombre...
+            'cups_contratado.categoria_cups',  // ✅ CAMBIADO
+            'cups_contratado.cups',             // ✅ CAMBIADO
+            'usuarioCreador',
             'sede'
         ])
         ->where('paciente_uuid', $paciente->uuid)
@@ -683,7 +683,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             'total' => $citas->count()
         ]);
 
-        // ✅ TRANSFORMAR CITAS
+        // ✅ TRANSFORMAR CITAS CON SNAKE_CASE
         $citasConInfo = $citas->map(function($cita) {
             return [
                 'uuid' => $cita->uuid,
@@ -705,24 +705,24 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                 'consultorio' => $cita->agenda?->consultorio,
                 'proceso_nombre' => $cita->agenda?->proceso?->nombre ?? 'N/A',
                 
-                // MÉDICO (usando nombre_completo si existe)
+                // MÉDICO
                 'medico_uuid' => $cita->agenda?->usuarioMedico?->uuid,
                 'medico_nombre' => $cita->agenda?->usuarioMedico?->nombre_completo 
                     ?? $cita->agenda?->usuarioMedico?->name 
                     ?? 'N/A',
                 'medico_especialidad' => $cita->agenda?->usuarioMedico?->especialidad?->nombre ?? 'N/A',
                 
-                // CUPS Y CATEGORÍA
-                'cups_contratado_uuid' => $cita->cupsContratado?->uuid,
-                'cups_codigo' => $cita->cupsContratado?->cups?->codigo ?? 'N/A',
-                'cups_nombre' => $cita->cupsContratado?->cups?->nombre ?? 'N/A',
-                'categoria_cups_id' => $cita->cupsContratado?->categoriaCups?->id,
-                'categoria_cups_nombre' => $cita->cupsContratado?->categoriaCups?->nombre ?? 'N/A',
+                // ✅ CUPS Y CATEGORÍA CON SNAKE_CASE
+                'cups_contratado_uuid' => $cita->cups_contratado?->uuid,
+                'cups_codigo' => $cita->cups_contratado?->cups?->codigo ?? 'N/A',
+                'cups_nombre' => $cita->cups_contratado?->cups?->nombre ?? 'N/A',
+                'categoria_cups_id' => $cita->cups_contratado?->categoria_cups?->id,
+                'categoria_cups_nombre' => $cita->cups_contratado?->categoria_cups?->nombre ?? 'N/A',
                 
                 // SEDE
                 'sede_nombre' => $cita->sede?->nombre ?? 'N/A',
                 
-                // CREADOR (usando nombre_completo o name)
+                // CREADOR
                 'creado_por' => $cita->usuarioCreador?->nombre_completo 
                     ?? $cita->usuarioCreador?->name 
                     ?? 'Sistema',

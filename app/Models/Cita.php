@@ -146,11 +146,10 @@ class Cita extends Model
         return $this->belongsTo(Agenda::class, 'agenda_uuid', 'uuid');
     }
 
-    public function cupsContratado(): BelongsTo
-    {
-        return $this->belongsTo(CupsContratado::class, 'cups_contratado_uuid', 'uuid');
-    }
-
+   public function cups_contratado(): BelongsTo
+{
+    return $this->belongsTo(CupsContratado::class, 'cups_contratado_uuid', 'uuid');
+}
     public function usuarioCreador(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'usuario_creo_cita_id');

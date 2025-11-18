@@ -36,11 +36,10 @@ class CategoriaCups extends Model
     }
 
     // Relaciones
-    public function cupsContratados(): HasMany
+    public function cups_contratados(): HasMany
     {
-        return $this->hasMany(CupsContratado::class);
+        return $this->hasMany(CupsContratado::class, 'categoria_cups_id');
     }
-
     public function cups(): HasMany
     {
         return $this->hasMany(Cups::class, 'categoria_id');
@@ -65,6 +64,6 @@ class CategoriaCups extends Model
 
     public function getTotalContratadosAttribute()
     {
-        return $this->cupsContratados()->count();
+        return $this->cups_contratados()->count();
     }
 }
