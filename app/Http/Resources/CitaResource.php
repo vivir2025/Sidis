@@ -64,22 +64,34 @@ class CitaResource extends JsonResource
             }),
             
             // CUPS Contratado
-            'cups_contratado' => $this->whenLoaded('cupsContratado', function () {
+           'cups_contratado' => $this->whenLoaded('cupsContratado', function () {
+    return [
+        'uuid' => $this->cupsContratado->uuid,
+        'tarifa' => $this->cupsContratado->tarifa,
+        
+        // ✅ AGREGAR CATEGORÍA CUPS (PRIMERA VEZ / CONTROL)
+        'categoria_cups' => $this->when(
+            $this->cupsContratado && $this->cupsContratado->relationLoaded('categoriaCups'),
+            function () {
                 return [
-                    'uuid' => $this->cupsContratado->uuid,
-                    'tarifa' => $this->cupsContratado->tarifa,
-                    'cups' => $this->when(
-                        $this->cupsContratado && $this->cupsContratado->relationLoaded('cups'),
-                        function () {
-                            return [
-                                'uuid' => $this->cupsContratado->cups->uuid,
-                                'codigo' => $this->cupsContratado->cups->codigo,
-                                'nombre' => $this->cupsContratado->cups->nombre
-                            ];
-                        }
-                    )
+                    'id' => $this->cupsContratado->categoriaCups->id,
+                    'nombre' => $this->cupsContratado->categoriaCups->nombre
                 ];
-            }),
+            }
+        ),
+        
+        'cups' => $this->when(
+            $this->cupsContratado && $this->cupsContratado->relationLoaded('cups'),
+            function () {
+                return [
+                    'uuid' => $this->cupsContratado->cups->uuid,
+                    'codigo' => $this->cupsContratado->cups->codigo,
+                    'nombre' => $this->cupsContratado->cups->nombre
+                ];
+            }
+        )
+    ];
+}),
             
             // Usuario que creó la cita
             'usuario_creador' => $this->whenLoaded('usuarioCreador', function () {
