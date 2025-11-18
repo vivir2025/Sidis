@@ -117,7 +117,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::delete('/{uuid}/firma', [UsuarioController::class, 'eliminarFirma']);
     });
 
-
+    Route::get('/pacientes/{uuid}/citas', [CitaController::class, 'citasPaciente']);
     // ================================
     // CITAS
     // ================================
