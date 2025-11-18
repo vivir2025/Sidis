@@ -693,7 +693,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
 
         // ✅ OBTENER TODAS LAS CITAS (USANDO UUID)
         $citas = Cita::with([
-            'paciente:id,uuid,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,tipo_documento_id,numero_documento',
+            'paciente:id,uuid,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,tipo_documento_id,documento',
             
             'agenda' => function($query) {
                 $query->select('id', 'uuid', 'fecha', 'consultorio', 'proceso_id', 'usuario_medico_id')
