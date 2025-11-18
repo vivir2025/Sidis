@@ -652,29 +652,46 @@ public function cambiarEstado(Request $request, string $uuid): JsonResponse
 public function citasPaciente(string $pacienteUuid): JsonResponse
 {
     try {
-        Log::info('📋 API CitaController@citasPaciente - Obteniendo citas del paciente', [
+        Log::info('📋 API CitaController@citasPaciente - Inicio', [
             'paciente_uuid' => $pacienteUuid
         ]);
 
-        // ✅ VERIFICAR QUE EL PACIENTE EXISTE
         $paciente = Paciente::where('uuid', $pacienteUuid)->first();
 
         if (!$paciente) {
-            Log::warning('⚠️ Paciente no encontrado', [
-                'paciente_uuid' => $pacienteUuid
-            ]);
-
             return response()->json([
                 'success' => false,
                 'message' => 'Paciente no encontrado'
             ], 404);
         }
 
-        // ✅ OBTENER CITAS CON TODAS LAS RELACIONES
+        // ✅ OBTENER UNA CITA PARA DEBUG
+        $citaDebug = Cita::with([
+            'agenda.proceso',
+            'cupsContratado.categoriaCups',
+            'cupsContratado.cups'
+        ])
+        ->where('paciente_id', $paciente->id)
+        ->first();
+
+        Log::info('🔍 DEBUG: Primera cita del paciente', [
+            'cita_uuid' => $citaDebug?->uuid,
+            'tiene_agenda' => $citaDebug?->agenda ? 'SI' : 'NO',
+            'agenda_id' => $citaDebug?->agenda_id,
+            'tiene_proceso' => $citaDebug?->agenda?->proceso ? 'SI' : 'NO',
+            'proceso_id' => $citaDebug?->agenda?->proceso_id,
+            'proceso_nombre' => $citaDebug?->agenda?->proceso?->nombre,
+            'tiene_cups_contratado' => $citaDebug?->cupsContratado ? 'SI' : 'NO',
+            'cups_contratado_id' => $citaDebug?->cups_contratado_id,
+            'tiene_categoria' => $citaDebug?->cupsContratado?->categoriaCups ? 'SI' : 'NO',
+            'categoria_id' => $citaDebug?->cupsContratado?->categoria_cups_id,
+            'categoria_nombre' => $citaDebug?->cupsContratado?->categoriaCups?->nombre,
+        ]);
+
+        // ✅ OBTENER TODAS LAS CITAS
         $citas = Cita::with([
             'paciente:id,uuid,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,tipo_documento_id,numero_documento',
             
-            // ✅ AGENDA CON PROCESO Y MÉDICO
             'agenda' => function($query) {
                 $query->select('id', 'uuid', 'fecha', 'consultorio', 'proceso_id', 'usuario_medico_id')
                     ->with([
@@ -684,7 +701,6 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                     ]);
             },
             
-            // ✅ CUPS CONTRATADO CON CATEGORÍA Y CUPS
             'cupsContratado' => function($query) {
                 $query->select('id', 'uuid', 'cups_id', 'contrato_id', 'categoria_cups_id', 'valor_particular', 'valor_contrato')
                     ->with([
@@ -703,29 +719,19 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
         ->orderBy('fecha_inicio', 'desc')
         ->get();
 
-        Log::info('✅ Citas del paciente obtenidas exitosamente', [
-            'paciente_uuid' => $pacienteUuid,
-            'paciente_nombre' => trim("{$paciente->primer_nombre} {$paciente->primer_apellido}"),
-            'total_citas' => $citas->count(),
-            
-            // ✅ DEBUG: VERIFICAR SI LAS RELACIONES ESTÁN CARGADAS
+        Log::info('✅ Citas obtenidas', [
+            'total' => $citas->count(),
             'primera_cita_debug' => [
                 'uuid' => $citas->first()?->uuid,
                 'tiene_agenda' => $citas->first()?->agenda ? 'SI' : 'NO',
                 'tiene_proceso' => $citas->first()?->agenda?->proceso ? 'SI' : 'NO',
                 'proceso_nombre' => $citas->first()?->agenda?->proceso?->nombre,
-                'tiene_cups_contratado' => $citas->first()?->cupsContratado ? 'SI' : 'NO',
-                'tiene_categoria_cups' => $citas->first()?->cupsContratado?->categoriaCups ? 'SI' : 'NO',
+                'tiene_cups' => $citas->first()?->cupsContratado ? 'SI' : 'NO',
                 'categoria_nombre' => $citas->first()?->cupsContratado?->categoriaCups?->nombre,
-                'cups_codigo' => $citas->first()?->cupsContratado?->cups?->codigo,
-                
-                // ✅ VERIFICAR IDs
-                'agenda_id' => $citas->first()?->agenda_id,
-                'cups_contratado_id' => $citas->first()?->cups_contratado_id,
             ]
         ]);
 
-        // ✅ TRANSFORMAR CITAS
+        // TRANSFORMAR CITAS
         $citasConInfo = $citas->map(function($cita) {
             $agenda = $cita->agenda;
             $proceso = $agenda?->proceso;
@@ -735,7 +741,6 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             $categoriaCups = $cupsContratado?->categoriaCups;
             
             return [
-                // INFORMACIÓN BÁSICA
                 'uuid' => $cita->uuid,
                 'fecha' => $cita->fecha,
                 'fecha_inicio' => $cita->fecha_inicio,
@@ -746,13 +751,16 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                 'motivo_consulta' => $cita->motivo,
                 'patologia' => $cita->patologia,
                 
+                // IDs DIRECTOS PARA DEBUG
+                'agenda_id' => $cita->agenda_id,
+                'cups_contratado_id' => $cita->cups_contratado_id,
+                
                 // AGENDA
                 'agenda_uuid' => $agenda?->uuid,
-                'agenda_id' => $cita->agenda_id, // ✅ ID DIRECTO
                 'consultorio' => $agenda?->consultorio,
                 'fecha_agenda' => $agenda?->fecha,
                 
-                // PROCESO (DESDE AGENDA)
+                // PROCESO
                 'proceso_id' => $proceso?->id,
                 'proceso_nombre' => $proceso?->nombre ?? 'N/A',
                 'proceso_descripcion' => $proceso?->descripcion,
@@ -765,14 +773,13 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                     : 'N/A',
                 'medico_especialidad' => $medico?->especialidad?->nombre ?? 'N/A',
                 
-                // CUPS CONTRATADO
+                // CUPS
                 'cups_contratado_uuid' => $cupsContratado?->uuid,
-                'cups_contratado_id' => $cita->cups_contratado_id, // ✅ ID DIRECTO
                 'cups_codigo' => $cups?->codigo ?? 'N/A',
                 'cups_nombre' => $cups?->nombre ?? 'N/A',
                 'cups_origen' => $cups?->origen,
                 
-                // CATEGORÍA CUPS (CRÍTICO PARA PRIMERA VEZ)
+                // CATEGORÍA CUPS
                 'categoria_cups_id' => $categoriaCups?->id,
                 'categoria_cups_nombre' => $categoriaCups?->nombre ?? 'N/A',
                 'categoria_cups_descripcion' => $categoriaCups?->descripcion,
@@ -786,46 +793,17 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                     ? trim("{$cita->usuarioCreador->primer_nombre} {$cita->usuarioCreador->primer_apellido}")
                     : 'Sistema',
                 
-                // TIMESTAMPS
                 'created_at' => $cita->created_at?->toISOString(),
                 'updated_at' => $cita->updated_at?->toISOString(),
             ];
         });
-
-        // ESTADÍSTICAS
-        $estadisticas = [
-            'total_citas' => $citas->count(),
-            'citas_por_estado' => [
-                'PROGRAMADA' => $citas->where('estado', 'PROGRAMADA')->count(),
-                'ATENDIDA' => $citas->where('estado', 'ATENDIDA')->count(),
-                'CONFIRMADA' => $citas->where('estado', 'CONFIRMADA')->count(),
-                'EN_ATENCION' => $citas->where('estado', 'EN_ATENCION')->count(),
-            ],
-            'citas_por_proceso' => $citas->map(function($cita) {
-                return $cita->agenda?->proceso?->nombre ?? 'Sin proceso';
-            })->countBy()->toArray(),
-            'ultima_cita' => $citas->first()?->fecha,
-            'primera_cita_historica' => $citas->last()?->fecha,
-            'citas_este_mes' => $citas->filter(function($cita) {
-                return \Carbon\Carbon::parse($cita->fecha)->isCurrentMonth();
-            })->count(),
-            'tiene_primera_vez_medicina_general' => $citas->contains(function($cita) {
-                $procesoNombre = $cita->agenda?->proceso?->nombre;
-                $categoriaNombre = $cita->cupsContratado?->categoriaCups?->nombre;
-                
-                return $procesoNombre === 'MEDICINA GENERAL' 
-                    && $categoriaNombre === 'PRIMERA VEZ';
-            })
-        ];
 
         return response()->json([
             'success' => true,
             'data' => $citasConInfo,
             'meta' => [
                 'paciente_uuid' => $pacienteUuid,
-                'paciente_nombre' => trim("{$paciente->primer_nombre} {$paciente->segundo_nombre} {$paciente->primer_apellido} {$paciente->segundo_apellido}"),
-                'paciente_documento' => $paciente->numero_documento,
-                'estadisticas' => $estadisticas
+                'total_citas' => $citas->count(),
             ],
             'message' => 'Citas del paciente obtenidas exitosamente'
         ]);
@@ -834,7 +812,6 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
         Log::error('❌ Error obteniendo citas del paciente', [
             'paciente_uuid' => $pacienteUuid,
             'error' => $e->getMessage(),
-            'file' => $e->getFile(),
             'line' => $e->getLine(),
             'trace' => $e->getTraceAsString()
         ]);
