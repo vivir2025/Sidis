@@ -646,9 +646,6 @@ public function cambiarEstado(Request $request, string $uuid): JsonResponse
     }
 }
 
-  /**
-     * ✅ AGREGAR ESTE MÉTODO AQUÍ (DESPUÉS DE cambiarEstado Y ANTES DEL CIERRE DE LA CLASE)
-     */
 public function citasPaciente(string $pacienteUuid): JsonResponse
 {
     try {
@@ -656,6 +653,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             'paciente_uuid' => $pacienteUuid
         ]);
 
+        // ✅ BUSCAR PACIENTE POR UUID
         $paciente = Paciente::where('uuid', $pacienteUuid)->first();
 
         if (!$paciente) {
@@ -665,30 +663,35 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             ], 404);
         }
 
+        // ✅ VERIFICAR QUÉ COLUMNA USA LA TABLA CITAS
+        $primeraColumna = \DB::select("SHOW COLUMNS FROM citas LIKE 'paciente%'");
+        Log::info('🔍 Columnas de paciente en citas', [
+            'columnas' => $primeraColumna
+        ]);
+
         // ✅ OBTENER UNA CITA PARA DEBUG
         $citaDebug = Cita::with([
             'agenda.proceso',
             'cupsContratado.categoriaCups',
             'cupsContratado.cups'
         ])
-        ->where('paciente_id', $paciente->id)
+        ->where('paciente_uuid', $paciente->uuid)  // ✅ CAMBIO AQUÍ: UUID
         ->first();
 
         Log::info('🔍 DEBUG: Primera cita del paciente', [
             'cita_uuid' => $citaDebug?->uuid,
+            'paciente_uuid_en_cita' => $citaDebug?->paciente_uuid,
+            'agenda_uuid' => $citaDebug?->agenda_uuid,
+            'cups_contratado_uuid' => $citaDebug?->cups_contratado_uuid,
             'tiene_agenda' => $citaDebug?->agenda ? 'SI' : 'NO',
-            'agenda_id' => $citaDebug?->agenda_id,
             'tiene_proceso' => $citaDebug?->agenda?->proceso ? 'SI' : 'NO',
-            'proceso_id' => $citaDebug?->agenda?->proceso_id,
             'proceso_nombre' => $citaDebug?->agenda?->proceso?->nombre,
             'tiene_cups_contratado' => $citaDebug?->cupsContratado ? 'SI' : 'NO',
-            'cups_contratado_id' => $citaDebug?->cups_contratado_id,
             'tiene_categoria' => $citaDebug?->cupsContratado?->categoriaCups ? 'SI' : 'NO',
-            'categoria_id' => $citaDebug?->cupsContratado?->categoria_cups_id,
             'categoria_nombre' => $citaDebug?->cupsContratado?->categoriaCups?->nombre,
         ]);
 
-        // ✅ OBTENER TODAS LAS CITAS
+        // ✅ OBTENER TODAS LAS CITAS (USANDO UUID)
         $citas = Cita::with([
             'paciente:id,uuid,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,tipo_documento_id,numero_documento',
             
@@ -713,7 +716,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             'usuarioCreador:id,uuid,primer_nombre,primer_apellido',
             'sede:id,nombre,direccion'
         ])
-        ->where('paciente_id', $paciente->id)
+        ->where('paciente_uuid', $paciente->uuid)  // ✅ CAMBIO AQUÍ: UUID
         ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA', 'EN_ATENCION'])
         ->orderBy('fecha', 'desc')
         ->orderBy('fecha_inicio', 'desc')
@@ -731,7 +734,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             ]
         ]);
 
-        // TRANSFORMAR CITAS
+        // ✅ TRANSFORMAR CITAS
         $citasConInfo = $citas->map(function($cita) {
             $agenda = $cita->agenda;
             $proceso = $agenda?->proceso;
@@ -750,10 +753,6 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                 'observaciones' => $cita->nota,
                 'motivo_consulta' => $cita->motivo,
                 'patologia' => $cita->patologia,
-                
-                // IDs DIRECTOS PARA DEBUG
-                'agenda_id' => $cita->agenda_id,
-                'cups_contratado_id' => $cita->cups_contratado_id,
                 
                 // AGENDA
                 'agenda_uuid' => $agenda?->uuid,
