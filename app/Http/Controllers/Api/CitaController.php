@@ -645,7 +645,6 @@ public function cambiarEstado(Request $request, string $uuid): JsonResponse
         ], 500);
     }
 }
-
 public function citasPaciente(string $pacienteUuid): JsonResponse
 {
     try {
@@ -663,13 +662,13 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             ], 404);
         }
 
-        // ✅ EAGER LOADING CON SNAKE_CASE
+        // ✅ EAGER LOADING CON CAMELCASE (CORREGIDO)
         $citas = Cita::with([
             'paciente',
             'agenda.proceso',
             'agenda.usuarioMedico.especialidad',
-            'cups_contratado.categoria_cups',  // ✅ CAMBIADO
-            'cups_contratado.cups',             // ✅ CAMBIADO
+            'cupsContratado.categoriaCups',  // ✅ CAMBIADO A CAMELCASE
+            'cupsContratado.cups',            // ✅ CAMBIADO A CAMELCASE
             'usuarioCreador',
             'sede'
         ])
@@ -683,7 +682,7 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
             'total' => $citas->count()
         ]);
 
-        // ✅ TRANSFORMAR CITAS CON SNAKE_CASE
+        // ✅ TRANSFORMAR CITAS CON CAMELCASE (CORREGIDO)
         $citasConInfo = $citas->map(function($cita) {
             return [
                 'uuid' => $cita->uuid,
@@ -712,12 +711,12 @@ public function citasPaciente(string $pacienteUuid): JsonResponse
                     ?? 'N/A',
                 'medico_especialidad' => $cita->agenda?->usuarioMedico?->especialidad?->nombre ?? 'N/A',
                 
-                // ✅ CUPS Y CATEGORÍA CON SNAKE_CASE
-                'cups_contratado_uuid' => $cita->cups_contratado?->uuid,
-                'cups_codigo' => $cita->cups_contratado?->cups?->codigo ?? 'N/A',
-                'cups_nombre' => $cita->cups_contratado?->cups?->nombre ?? 'N/A',
-                'categoria_cups_id' => $cita->cups_contratado?->categoria_cups?->id,
-                'categoria_cups_nombre' => $cita->cups_contratado?->categoria_cups?->nombre ?? 'N/A',
+                // ✅ CUPS Y CATEGORÍA CON CAMELCASE (CORREGIDO)
+                'cups_contratado_uuid' => $cita->cupsContratado?->uuid,
+                'cups_codigo' => $cita->cupsContratado?->cups?->codigo ?? 'N/A',
+                'cups_nombre' => $cita->cupsContratado?->cups?->nombre ?? 'N/A',
+                'categoria_cups_id' => $cita->cupsContratado?->categoriaCups?->id,
+                'categoria_cups_nombre' => $cita->cupsContratado?->categoriaCups?->nombre ?? 'N/A',
                 
                 // SEDE
                 'sede_nombre' => $cita->sede?->nombre ?? 'N/A',
