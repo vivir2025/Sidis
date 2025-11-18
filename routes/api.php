@@ -117,7 +117,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::delete('/{uuid}/firma', [UsuarioController::class, 'eliminarFirma']);
     });
 
-    Route::get('/pacientes/{uuid}/citas', [CitaController::class, 'citasPaciente']);
+    
     // ================================
     // CITAS
     // ================================
@@ -133,6 +133,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
          // ✅ AGREGAR ESTAS TRES LÍNEAS PARA CAMBIAR ESTADO
    
     });
+    
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
 Route::get('/agendas/proceso-by-usuario/{usuario_uuid}', [AgendaController::class, 'getProcesoByUsuarioMedico']);
  Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
@@ -141,6 +142,7 @@ Route::get('/agendas/proceso-by-usuario/{usuario_uuid}', [AgendaController::clas
 Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
 Route::patch('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
 Route::post('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+Route::get('/pacientes/{uuid}/citas', [CitaController::class, 'citasPaciente']);
  // ================================
 // AGENDAS
 // ================================
