@@ -2739,8 +2739,7 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita.paciente', // Datos del paciente
                 'cita.agenda', // Agenda de la cita
                 'cita.paciente.empresa',
-                'cita.paciente.ocupacion', 
-                'cita.paciente.estadoCivil',   
+                'cita.paciente.ocupaciones',  
                 'cita.paciente.regimen',   // ← Relación del paciente
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
@@ -2814,6 +2813,7 @@ private function getCitaIdFromUuid($citaUuid)
                                                 ($historia->cita->paciente->segundo_apellido ?? '')),
                         'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
                         'documento' => $historia->cita->paciente->documento ?? 'N/A',
+                        'estado_civil' => $historia->cita->paciente->estado_civil?? 'N/A',
                         'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
                         'sexo' => $historia->cita->paciente->sexo ?? null,
                         'telefono' => $historia->cita->paciente->telefono ?? null,
@@ -2833,14 +2833,9 @@ private function getCitaIdFromUuid($citaUuid)
                         ] : null,
 
                         // ✅ OCUPACIÓN (SI EXISTE)
-                        'ocupacion' => $historia->cita->paciente->ocupacion ? [
-                        'uuid' => $historia->cita->paciente->ocupacion->uuid ?? $historia->cita->paciente->ocupacion->id,
-                        'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
-                        ] : null,
-
-                        'estado_civil' => $historia->cita->paciente->estadoCivil ? [
-                        'uuid' => $historia->cita->paciente->estadoCivil->uuid ?? $historia->cita->paciente->estadoCivil->id,
-                        'nombre' => $historia->cita->paciente->estadoCivil->nombre ?? 'N/A',
+                        'ocupaciones' => $historia->cita->paciente->ocupaciones ? [
+                        'uuid' => $historia->cita->paciente->ocupaciones->uuid ?? $historia->cita->paciente->ocupaciones->id,
+                        'nombre' => $historia->cita->paciente->ocupaciones->nombre ?? 'N/A',
                         ] : null,
                     ] : null,
                     
