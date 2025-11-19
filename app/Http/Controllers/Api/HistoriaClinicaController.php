@@ -2738,6 +2738,9 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita',
                 'cita.paciente', // Datos del paciente
                 'cita.agenda', // Agenda de la cita
+                'cita.paciente.empresa',
+                'cita.paciente.ocupacion', 
+                'cita.paciente.estadoCivil',   
                 'cita.paciente.regimen',   // ← Relación del paciente
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
@@ -2821,6 +2824,23 @@ private function getCitaIdFromUuid($citaUuid)
                         'uuid' => $historia->cita->paciente->regimen->uuid ?? $historia->cita->paciente->regimen->id,
                         'nombre' => $historia->cita->paciente->regimen->nombre ?? 'N/A',
                         'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
+                        ] : null,
+                            // ✅ EMPRESA (SI EXISTE)
+                        'empresa' => $historia->cita->paciente->empresa ? [
+                        'uuid' => $historia->cita->paciente->empresa->uuid ?? $historia->cita->paciente->empresa->id,
+                        'nombre' => $historia->cita->paciente->empresa->nombre ?? 'N/A',
+                        'nit' => $historia->cita->paciente->empresa->nit ?? null,
+                        ] : null,
+
+                        // ✅ OCUPACIÓN (SI EXISTE)
+                        'ocupacion' => $historia->cita->paciente->ocupacion ? [
+                        'uuid' => $historia->cita->paciente->ocupacion->uuid ?? $historia->cita->paciente->ocupacion->id,
+                        'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
+                        ] : null,
+
+                        'estado_civil' => $historia->cita->paciente->estadoCivil ? [
+                        'uuid' => $historia->cita->paciente->estadoCivil->uuid ?? $historia->cita->paciente->estadoCivil->id,
+                        'nombre' => $historia->cita->paciente->estadoCivil->nombre ?? 'N/A',
                         ] : null,
                     ] : null,
                     
