@@ -200,33 +200,106 @@ class HistoriaClinicaController extends Controller
      * ✅ MÉTODO AUXILIAR PARA OBTENER TIPO DE CONSULTA
      * Navega: Historia → Cita → CupsContratado → CategoriaCups
      */
-    private function obtenerTipoConsulta($historia): ?string
-    {
-        try {
-            // Verificar si existe la cadena de relaciones
-            if (!$historia->cita || 
-                !$historia->cita->cupsContratado || 
-                !$historia->cita->cupsContratado->categoriaCups) {
-                return null;
-            }
+   /**
+ * ✅ OBTENER TIPO DE CONSULTA CON DEBUG COMPLETO
+ */
+private function obtenerTipoConsulta($historia): ?string
+{
+    try {
+        Log::info('🔍 DEBUG - Iniciando obtenerTipoConsulta', [
+            'historia_uuid' => $historia->uuid ?? null,
+            'historia_id' => $historia->id ?? null
+        ]);
 
-            $categoriaCups = $historia->cita->cupsContratado->categoriaCups;
-            
-            // Determinar tipo según el ID de la categoría
-            return match ($categoriaCups->id) {
-                1 => 'PRIMERA VEZ',
-                2 => 'CONTROL',
-                default => $categoriaCups->nombre ?? null
-            };
-            
-        } catch (\Exception $e) {
-            Log::warning('⚠️ Error obteniendo tipo consulta', [
-                'historia_id' => $historia->id ?? null,
-                'error' => $e->getMessage()
+        // ✅ PASO 1: Verificar si existe la cita
+        if (!$historia->cita) {
+            Log::warning('⚠️ Historia sin cita', [
+                'historia_uuid' => $historia->uuid ?? null
             ]);
             return null;
         }
+
+        Log::info('✅ Cita encontrada', [
+            'cita_id' => $historia->cita->id ?? null,
+            'cita_uuid' => $historia->cita->uuid ?? null,
+            'cups_contratado_id' => $historia->cita->cups_contratado_id ?? 'NULL'
+        ]);
+
+        // ✅ PASO 2: Verificar si existe cups_contratado_id
+        if (!isset($historia->cita->cups_contratado_id) || empty($historia->cita->cups_contratado_id)) {
+            Log::warning('⚠️ Cita sin cups_contratado_id', [
+                'cita_id' => $historia->cita->id ?? null,
+                'cups_contratado_id' => $historia->cita->cups_contratado_id ?? 'NULL'
+            ]);
+            return null;
+        }
+
+        // ✅ PASO 3: Verificar si la relación cupsContratado está cargada
+        if (!$historia->cita->cupsContratado) {
+            Log::warning('⚠️ Relación cupsContratado NO cargada', [
+                'cita_id' => $historia->cita->id ?? null,
+                'cups_contratado_id' => $historia->cita->cups_contratado_id
+            ]);
+            return null;
+        }
+
+        Log::info('✅ CupsContratado encontrado', [
+            'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
+            'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id ?? 'NULL'
+        ]);
+
+        // ✅ PASO 4: Verificar si existe categoria_cups_id
+        if (!isset($historia->cita->cupsContratado->categoria_cups_id) || 
+            empty($historia->cita->cupsContratado->categoria_cups_id)) {
+            Log::warning('⚠️ CupsContratado sin categoria_cups_id', [
+                'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
+                'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id ?? 'NULL'
+            ]);
+            return null;
+        }
+
+        // ✅ PASO 5: Verificar si la relación categoriaCups está cargada
+        if (!$historia->cita->cupsContratado->categoriaCups) {
+            Log::warning('⚠️ Relación categoriaCups NO cargada', [
+                'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
+                'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id
+            ]);
+            return null;
+        }
+
+        $categoriaCups = $historia->cita->cupsContratado->categoriaCups;
+
+        Log::info('✅ CategoriaCups encontrada', [
+            'categoria_id' => $categoriaCups->id ?? null,
+            'categoria_nombre' => $categoriaCups->nombre ?? 'NULL'
+        ]);
+
+        // ✅ PASO 6: Determinar tipo según el ID de la categoría
+        $tipoConsulta = match ((int)$categoriaCups->id) {
+            1 => 'PRIMERA VEZ',
+            2 => 'CONTROL',
+            default => $categoriaCups->nombre ?? null
+        };
+
+        Log::info('✅ Tipo consulta determinado', [
+            'historia_uuid' => $historia->uuid ?? null,
+            'categoria_id' => $categoriaCups->id,
+            'tipo_consulta' => $tipoConsulta
+        ]);
+
+        return $tipoConsulta;
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Error obteniendo tipo consulta', [
+            'historia_uuid' => $historia->uuid ?? null,
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile()),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
     }
+}
 
 
 public function store(Request $request)
