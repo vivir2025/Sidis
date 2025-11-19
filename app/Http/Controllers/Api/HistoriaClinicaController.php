@@ -2816,6 +2816,12 @@ private function getCitaIdFromUuid($citaUuid)
                         'telefono' => $historia->cita->paciente->telefono ?? null,
                         'direccion' => $historia->cita->paciente->direccion ?? null,
                         'email' => $historia->cita->paciente->email ?? null,
+                            // ✅ RÉGIMEN (← ESTO ES LO QUE FALTABA)
+                        'regimen' => $historia->cita->paciente->regimen ? [
+                        'uuid' => $historia->cita->paciente->regimen->uuid ?? $historia->cita->paciente->regimen->id,
+                        'nombre' => $historia->cita->paciente->regimen->nombre ?? 'N/A',
+                        'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
+                        ] : null,
                     ] : null,
                     
                     // ✅ AGENDA CON PROFESIONAL Y ESPECIALIDAD
