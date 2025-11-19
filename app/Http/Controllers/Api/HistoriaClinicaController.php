@@ -2848,34 +2848,53 @@ private function getCitaIdFromUuid($citaUuid)
                     ] : null,
                     
                     // ✅ AGENDA CON PROFESIONAL Y ESPECIALIDAD
-                    'agenda' => $historia->cita && $historia->cita->agenda ? [
-                        'uuid' => $historia->cita->agenda->uuid,
+                   'agenda' => $historia->cita && $historia->cita->agenda ? [
+                    'uuid' => $historia->cita->agenda->uuid,
+                    
+                    // ✅ PROCESO (ESPECIALIDAD)
+                    'proceso' => $historia->cita->agenda->proceso ? [
+                        'uuid' => $historia->cita->agenda->proceso->uuid,
+                        'nombre' => $historia->cita->agenda->proceso->nombre ?? 'N/A',
+                    ] : null,
+                    
+                    // ✅ PROFESIONAL (MÉDICO ASIGNADO)
+                    'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
+                        'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
                         
-                        // ✅ PROCESO (ESPECIALIDAD)
-                        'proceso' => $historia->cita->agenda->proceso ? [
-                            'uuid' => $historia->cita->agenda->proceso->uuid,
-                            'nombre' => $historia->cita->agenda->proceso->nombre ?? 'N/A',
+                        // ✅ NOMBRE COMPLETO
+                        'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
+                                            trim(($historia->cita->agenda->usuarioMedico->nombre ?? '') . ' ' . 
+                                                ($historia->cita->agenda->usuarioMedico->apellido ?? '')),
+                        
+                        // ✅ DOCUMENTO
+                        'documento' => $historia->cita->agenda->usuarioMedico->documento ?? null,
+                        
+                        // ✅ REGISTRO PROFESIONAL (← CORREGIDO)
+                        'registro_profesional' => $historia->cita->agenda->usuarioMedico->registro_profesional ?? null,
+                        
+                        // ✅ FIRMA EN BASE64 (← NUEVO CAMPO)
+                        'firma' => $historia->cita->agenda->usuarioMedico->firma ?? null,
+                        
+                        // ✅ ESPECIALIDAD
+                        'especialidad' => $historia->cita->agenda->usuarioMedico->especialidad ? [
+                            'uuid' => $historia->cita->agenda->usuarioMedico->especialidad->uuid,
+                            'nombre' => $historia->cita->agenda->usuarioMedico->especialidad->nombre,
                         ] : null,
                         
-                        // ✅ PROFESIONAL
-                        'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
-                            'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
-                            'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
-                                                trim(($historia->cita->agenda->usuarioMedico->primer_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->agenda->usuarioMedico->primer_apellido ?? '')),
-                            'documento' => $historia->cita->agenda->usuarioMedico->documento ?? null,
-                            'registro_medico' => $historia->cita->agenda->usuarioMedico->registro_medico ?? null,
-                            'especialidad' => $historia->cita->agenda->usuarioMedico->especialidad ? [
-                                'uuid' => $historia->cita->agenda->usuarioMedico->especialidad->uuid,
-                                'nombre' => $historia->cita->agenda->usuarioMedico->especialidad->nombre,
-                            ] : null,
-                        ] : ($historia->cita->agenda->usuario ? [
+                    ] : (
+                        // ✅ FALLBACK: SI NO HAY MÉDICO ASIGNADO, USAR USUARIO QUE CREÓ LA AGENDA
+                        $historia->cita->agenda->usuario ? [
                             'uuid' => $historia->cita->agenda->usuario->uuid,
                             'nombre_completo' => $historia->cita->agenda->usuario->nombre_completo ?? 
-                                                trim(($historia->cita->agenda->usuario->primer_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->agenda->usuario->primer_apellido ?? '')),
-                        ] : null),
-                    ] : null,
+                                                trim(($historia->cita->agenda->usuario->nombre ?? '') . ' ' . 
+                                                    ($historia->cita->agenda->usuario->apellido ?? '')),
+                            'documento' => $historia->cita->agenda->usuario->documento ?? null,
+                            'registro_profesional' => $historia->cita->agenda->usuario->registro_profesional ?? null,
+                            'firma' => $historia->cita->agenda->usuario->firma ?? null, // ✅ FIRMA TAMBIÉN AQUÍ
+                        ] : null
+                    ),
+                ] : null,
+
                 ],
                 
                 // ═══════════════════════════════════════════
