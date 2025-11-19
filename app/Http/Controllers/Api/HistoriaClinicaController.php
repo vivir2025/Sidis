@@ -2741,6 +2741,7 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita.paciente.empresa',
                 'cita.paciente.regimen',   // ← Relación del paciente
                 'cita.paciente.ocupacion',  
+                'cita.paciente.brigada',
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
                 'cita.agenda.usuarioMedico.especialidad', // Especialidad del médico
@@ -2838,6 +2839,12 @@ private function getCitaIdFromUuid($citaUuid)
                         'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
                         'codigo' => $historia->cita->paciente->ocupacion->codigo ?? null,
                     ] : null,
+
+                    'brigada' => $historia->cita->paciente->brigada ? [
+                    'uuid' => $historia->cita->paciente->brigada->uuid ?? $historia->cita->paciente->brigada->id,
+                    'nombre' => $historia->cita->paciente->brigada->nombre ?? 'N/A',
+                    ] : null,
+                    
                     ] : null,
                     
                     // ✅ AGENDA CON PROFESIONAL Y ESPECIALIDAD
