@@ -2738,9 +2738,9 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita',
                 'cita.paciente', // Datos del paciente
                 'cita.agenda', // Agenda de la cita
-                'cita.paciente.empresas',
-                'cita.paciente.ocupaciones',  
+                'cita.paciente.empresa',
                 'cita.paciente.regimen',   // ← Relación del paciente
+                'cita.paciente.ocupacion',  
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
                 'cita.agenda.usuarioMedico.especialidad', // Especialidad del médico
@@ -2813,7 +2813,7 @@ private function getCitaIdFromUuid($citaUuid)
                                                 ($historia->cita->paciente->segundo_apellido ?? '')),
                         'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
                         'documento' => $historia->cita->paciente->documento ?? 'N/A',
-                        'estado_civil' => $historia->cita->paciente->estado_civil?? 'N/A',
+                        'estado_civil' => $historia->cita->paciente->estado_civil ?? null,
                         'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
                         'sexo' => $historia->cita->paciente->sexo ?? null,
                         'telefono' => $historia->cita->paciente->telefono ?? null,
@@ -2825,18 +2825,19 @@ private function getCitaIdFromUuid($citaUuid)
                         'nombre' => $historia->cita->paciente->regimen->nombre ?? 'N/A',
                         'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
                         ] : null,
-                            // ✅ EMPRESA (SI EXISTE)
-                        'empresas' => $historia->cita->paciente->empresas ? [
-                        'uuid' => $historia->cita->paciente->empresas->uuid ?? $historia->cita->paciente->empresas->id,
-                        'nombre' => $historia->cita->paciente->empresas->nombre ?? 'N/A',
-                        'nit' => $historia->cita->paciente->empresas->nit ?? null,
-                        ] : null,
+                    // ✅ EMPRESA (IGUAL QUE RÉGIMEN)
+                    'empresa' => $historia->cita->paciente->empresa ? [
+                        'uuid' => $historia->cita->paciente->empresa->uuid ?? $historia->cita->paciente->empresa->id,
+                        'nombre' => $historia->cita->paciente->empresa->nombre ?? 'N/A',
+                        'nit' => $historia->cita->paciente->empresa->nit ?? null,
+                    ] : null,
 
-                        // ✅ OCUPACIÓN (SI EXISTE)
-                        'ocupaciones' => $historia->cita->paciente->ocupaciones ? [
-                        'uuid' => $historia->cita->paciente->ocupaciones->uuid ?? $historia->cita->paciente->ocupaciones->id,
-                        'nombre' => $historia->cita->paciente->ocupaciones->nombre ?? 'N/A',
-                        ] : null,
+                    // ✅ OCUPACIÓN (IGUAL QUE RÉGIMEN)
+                    'ocupacion' => $historia->cita->paciente->ocupacion ? [
+                        'uuid' => $historia->cita->paciente->ocupacion->uuid ?? $historia->cita->paciente->ocupacion->id,
+                        'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
+                        'codigo' => $historia->cita->paciente->ocupacion->codigo ?? null,
+                    ] : null,
                     ] : null,
                     
                     // ✅ AGENDA CON PROFESIONAL Y ESPECIALIDAD
