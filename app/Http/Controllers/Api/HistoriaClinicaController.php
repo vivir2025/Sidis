@@ -2738,6 +2738,7 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita',
                 'cita.paciente', // Datos del paciente
                 'cita.agenda', // Agenda de la cita
+                'cita.paciente.regimen',   // ← Relación del paciente
                 'cita.agenda.usuario', // Usuario que creó la agenda
                 'cita.agenda.usuarioMedico', // Médico asignado
                 'cita.agenda.usuarioMedico.especialidad', // Especialidad del médico
