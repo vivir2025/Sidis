@@ -2738,7 +2738,7 @@ private function getCitaIdFromUuid($citaUuid)
                 'cita',
                 'cita.paciente', // Datos del paciente
                 'cita.agenda', // Agenda de la cita
-                'cita.paciente.empresa',
+                'cita.paciente.empresas',
                 'cita.paciente.ocupaciones',  
                 'cita.paciente.regimen',   // ← Relación del paciente
                 'cita.agenda.usuario', // Usuario que creó la agenda
@@ -2826,10 +2826,10 @@ private function getCitaIdFromUuid($citaUuid)
                         'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
                         ] : null,
                             // ✅ EMPRESA (SI EXISTE)
-                        'empresa' => $historia->cita->paciente->empresa ? [
-                        'uuid' => $historia->cita->paciente->empresa->uuid ?? $historia->cita->paciente->empresa->id,
-                        'nombre' => $historia->cita->paciente->empresa->nombre ?? 'N/A',
-                        'nit' => $historia->cita->paciente->empresa->nit ?? null,
+                        'empresas' => $historia->cita->paciente->empresas ? [
+                        'uuid' => $historia->cita->paciente->empresas->uuid ?? $historia->cita->paciente->empresas->id,
+                        'nombre' => $historia->cita->paciente->empresas->nombre ?? 'N/A',
+                        'nit' => $historia->cita->paciente->empresas->nit ?? null,
                         ] : null,
 
                         // ✅ OCUPACIÓN (SI EXISTE)
