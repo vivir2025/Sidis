@@ -216,162 +216,193 @@ class CitaController extends Controller
         }
     }
 
-    private function asignarCupsAutomatico(string $pacienteUuid, string $agendaUuid): array
-    {
-        try {
-            Log::info('🔍 Asignando CUPS automático', [
-                'paciente_uuid' => $pacienteUuid,
-                'agenda_uuid' => $agendaUuid
+    /**
+ * 🎯 ASIGNAR AUTOMÁTICAMENTE EL CUPS CORRECTO
+ * "ESPECIAL CONTROL" = MEDICINA GENERAL (solo cambia el nombre en la vista)
+ */
+private function asignarCupsAutomatico(string $pacienteUuid, string $agendaUuid): array
+{
+    try {
+        Log::info('🔍 Asignando CUPS automático', [
+            'paciente_uuid' => $pacienteUuid,
+            'agenda_uuid' => $agendaUuid
+        ]);
+
+        // ✅ 1. OBTENER LA AGENDA Y SU PROCESO
+        $agenda = \App\Models\Agenda::where('uuid', $agendaUuid)
+            ->where('estado', 'ACTIVO')
+            ->with('proceso')
+            ->first();
+
+        if (!$agenda) {
+            return [
+                'success' => false,
+                'error' => 'La agenda seleccionada no está disponible o fue anulada'
+            ];
+        }
+
+        if (!$agenda->proceso) {
+            return [
+                'success' => false,
+                'error' => 'La agenda no tiene un proceso/especialidad asignado'
+            ];
+        }
+
+        $procesoNombre = strtoupper(trim($agenda->proceso->nombre));
+        
+        Log::info('✅ Proceso identificado', [
+            'proceso' => $procesoNombre
+        ]);
+
+        // ✅ 2. MAPEAR "ESPECIAL CONTROL" → "MEDICINA GENERAL"
+        // "ESPECIAL CONTROL" es solo una etiqueta visual, funcionalmente es MG
+        $procesoReal = $procesoNombre;
+        if ($procesoNombre === 'ESPECIAL CONTROL') {
+            $procesoReal = 'MEDICINA GENERAL';
+            Log::info('🔄 Proceso mapeado', [
+                'proceso_visual' => $procesoNombre,
+                'proceso_funcional' => $procesoReal
             ]);
+        }
 
-            // ✅ 1. OBTENER LA AGENDA Y SU PROCESO
-            $agenda = \App\Models\Agenda::where('uuid', $agendaUuid)
-                ->where('estado', 'ACTIVO')
-                ->with('proceso')
-                ->first();
+        // ✅ 3. OBTENER PACIENTE
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
 
-            if (!$agenda) {
+        if (!$paciente) {
+            return [
+                'success' => false,
+                'error' => 'Paciente no encontrado'
+            ];
+        }
+
+        // ✅ 4. OBTENER HISTORIAL DE CITAS DEL PACIENTE
+        $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
+            ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA', 'EN_ATENCION'])
+            ->with(['agenda.proceso', 'cupsContratado.categoriaCups'])
+            ->get();
+
+        // ✅ 5. DETERMINAR TIPO DE CONSULTA
+        $tipoConsulta = null;
+
+        // Si NO tiene citas, DEBE ser Medicina General - Primera Vez
+        if ($citasDelPaciente->isEmpty()) {
+            if ($procesoReal !== 'MEDICINA GENERAL') {
                 return [
                     'success' => false,
-                    'error' => 'La agenda seleccionada no está disponible o fue anulada'
+                    'error' => 'El paciente debe tener primero una cita de MEDICINA GENERAL - PRIMERA VEZ',
+                    'requiere_medicina_general' => true
+                ];
+            }
+            $tipoConsulta = 'PRIMERA VEZ';
+        } else {
+            // Verificar si tiene Primera Vez de Medicina General
+            $tienePrimeraVezMG = $citasDelPaciente->contains(function($cita) {
+                $procesoNombreCita = strtoupper(trim($cita->agenda->proceso->nombre ?? ''));
+                
+                // Considerar tanto "MEDICINA GENERAL" como "ESPECIAL CONTROL"
+                $esMedicinaGeneral = in_array($procesoNombreCita, ['MEDICINA GENERAL', 'ESPECIAL CONTROL']);
+                
+                return $esMedicinaGeneral &&
+                       $cita->cupsContratado && 
+                       $cita->cupsContratado->categoriaCups &&
+                       $cita->cupsContratado->categoriaCups->id == 1; // 1 = PRIMERA VEZ
+            });
+
+            // Si no tiene Primera Vez de MG y está pidiendo otra especialidad
+            if (!$tienePrimeraVezMG && $procesoReal !== 'MEDICINA GENERAL') {
+                return [
+                    'success' => false,
+                    'error' => 'El paciente debe tener MEDICINA GENERAL - PRIMERA VEZ antes de otras especialidades',
+                    'requiere_medicina_general' => true
                 ];
             }
 
-            if (!$agenda->proceso) {
-                return [
-                    'success' => false,
-                    'error' => 'La agenda no tiene un proceso/especialidad asignado'
-                ];
-            }
-
-            $procesoNombre = strtoupper(trim($agenda->proceso->nombre));
+            // Especialidades que SIEMPRE son CONTROL
+            $especialidadesSoloControl = ['NEFROLOGIA', 'MEDICINA INTERNA', 'INTERNISTA'];
             
-            Log::info('✅ Proceso identificado', [
-                'proceso' => $procesoNombre
-            ]);
-
-            // ✅ 2. OBTENER PACIENTE
-            $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
-
-            if (!$paciente) {
-                return [
-                    'success' => false,
-                    'error' => 'Paciente no encontrado'
-                ];
-            }
-
-            // ✅ 3. OBTENER HISTORIAL DE CITAS DEL PACIENTE
-            $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
-                ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA', 'EN_ATENCION'])
-                ->with(['agenda.proceso', 'cupsContratado.categoriaCups'])
-                ->get();
-
-            // ✅ 4. DETERMINAR TIPO DE CONSULTA
-            $tipoConsulta = null;
-
-            // Si NO tiene citas, DEBE ser Medicina General - Primera Vez
-            if ($citasDelPaciente->isEmpty()) {
-                if ($procesoNombre !== 'MEDICINA GENERAL') {
-                    return [
-                        'success' => false,
-                        'error' => 'El paciente debe tener primero una cita de MEDICINA GENERAL - PRIMERA VEZ',
-                        'requiere_medicina_general' => true
-                    ];
-                }
-                $tipoConsulta = 'PRIMERA VEZ';
+            if (in_array($procesoReal, $especialidadesSoloControl)) {
+                $tipoConsulta = 'CONTROL';
             } else {
-                // Verificar si tiene Primera Vez de Medicina General
-                $tienePrimeraVezMG = $citasDelPaciente->contains(function($cita) {
-                    return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === 'MEDICINA GENERAL' &&
-                           $cita->cupsContratado && 
-                           $cita->cupsContratado->categoriaCups &&
-                           $cita->cupsContratado->categoriaCups->id == 1; // 1 = PRIMERA VEZ
+                // Verificar si ya tiene citas de esta especialidad
+                $citasDeEspecialidad = $citasDelPaciente->filter(function($cita) use ($procesoReal) {
+                    $procesoNombreCita = strtoupper(trim($cita->agenda->proceso->nombre ?? ''));
+                    
+                    // Mapear "ESPECIAL CONTROL" a "MEDICINA GENERAL" para comparación
+                    if ($procesoNombreCita === 'ESPECIAL CONTROL') {
+                        $procesoNombreCita = 'MEDICINA GENERAL';
+                    }
+                    
+                    return $procesoNombreCita === $procesoReal;
                 });
 
-                // Si no tiene Primera Vez de MG y está pidiendo otra especialidad
-                if (!$tienePrimeraVezMG && $procesoNombre !== 'MEDICINA GENERAL') {
-                    return [
-                        'success' => false,
-                        'error' => 'El paciente debe tener MEDICINA GENERAL - PRIMERA VEZ antes de otras especialidades',
-                        'requiere_medicina_general' => true
-                    ];
-                }
-
-                // Especialidades que SIEMPRE son CONTROL
-                $especialidadesSoloControl = ['NEFROLOGIA', 'MEDICINA INTERNA', 'INTERNISTA'];
-                
-                if (in_array($procesoNombre, $especialidadesSoloControl)) {
-                    $tipoConsulta = 'CONTROL';
-                } else {
-                    // Verificar si ya tiene citas de esta especialidad
-                    $citasDeEspecialidad = $citasDelPaciente->filter(function($cita) use ($procesoNombre) {
-                        return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === $procesoNombre;
-                    });
-
-                    $tipoConsulta = $citasDeEspecialidad->isEmpty() ? 'PRIMERA VEZ' : 'CONTROL';
-                }
+                $tipoConsulta = $citasDeEspecialidad->isEmpty() ? 'PRIMERA VEZ' : 'CONTROL';
             }
+        }
 
-            Log::info('✅ Tipo de consulta determinado', [
-                'proceso' => $procesoNombre,
+        Log::info('✅ Tipo de consulta determinado', [
+            'proceso_visual' => $procesoNombre,
+            'proceso_funcional' => $procesoReal,
+            'tipo_consulta' => $tipoConsulta
+        ]);
+
+        // ✅ 6. BUSCAR EL CUPS CORRECTO EN cups_contratados
+        $categoriaCupsId = $tipoConsulta === 'PRIMERA VEZ' ? 1 : 2;
+
+        // Buscar usando el proceso REAL (funcional), no el visual
+        $cupsContratado = CupsContratado::with(['cups', 'categoriaCups'])
+            ->whereHas('cups', function($query) use ($procesoReal) {
+                // Buscar CUPS que contenga el nombre del proceso REAL
+                $query->where('nombre', 'LIKE', "%{$procesoReal}%");
+            })
+            ->where('categoria_cups_id', $categoriaCupsId)
+            ->where('activo', 1)
+            ->first();
+
+        if (!$cupsContratado) {
+            Log::error('❌ No se encontró CUPS contratado', [
+                'proceso_visual' => $procesoNombre,
+                'proceso_funcional' => $procesoReal,
+                'categoria_cups_id' => $categoriaCupsId,
                 'tipo_consulta' => $tipoConsulta
-            ]);
-
-            // ✅ 5. BUSCAR EL CUPS CORRECTO EN cups_contratados
-            $categoriaCupsId = $tipoConsulta === 'PRIMERA VEZ' ? 1 : 2;
-
-            $cupsContratado = CupsContratado::with(['cups', 'categoriaCups'])
-                ->whereHas('cups', function($query) use ($procesoNombre) {
-                    // Buscar CUPS que contenga el nombre del proceso
-                    $query->where('nombre', 'LIKE', "%{$procesoNombre}%");
-                })
-                ->where('categoria_cups_id', $categoriaCupsId)
-                ->where('activo', 1)
-                ->first();
-
-            if (!$cupsContratado) {
-                Log::error('❌ No se encontró CUPS contratado', [
-                    'proceso' => $procesoNombre,
-                    'categoria_cups_id' => $categoriaCupsId,
-                    'tipo_consulta' => $tipoConsulta
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => "No se encontró un CUPS activo para {$procesoNombre} - {$tipoConsulta}"
-                ];
-            }
-
-            Log::info('✅ CUPS encontrado y asignado', [
-                'cups_uuid' => $cupsContratado->uuid,
-                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
-                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
-                'categoria' => $cupsContratado->categoriaCups->nombre ?? 'N/A'
-            ]);
-
-            return [
-                'success' => true,
-                'cups_contratado_uuid' => $cupsContratado->uuid,
-                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
-                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
-                'tipo_consulta' => $tipoConsulta,
-                'categoria_cups_id' => $categoriaCupsId
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error asignando CUPS automático', [
-                'error' => $e->getMessage(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
             ]);
 
             return [
                 'success' => false,
-                'error' => 'Error interno asignando CUPS automático'
+                'error' => "No se encontró un CUPS activo para {$procesoReal} - {$tipoConsulta}"
             ];
         }
-    }
 
+        Log::info('✅ CUPS encontrado y asignado', [
+            'cups_uuid' => $cupsContratado->uuid,
+            'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+            'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+            'categoria' => $cupsContratado->categoriaCups->nombre ?? 'N/A',
+            'proceso_visual' => $procesoNombre,
+            'proceso_funcional' => $procesoReal
+        ]);
+
+        return [
+            'success' => true,
+            'cups_contratado_uuid' => $cupsContratado->uuid,
+            'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+            'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+            'tipo_consulta' => $tipoConsulta,
+            'categoria_cups_id' => $categoriaCupsId
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error asignando CUPS automático', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return [
+            'success' => false,
+            'error' => 'Error interno asignando CUPS automático'
+        ];
+    }
+}
     public function show(string $uuid): JsonResponse
     {
         try {
