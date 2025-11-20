@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Models\Cita;
 use App\Models\Paciente;
+use App\Models\CupsContratado;
 use App\Http\Resources\CitaResource;
 use Illuminate\Support\Facades\Log;
 
