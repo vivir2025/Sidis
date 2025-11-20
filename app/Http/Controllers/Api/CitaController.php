@@ -336,19 +336,41 @@ class CitaController extends Controller
 private function validarEspecialidadParaPaciente(string $pacienteUuid, string $agendaUuid): array
 {
     try {
-        // ✅ OBTENER AGENDA
+        Log::info('🔍 Validando especialidad', [
+            'paciente_uuid' => $pacienteUuid,
+            'agenda_uuid' => $agendaUuid
+        ]);
+
+        // ✅ VERIFICAR QUE LA AGENDA EXISTE Y ESTÁ ACTIVA
         $agenda = \App\Models\Agenda::where('uuid', $agendaUuid)
+            ->where('activo', true) // ✅ CRÍTICO: Verificar que esté activa
             ->with('proceso')
             ->first();
 
-        if (!$agenda || !$agenda->proceso) {
+        if (!$agenda) {
+            Log::error('❌ Agenda no encontrada o inactiva', [
+                'agenda_uuid' => $agendaUuid
+            ]);
+            
             return [
                 'success' => false,
-                'error' => 'Agenda o proceso no encontrado'
+                'error' => 'La agenda seleccionada no está disponible. Por favor, seleccione otra fecha/hora.'
             ];
         }
 
-        $procesoNombre = $agenda->proceso->nombre;
+        if (!$agenda->proceso) {
+            return [
+                'success' => false,
+                'error' => 'La agenda no tiene un proceso/especialidad asignado'
+            ];
+        }
+
+        $procesoNombre = strtoupper(trim($agenda->proceso->nombre));
+        
+        Log::info('✅ Agenda válida', [
+            'agenda_uuid' => $agendaUuid,
+            'proceso' => $procesoNombre
+        ]);
 
         // ✅ OBTENER PACIENTE
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
@@ -363,12 +385,17 @@ private function validarEspecialidadParaPaciente(string $pacienteUuid, string $a
         // ✅ OBTENER CITAS DEL PACIENTE
         $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
             ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA'])
-            ->with(['agenda.proceso', 'cupsContratado.categoriaCups'])
+            ->with(['agenda.proceso', 'cupsContratado.categoriaCups']) // ✅ camelCase
             ->get();
 
         // ✅ SI NO TIENE CITAS, SOLO PUEDE MEDICINA GENERAL
         if ($citasDelPaciente->isEmpty()) {
             if ($procesoNombre !== 'MEDICINA GENERAL') {
+                Log::warning('⚠️ Paciente sin citas previas intenta especialidad', [
+                    'paciente_uuid' => $pacienteUuid,
+                    'especialidad_solicitada' => $procesoNombre
+                ]);
+                
                 return [
                     'success' => false,
                     'error' => 'El paciente debe tener primero una cita de MEDICINA GENERAL - PRIMERA VEZ',
@@ -384,11 +411,19 @@ private function validarEspecialidadParaPaciente(string $pacienteUuid, string $a
 
         // ✅ VERIFICAR PRIMERA VEZ DE MEDICINA GENERAL
         $tienePrimeraVezMG = $citasDelPaciente->contains(function($cita) {
-            return $cita->agenda->proceso->nombre === 'MEDICINA GENERAL' &&
+            return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === 'MEDICINA GENERAL' &&
+                   $cita->cupsContratado && 
+                   $cita->cupsContratado->categoriaCups &&
                    $cita->cupsContratado->categoriaCups->id == 1;
         });
 
         if (!$tienePrimeraVezMG && $procesoNombre !== 'MEDICINA GENERAL') {
+            Log::warning('⚠️ Paciente sin PRIMERA VEZ MG intenta especialidad', [
+                'paciente_uuid' => $pacienteUuid,
+                'especialidad_solicitada' => $procesoNombre,
+                'total_citas' => $citasDelPaciente->count()
+            ]);
+            
             return [
                 'success' => false,
                 'error' => 'El paciente debe tener MEDICINA GENERAL - PRIMERA VEZ antes de otras especialidades',
@@ -399,7 +434,7 @@ private function validarEspecialidadParaPaciente(string $pacienteUuid, string $a
         // ✅ DETERMINAR TIPO DE CONSULTA
         $especialidadesSoloControl = ['NEFROLOGIA', 'MEDICINA INTERNA', 'INTERNISTA'];
         
-        if (in_array(strtoupper($procesoNombre), $especialidadesSoloControl)) {
+        if (in_array($procesoNombre, $especialidadesSoloControl)) {
             return [
                 'success' => true,
                 'tipo_consulta' => 'CONTROL'
@@ -407,10 +442,16 @@ private function validarEspecialidadParaPaciente(string $pacienteUuid, string $a
         }
 
         $citasDeEspecialidad = $citasDelPaciente->filter(function($cita) use ($procesoNombre) {
-            return strtoupper($cita->agenda->proceso->nombre) === strtoupper($procesoNombre);
+            return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === $procesoNombre;
         });
 
         $tipoConsulta = $citasDeEspecialidad->isEmpty() ? 'PRIMERA VEZ' : 'CONTROL';
+
+        Log::info('✅ Validación exitosa', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $procesoNombre,
+            'tipo_consulta' => $tipoConsulta
+        ]);
 
         return [
             'success' => true,
@@ -418,8 +459,10 @@ private function validarEspecialidadParaPaciente(string $pacienteUuid, string $a
         ];
 
     } catch (\Exception $e) {
-        Log::error('Error validando especialidad en backend', [
-            'error' => $e->getMessage()
+        Log::error('❌ Error validando especialidad', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
         ]);
 
         return [
