@@ -109,7 +109,7 @@ class CitaController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+   public function store(Request $request): JsonResponse
     {
         try {
             Log::info('🩺 API CitaController@store - Datos recibidos', [
@@ -117,9 +117,9 @@ class CitaController extends Controller
                 'user_id' => $request->user()->id
             ]);
 
-            // ✅ VALIDACIÓN MEJORADA - Permitir sede_id opcional
+            // ✅ VALIDACIÓN MEJORADA - cups_contratado_uuid ahora es OPCIONAL
             $validatedData = $request->validate([
-                'sede_id' => 'nullable|exists:sedes,id', // ✅ NUEVO: Permitir especificar sede
+                'sede_id' => 'nullable|exists:sedes,id',
                 'fecha' => 'required|date',
                 'fecha_inicio' => 'required|date',
                 'fecha_final' => 'required|date|after:fecha_inicio',
@@ -130,31 +130,35 @@ class CitaController extends Controller
                 'patologia' => 'nullable|string|max:50',
                 'paciente_uuid' => 'required|string|exists:pacientes,uuid',
                 'agenda_uuid' => 'required|string|exists:agendas,uuid',
-                'cups_contratado_uuid' => 'required|string|exists:cups_contratados,uuid'
+                'cups_contratado_uuid' => 'nullable|string|exists:cups_contratados,uuid' // ✅ AHORA OPCIONAL
             ]);
-              // ✅ VALIDAR ESPECIALIDAD ANTES DE CREAR
-        $validacionEspecialidad = $this->validarEspecialidadParaPaciente(
-            $validatedData['paciente_uuid'],
-            $validatedData['agenda_uuid']
-        );
 
-        if (!$validacionEspecialidad['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $validacionEspecialidad['error'],
-                'requiere_medicina_general' => $validacionEspecialidad['requiere_medicina_general'] ?? false
-            ], 422);
-        }
+            // ✅ NUEVO: ASIGNAR AUTOMÁTICAMENTE EL CUPS CORRECTO
+            $resultadoCups = $this->asignarCupsAutomatico(
+                $validatedData['paciente_uuid'],
+                $validatedData['agenda_uuid']
+            );
 
+            if (!$resultadoCups['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $resultadoCups['error'],
+                    'requiere_medicina_general' => $resultadoCups['requiere_medicina_general'] ?? false
+                ], 422);
+            }
 
-            // ✅ CAMBIO: Usar sede del request o del usuario como fallback
+            // ✅ ASIGNAR EL CUPS AUTOMÁTICAMENTE
+            $validatedData['cups_contratado_uuid'] = $resultadoCups['cups_contratado_uuid'];
+
+            // Completar datos
             $validatedData['sede_id'] = $validatedData['sede_id'] ?? $request->user()->sede_id;
             $validatedData['usuario_creo_cita_id'] = $request->user()->id;
             $validatedData['estado'] = $validatedData['estado'] ?? 'PROGRAMADA';
 
             Log::info('📝 Datos validados para crear cita', [
                 'data' => $validatedData,
-                'sede_id_final' => $validatedData['sede_id']
+                'cups_asignado' => $resultadoCups['cups_nombre'],
+                'tipo_consulta' => $resultadoCups['tipo_consulta']
             ]);
 
             $cita = Cita::create($validatedData);
@@ -162,21 +166,26 @@ class CitaController extends Controller
             $cita->load([
                 'paciente', 
                 'agenda', 
-                'cupsContratado', 
+                'cupsContratado.categoriaCups', 
                 'usuarioCreador',
                 'sede'
             ]);
 
-            Log::info('✅ Cita creada exitosamente en API', [
+            Log::info('✅ Cita creada exitosamente con CUPS automático', [
                 'cita_uuid' => $cita->uuid,
                 'paciente_uuid' => $cita->paciente_uuid,
-                'sede_id' => $cita->sede_id
+                'cups_asignado' => $resultadoCups['cups_nombre'],
+                'tipo_consulta' => $resultadoCups['tipo_consulta']
             ]);
 
             return response()->json([
                 'success' => true,
                 'data' => new CitaResource($cita),
-                'message' => 'Cita creada exitosamente'
+                'message' => 'Cita creada exitosamente',
+                'meta' => [
+                    'cups_asignado' => $resultadoCups['cups_nombre'],
+                    'tipo_consulta' => $resultadoCups['tipo_consulta']
+                ]
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -204,6 +213,162 @@ class CitaController extends Controller
                 'message' => 'Error al crear la cita',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    private function asignarCupsAutomatico(string $pacienteUuid, string $agendaUuid): array
+    {
+        try {
+            Log::info('🔍 Asignando CUPS automático', [
+                'paciente_uuid' => $pacienteUuid,
+                'agenda_uuid' => $agendaUuid
+            ]);
+
+            // ✅ 1. OBTENER LA AGENDA Y SU PROCESO
+            $agenda = \App\Models\Agenda::where('uuid', $agendaUuid)
+                ->where('estado', 'ACTIVO')
+                ->with('proceso')
+                ->first();
+
+            if (!$agenda) {
+                return [
+                    'success' => false,
+                    'error' => 'La agenda seleccionada no está disponible o fue anulada'
+                ];
+            }
+
+            if (!$agenda->proceso) {
+                return [
+                    'success' => false,
+                    'error' => 'La agenda no tiene un proceso/especialidad asignado'
+                ];
+            }
+
+            $procesoNombre = strtoupper(trim($agenda->proceso->nombre));
+            
+            Log::info('✅ Proceso identificado', [
+                'proceso' => $procesoNombre
+            ]);
+
+            // ✅ 2. OBTENER PACIENTE
+            $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+
+            if (!$paciente) {
+                return [
+                    'success' => false,
+                    'error' => 'Paciente no encontrado'
+                ];
+            }
+
+            // ✅ 3. OBTENER HISTORIAL DE CITAS DEL PACIENTE
+            $citasDelPaciente = \App\Models\Cita::where('paciente_uuid', $paciente->uuid)
+                ->whereIn('estado', ['PROGRAMADA', 'ATENDIDA', 'CONFIRMADA', 'EN_ATENCION'])
+                ->with(['agenda.proceso', 'cupsContratado.categoriaCups'])
+                ->get();
+
+            // ✅ 4. DETERMINAR TIPO DE CONSULTA
+            $tipoConsulta = null;
+
+            // Si NO tiene citas, DEBE ser Medicina General - Primera Vez
+            if ($citasDelPaciente->isEmpty()) {
+                if ($procesoNombre !== 'MEDICINA GENERAL') {
+                    return [
+                        'success' => false,
+                        'error' => 'El paciente debe tener primero una cita de MEDICINA GENERAL - PRIMERA VEZ',
+                        'requiere_medicina_general' => true
+                    ];
+                }
+                $tipoConsulta = 'PRIMERA VEZ';
+            } else {
+                // Verificar si tiene Primera Vez de Medicina General
+                $tienePrimeraVezMG = $citasDelPaciente->contains(function($cita) {
+                    return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === 'MEDICINA GENERAL' &&
+                           $cita->cupsContratado && 
+                           $cita->cupsContratado->categoriaCups &&
+                           $cita->cupsContratado->categoriaCups->id == 1; // 1 = PRIMERA VEZ
+                });
+
+                // Si no tiene Primera Vez de MG y está pidiendo otra especialidad
+                if (!$tienePrimeraVezMG && $procesoNombre !== 'MEDICINA GENERAL') {
+                    return [
+                        'success' => false,
+                        'error' => 'El paciente debe tener MEDICINA GENERAL - PRIMERA VEZ antes de otras especialidades',
+                        'requiere_medicina_general' => true
+                    ];
+                }
+
+                // Especialidades que SIEMPRE son CONTROL
+                $especialidadesSoloControl = ['NEFROLOGIA', 'MEDICINA INTERNA', 'INTERNISTA'];
+                
+                if (in_array($procesoNombre, $especialidadesSoloControl)) {
+                    $tipoConsulta = 'CONTROL';
+                } else {
+                    // Verificar si ya tiene citas de esta especialidad
+                    $citasDeEspecialidad = $citasDelPaciente->filter(function($cita) use ($procesoNombre) {
+                        return strtoupper(trim($cita->agenda->proceso->nombre ?? '')) === $procesoNombre;
+                    });
+
+                    $tipoConsulta = $citasDeEspecialidad->isEmpty() ? 'PRIMERA VEZ' : 'CONTROL';
+                }
+            }
+
+            Log::info('✅ Tipo de consulta determinado', [
+                'proceso' => $procesoNombre,
+                'tipo_consulta' => $tipoConsulta
+            ]);
+
+            // ✅ 5. BUSCAR EL CUPS CORRECTO EN cups_contratados
+            $categoriaCupsId = $tipoConsulta === 'PRIMERA VEZ' ? 1 : 2;
+
+            $cupsContratado = CupsContratado::with(['cups', 'categoriaCups'])
+                ->whereHas('cups', function($query) use ($procesoNombre) {
+                    // Buscar CUPS que contenga el nombre del proceso
+                    $query->where('nombre', 'LIKE', "%{$procesoNombre}%");
+                })
+                ->where('categoria_cups_id', $categoriaCupsId)
+                ->where('activo', 1)
+                ->first();
+
+            if (!$cupsContratado) {
+                Log::error('❌ No se encontró CUPS contratado', [
+                    'proceso' => $procesoNombre,
+                    'categoria_cups_id' => $categoriaCupsId,
+                    'tipo_consulta' => $tipoConsulta
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => "No se encontró un CUPS activo para {$procesoNombre} - {$tipoConsulta}"
+                ];
+            }
+
+            Log::info('✅ CUPS encontrado y asignado', [
+                'cups_uuid' => $cupsContratado->uuid,
+                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+                'categoria' => $cupsContratado->categoriaCups->nombre ?? 'N/A'
+            ]);
+
+            return [
+                'success' => true,
+                'cups_contratado_uuid' => $cupsContratado->uuid,
+                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+                'tipo_consulta' => $tipoConsulta,
+                'categoria_cups_id' => $categoriaCupsId
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error asignando CUPS automático', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Error interno asignando CUPS automático'
+            ];
         }
     }
 
