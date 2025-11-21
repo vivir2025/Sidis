@@ -337,52 +337,113 @@ private function asignarCupsAutomatico($pacienteUuid, $agendaUuid)
 
 
 
-private function determinarTipoConsulta(string $cupsContratadoUuid): string
+/**
+ * ✅ DETERMINAR TIPO DE CONSULTA BASADO EN HISTORIAL DEL PACIENTE
+ */
+private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid): string
 {
     try {
-        Log::info('🔍 Determinando tipo de consulta desde CUPS contratado', [
-            'cups_contratado_uuid' => $cupsContratadoUuid
+        Log::info('🔍 Determinando tipo de consulta', [
+            'paciente_uuid' => $pacienteUuid,
+            'agenda_uuid' => $agendaUuid
         ]);
 
-        // ✅ OBTENER CUPS CONTRATADO CON SU CATEGORÍA
-        $cupsContratado = CupsContratado::with('categoriaCups')
-            ->where('uuid', $cupsContratadoUuid)
-            ->first();
-
-        if (!$cupsContratado) {
-            Log::warning('⚠️ CUPS contratado no encontrado', [
-                'cups_contratado_uuid' => $cupsContratadoUuid
-            ]);
-            return 'PRIMERA VEZ'; // Default
+        // 1️⃣ Obtener agenda y proceso
+        $agenda = Agenda::with('proceso')->where('uuid', $agendaUuid)->first();
+        
+        if (!$agenda || !$agenda->proceso) {
+            Log::warning('⚠️ Agenda o proceso no encontrado');
+            return 'PRIMERA VEZ';
         }
 
-        if (!$cupsContratado->categoriaCups) {
-            Log::warning('⚠️ CUPS contratado sin categoría', [
-                'cups_contratado_uuid' => $cupsContratadoUuid,
-                'cups_contratado_id' => $cupsContratado->id
-            ]);
-            return 'PRIMERA VEZ'; // Default
-        }
+        $procesoNombre = $agenda->proceso->nombre;
+        
+        Log::info('📋 Proceso identificado', [
+            'proceso_nombre' => $procesoNombre
+        ]);
 
-        $tipoConsulta = $cupsContratado->categoriaCups->nombre;
+        // 2️⃣ Mapear proceso funcional
+        $procesoFuncional = $this->mapearProcesoFuncional($procesoNombre);
 
-        Log::info('✅ Tipo de consulta determinado desde categoría CUPS', [
-            'cups_contratado_uuid' => $cupsContratadoUuid,
-            'categoria_cups_id' => $cupsContratado->categoria_cups_id,
-            'tipo_consulta' => $tipoConsulta
+        Log::info('🔄 Proceso funcional mapeado', [
+            'proceso_original' => $procesoNombre,
+            'proceso_funcional' => $procesoFuncional
+        ]);
+
+        // 3️⃣ ✅ CONTAR CITAS ANTERIORES DEL PACIENTE
+        $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
+            ->whereHas('agenda.proceso', function ($query) use ($procesoFuncional) {
+                $query->where('nombre', 'LIKE', "%{$procesoFuncional}%");
+            })
+            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA'])
+            ->where('fecha', '<', now()) // Solo citas pasadas o actuales
+            ->count();
+
+        Log::info('📊 Citas anteriores encontradas', [
+            'paciente_uuid' => $pacienteUuid,
+            'proceso_funcional' => $procesoFuncional,
+            'citas_anteriores' => $citasAnteriores
+        ]);
+
+        // 4️⃣ ✅ DETERMINAR TIPO DE CONSULTA
+        $tipoConsulta = ($citasAnteriores > 0) ? 'CONTROL' : 'PRIMERA VEZ';
+        
+        Log::info('✅ Tipo de consulta determinado', [
+            'tipo_consulta' => $tipoConsulta,
+            'citas_previas' => $citasAnteriores
         ]);
 
         return $tipoConsulta;
 
     } catch (\Exception $e) {
         Log::error('❌ Error determinando tipo de consulta', [
-            'cups_contratado_uuid' => $cupsContratadoUuid,
-            'error' => $e->getMessage()
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
         ]);
         
         return 'PRIMERA VEZ'; // Default en caso de error
     }
 }
+
+/**
+ * ✅ MAPEAR PROCESO A NOMBRE FUNCIONAL
+ */
+private function mapearProcesoFuncional(string $procesoNombre): string
+{
+    // Normalizar el nombre del proceso
+    $procesoNormalizado = strtoupper(trim($procesoNombre));
+    
+    // Mapeo de procesos
+    $mapeo = [
+        'ESPECIAL CONTROL' => 'MEDICINA GENERAL',
+        'ESPECIAL PRIMERA VEZ' => 'MEDICINA GENERAL',
+        'MEDICINA GENERAL CONTROL' => 'MEDICINA GENERAL',
+        'MEDICINA GENERAL PRIMERA VEZ' => 'MEDICINA GENERAL',
+        'PSICOLOGIA CONTROL' => 'PSICOLOGIA',
+        'PSICOLOGIA PRIMERA VEZ' => 'PSICOLOGIA',
+        'PSICOLOGÍA CONTROL' => 'PSICOLOGIA',
+        'PSICOLOGÍA PRIMERA VEZ' => 'PSICOLOGIA',
+    ];
+
+    // Si existe mapeo exacto, usarlo
+    if (isset($mapeo[$procesoNormalizado])) {
+        return $mapeo[$procesoNormalizado];
+    }
+
+    // Si contiene "MEDICINA GENERAL", retornar eso
+    if (str_contains($procesoNormalizado, 'MEDICINA GENERAL')) {
+        return 'MEDICINA GENERAL';
+    }
+
+    // Si contiene "PSICOLOGIA", retornar eso
+    if (str_contains($procesoNormalizado, 'PSICOLOGIA') || str_contains($procesoNormalizado, 'PSICOLOGÍA')) {
+        return 'PSICOLOGIA';
+    }
+
+    // Por defecto, retornar el nombre original
+    return $procesoNormalizado;
+}
+
 
 
 
