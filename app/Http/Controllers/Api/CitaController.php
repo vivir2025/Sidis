@@ -335,75 +335,40 @@ private function asignarCupsAutomatico($pacienteUuid, $agendaUuid)
 
 
 
-/**
- * ✅ DETERMINAR TIPO DE CONSULTA CORREGIDO
- */
-private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
+
+
+private function determinarTipoConsulta(string $cupsContratadoUuid): string
 {
     try {
-        Log::info('🔍 Determinando tipo de consulta', [
-            'paciente_uuid' => $pacienteUuid,
-            'agenda_uuid' => $agendaUuid
+        Log::info('🔍 Determinando tipo de consulta desde CUPS contratado', [
+            'cups_contratado_uuid' => $cupsContratadoUuid
         ]);
 
-        // 1. Obtener la agenda para saber el proceso
-        $agenda = Agenda::where('uuid', $agendaUuid)
-            ->with('proceso')
+        // ✅ OBTENER CUPS CONTRATADO CON SU CATEGORÍA
+        $cupsContratado = CupsContratado::with('categoriaCups')
+            ->where('uuid', $cupsContratadoUuid)
             ->first();
 
-        if (!$agenda || !$agenda->proceso) {
-            Log::warning('⚠️ No se pudo determinar tipo de consulta - Agenda sin proceso');
+        if (!$cupsContratado) {
+            Log::warning('⚠️ CUPS contratado no encontrado', [
+                'cups_contratado_uuid' => $cupsContratadoUuid
+            ]);
             return 'PRIMERA VEZ'; // Default
         }
 
-        // 2. Extraer nombre del proceso
-        $procesoNombre = is_object($agenda->proceso) 
-            ? ($agenda->proceso->nombre ?? null) 
-            : $agenda->proceso;
+        if (!$cupsContratado->categoriaCups) {
+            Log::warning('⚠️ CUPS contratado sin categoría', [
+                'cups_contratado_uuid' => $cupsContratadoUuid,
+                'cups_contratado_id' => $cupsContratado->id
+            ]);
+            return 'PRIMERA VEZ'; // Default
+        }
 
-        Log::info('📋 Proceso identificado', [
-            'proceso_nombre' => $procesoNombre
-        ]);
+        $tipoConsulta = $cupsContratado->categoriaCups->nombre;
 
-        // 3. Mapear proceso a funcional
-        $mapaProcesos = [
-            'ESPECIAL CONTROL' => 'MEDICINA GENERAL',
-            'ESPECIAL PRIMERA VEZ' => 'MEDICINA GENERAL',
-            'MEDICINA GENERAL' => 'MEDICINA GENERAL',
-            'ODONTOLOGIA' => 'ODONTOLOGIA',
-            'ENFERMERIA' => 'ENFERMERIA',
-            'PSICOLOGIA' => 'PSICOLOGIA',
-            'NUTRICION' => 'NUTRICION',
-        ];
-
-        $procesoFuncional = $mapaProcesos[$procesoNombre] ?? $procesoNombre;
-
-        Log::info('🔄 Proceso funcional mapeado', [
-            'proceso_original' => $procesoNombre,
-            'proceso_funcional' => $procesoFuncional
-        ]);
-
-        // ✅ 4. BUSCAR CITAS ANTERIORES DEL MISMO PROCESO (SIN EXCLUIR NADA)
-        $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
-            ->whereHas('agenda.proceso', function ($query) use ($procesoFuncional) {
-                $query->where('nombre', 'LIKE', "%{$procesoFuncional}%");
-            })
-            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA']) // ✅ Incluir más estados
-            ->count();
-
-        Log::info('📊 Citas anteriores encontradas', [
-            'paciente_uuid' => $pacienteUuid,
-            'proceso_funcional' => $procesoFuncional,
-            'citas_anteriores' => $citasAnteriores
-        ]);
-
-        // ✅ 5. DETERMINAR TIPO: Si tiene 1 o más citas = CONTROL, si tiene 0 = PRIMERA VEZ
-        $tipoConsulta = $citasAnteriores > 0 ? 'CONTROL' : 'PRIMERA VEZ';
-
-        Log::info('✅ Tipo de consulta determinado', [
-            'paciente_uuid' => $pacienteUuid,
-            'proceso_funcional' => $procesoFuncional,
-            'citas_anteriores' => $citasAnteriores,
+        Log::info('✅ Tipo de consulta determinado desde categoría CUPS', [
+            'cups_contratado_uuid' => $cupsContratadoUuid,
+            'categoria_cups_id' => $cupsContratado->categoria_cups_id,
             'tipo_consulta' => $tipoConsulta
         ]);
 
@@ -411,14 +376,14 @@ private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
 
     } catch (\Exception $e) {
         Log::error('❌ Error determinando tipo de consulta', [
-            'error' => $e->getMessage(),
-            'paciente_uuid' => $pacienteUuid,
-            'agenda_uuid' => $agendaUuid,
-            'line' => $e->getLine()
+            'cups_contratado_uuid' => $cupsContratadoUuid,
+            'error' => $e->getMessage()
         ]);
+        
         return 'PRIMERA VEZ'; // Default en caso de error
     }
 }
+
 
 
     public function show(string $uuid): JsonResponse
