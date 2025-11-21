@@ -222,14 +222,14 @@ private function obtenerTipoConsulta($historia): ?string
         Log::info('✅ Cita encontrada', [
             'cita_id' => $historia->cita->id ?? null,
             'cita_uuid' => $historia->cita->uuid ?? null,
-            'cups_contratado_id' => $historia->cita->cups_contratado_id ?? 'NULL'
+            'cups_contratado_uuid' => $historia->cita->cups_contratado_uuid ?? 'NULL'
         ]);
 
-        // ✅ PASO 2: Verificar si existe cups_contratado_id
-        if (!isset($historia->cita->cups_contratado_id) || empty($historia->cita->cups_contratado_id)) {
-            Log::warning('⚠️ Cita sin cups_contratado_id', [
+        // ✅ PASO 2: Verificar si existe cups_contratado_uuid
+        if (empty($historia->cita->cups_contratado_uuid)) {
+            Log::warning('⚠️ Cita sin cups_contratado_uuid', [
                 'cita_id' => $historia->cita->id ?? null,
-                'cups_contratado_id' => $historia->cita->cups_contratado_id ?? 'NULL'
+                'cups_contratado_uuid' => $historia->cita->cups_contratado_uuid ?? 'NULL'
             ]);
             return null;
         }
@@ -238,22 +238,24 @@ private function obtenerTipoConsulta($historia): ?string
         if (!$historia->cita->cupsContratado) {
             Log::warning('⚠️ Relación cupsContratado NO cargada', [
                 'cita_id' => $historia->cita->id ?? null,
-                'cups_contratado_id' => $historia->cita->cups_contratado_id
+                'cups_contratado_uuid' => $historia->cita->cups_contratado_uuid
             ]);
             return null;
         }
 
         Log::info('✅ CupsContratado encontrado', [
-            'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
+            'cups_contratado_uuid' => $historia->cita->cupsContratado->uuid ?? null,
             'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id ?? 'NULL'
         ]);
 
-        // ✅ PASO 4: Verificar si existe categoria_cups_id
-        if (!isset($historia->cita->cupsContratado->categoria_cups_id) || 
-            empty($historia->cita->cupsContratado->categoria_cups_id)) {
-            Log::warning('⚠️ CupsContratado sin categoria_cups_id', [
-                'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
-                'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id ?? 'NULL'
+        // ✅ PASO 4: Verificar si existe categoria_cups_id (o categoria_cups_uuid)
+        $categoriaCupsKey = $historia->cita->cupsContratado->categoria_cups_id 
+                            ?? $historia->cita->cupsContratado->categoria_cups_uuid 
+                            ?? null;
+        
+        if (empty($categoriaCupsKey)) {
+            Log::warning('⚠️ CupsContratado sin categoria_cups', [
+                'cups_contratado_uuid' => $historia->cita->cupsContratado->uuid ?? null
             ]);
             return null;
         }
@@ -261,8 +263,8 @@ private function obtenerTipoConsulta($historia): ?string
         // ✅ PASO 5: Verificar si la relación categoriaCups está cargada
         if (!$historia->cita->cupsContratado->categoriaCups) {
             Log::warning('⚠️ Relación categoriaCups NO cargada', [
-                'cups_contratado_id' => $historia->cita->cupsContratado->id ?? null,
-                'categoria_cups_id' => $historia->cita->cupsContratado->categoria_cups_id
+                'cups_contratado_uuid' => $historia->cita->cupsContratado->uuid ?? null,
+                'categoria_cups_key' => $categoriaCupsKey
             ]);
             return null;
         }
@@ -275,11 +277,19 @@ private function obtenerTipoConsulta($historia): ?string
         ]);
 
         // ✅ PASO 6: Determinar tipo según el ID de la categoría
-        $tipoConsulta = match ((int)$categoriaCups->id) {
-            1 => 'PRIMERA VEZ',
-            2 => 'CONTROL',
-            default => $categoriaCups->nombre ?? null
-        };
+        $categoriaId = (int) $categoriaCups->id;
+        
+        switch ($categoriaId) {
+            case 1:
+                $tipoConsulta = 'PRIMERA VEZ';
+                break;
+            case 2:
+                $tipoConsulta = 'CONTROL';
+                break;
+            default:
+                $tipoConsulta = $categoriaCups->nombre ?? null;
+                break;
+        }
 
         Log::info('✅ Tipo consulta determinado', [
             'historia_uuid' => $historia->uuid ?? null,
