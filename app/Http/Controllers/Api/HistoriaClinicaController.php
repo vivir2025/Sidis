@@ -2873,7 +2873,7 @@ private function getCitaIdFromUuid($citaUuid)
                 // ═══════════════════════════════════════════
                 'cita' => [
                     'uuid' => $historia->cita->uuid ?? null,
-                    'fecha' => $historia->cita->fecha ?? null, // ✅ FECHA DE LA CITA
+                    'fecha' => $historia->cita->fecha ?? null,
                     'hora' => $historia->cita->hora ?? null,
                     'estado' => $historia->cita->estado ?? null,
                     
@@ -2893,33 +2893,35 @@ private function getCitaIdFromUuid($citaUuid)
                         'telefono' => $historia->cita->paciente->telefono ?? null,
                         'direccion' => $historia->cita->paciente->direccion ?? null,
                         'email' => $historia->cita->paciente->email ?? null,
-                            // ✅ RÉGIMEN (← ESTO ES LO QUE FALTABA)
+                        
+                        // ✅ RÉGIMEN
                         'regimen' => $historia->cita->paciente->regimen ? [
-                        'uuid' => $historia->cita->paciente->regimen->uuid ?? $historia->cita->paciente->regimen->id,
-                        'nombre' => $historia->cita->paciente->regimen->nombre ?? 'N/A',
-                        'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
+                            'uuid' => $historia->cita->paciente->regimen->uuid ?? $historia->cita->paciente->regimen->id,
+                            'nombre' => $historia->cita->paciente->regimen->nombre ?? 'N/A',
+                            'codigo' => $historia->cita->paciente->regimen->codigo ?? null,
                         ] : null,
-                    // ✅ EMPRESA (IGUAL QUE RÉGIMEN)
-                    'empresa' => $historia->cita->paciente->empresa ? [
-                        'uuid' => $historia->cita->paciente->empresa->uuid ?? $historia->cita->paciente->empresa->id,
-                        'nombre' => $historia->cita->paciente->empresa->nombre ?? 'N/A',
-                        'nit' => $historia->cita->paciente->empresa->nit ?? null,
-                    ] : null,
+                        
+                        // ✅ EMPRESA
+                        'empresa' => $historia->cita->paciente->empresa ? [
+                            'uuid' => $historia->cita->paciente->empresa->uuid ?? $historia->cita->paciente->empresa->id,
+                            'nombre' => $historia->cita->paciente->empresa->nombre ?? 'N/A',
+                            'nit' => $historia->cita->paciente->empresa->nit ?? null,
+                        ] : null,
 
-                    // ✅ OCUPACIÓN (IGUAL QUE RÉGIMEN)
-                    'ocupacion' => $historia->cita->paciente->ocupacion ? [
-                        'uuid' => $historia->cita->paciente->ocupacion->uuid ?? $historia->cita->paciente->ocupacion->id,
-                        'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
-                        'codigo' => $historia->cita->paciente->ocupacion->codigo ?? null,
-                    ] : null,
+                        // ✅ OCUPACIÓN
+                        'ocupacion' => $historia->cita->paciente->ocupacion ? [
+                            'uuid' => $historia->cita->paciente->ocupacion->uuid ?? $historia->cita->paciente->ocupacion->id,
+                            'nombre' => $historia->cita->paciente->ocupacion->nombre ?? 'N/A',
+                            'codigo' => $historia->cita->paciente->ocupacion->codigo ?? null,
+                        ] : null,
 
-                    'brigada' => $historia->cita->paciente->brigada ? [
-                    'uuid' => $historia->cita->paciente->brigada->uuid ?? $historia->cita->paciente->brigada->id,
-                    'nombre' => $historia->cita->paciente->brigada->nombre ?? 'N/A',
-                    ] : null,
-                    
-                    ] : null,
-                    
+                        // ✅ BRIGADA
+                        'brigada' => $historia->cita->paciente->brigada ? [
+                            'uuid' => $historia->cita->paciente->brigada->uuid ?? $historia->cita->paciente->brigada->id,
+                            'nombre' => $historia->cita->paciente->brigada->nombre ?? 'N/A',
+                        ] : null,
+                        
+                    ] : null,  // ← ✅ AGREGA UNA COMA AQUÍ
                     // ✅ AGENDA CON PROFESIONAL Y ESPECIALIDAD
                    'agenda' => $historia->cita && $historia->cita->agenda ? [
                     'uuid' => $historia->cita->agenda->uuid,
