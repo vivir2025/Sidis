@@ -335,10 +335,18 @@ private function asignarCupsAutomatico($pacienteUuid, $agendaUuid)
 
 
 
+/**
+ * ✅ DETERMINAR TIPO DE CONSULTA CORREGIDO
+ */
 private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
 {
     try {
-        // Obtener la agenda para saber el proceso
+        Log::info('🔍 Determinando tipo de consulta', [
+            'paciente_uuid' => $pacienteUuid,
+            'agenda_uuid' => $agendaUuid
+        ]);
+
+        // 1. Obtener la agenda para saber el proceso
         $agenda = Agenda::where('uuid', $agendaUuid)
             ->with('proceso')
             ->first();
@@ -348,12 +356,16 @@ private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
             return 'PRIMERA VEZ'; // Default
         }
 
-        // Extraer nombre del proceso
+        // 2. Extraer nombre del proceso
         $procesoNombre = is_object($agenda->proceso) 
             ? ($agenda->proceso->nombre ?? null) 
             : $agenda->proceso;
 
-        // Mapear proceso a funcional
+        Log::info('📋 Proceso identificado', [
+            'proceso_nombre' => $procesoNombre
+        ]);
+
+        // 3. Mapear proceso a funcional
         $mapaProcesos = [
             'ESPECIAL CONTROL' => 'MEDICINA GENERAL',
             'ESPECIAL PRIMERA VEZ' => 'MEDICINA GENERAL',
@@ -366,15 +378,26 @@ private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
 
         $procesoFuncional = $mapaProcesos[$procesoNombre] ?? $procesoNombre;
 
-        // Buscar si el paciente ya tiene citas previas del mismo proceso
+        Log::info('🔄 Proceso funcional mapeado', [
+            'proceso_original' => $procesoNombre,
+            'proceso_funcional' => $procesoFuncional
+        ]);
+
+        // ✅ 4. BUSCAR CITAS ANTERIORES DEL MISMO PROCESO (SIN EXCLUIR NADA)
         $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
             ->whereHas('agenda.proceso', function ($query) use ($procesoFuncional) {
                 $query->where('nombre', 'LIKE', "%{$procesoFuncional}%");
             })
-            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA'])
-            ->where('uuid', '!=', $agendaUuid) // Excluir la cita actual
+            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA']) // ✅ Incluir más estados
             ->count();
 
+        Log::info('📊 Citas anteriores encontradas', [
+            'paciente_uuid' => $pacienteUuid,
+            'proceso_funcional' => $procesoFuncional,
+            'citas_anteriores' => $citasAnteriores
+        ]);
+
+        // ✅ 5. DETERMINAR TIPO: Si tiene 1 o más citas = CONTROL, si tiene 0 = PRIMERA VEZ
         $tipoConsulta = $citasAnteriores > 0 ? 'CONTROL' : 'PRIMERA VEZ';
 
         Log::info('✅ Tipo de consulta determinado', [
@@ -390,11 +413,13 @@ private function determinarTipoConsulta($pacienteUuid, $agendaUuid)
         Log::error('❌ Error determinando tipo de consulta', [
             'error' => $e->getMessage(),
             'paciente_uuid' => $pacienteUuid,
-            'agenda_uuid' => $agendaUuid
+            'agenda_uuid' => $agendaUuid,
+            'line' => $e->getLine()
         ]);
         return 'PRIMERA VEZ'; // Default en caso de error
     }
 }
+
 
     public function show(string $uuid): JsonResponse
     {
