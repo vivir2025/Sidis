@@ -370,18 +370,19 @@ private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid
             'proceso_funcional' => $procesoFuncional
         ]);
 
-        // 3️⃣ ✅ CONTAR CITAS ANTERIORES DEL PACIENTE
+        // 3️⃣ ✅ BUSCAR POR PROCESO ORIGINAL, NO POR EL MAPEADO
         $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
-            ->whereHas('agenda.proceso', function ($query) use ($procesoFuncional) {
-                $query->where('nombre', 'LIKE', "%{$procesoFuncional}%");
+            ->whereHas('agenda.proceso', function ($query) use ($procesoNombre) {
+                // ✅ BUSCAR POR PROCESO ORIGINAL
+                $query->where('nombre', 'LIKE', "%{$procesoNombre}%");
             })
             ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA'])
-            ->where('fecha', '<', now()) // Solo citas pasadas o actuales
+            ->where('fecha', '<', now()->format('Y-m-d'))
             ->count();
 
         Log::info('📊 Citas anteriores encontradas', [
             'paciente_uuid' => $pacienteUuid,
-            'proceso_funcional' => $procesoFuncional,
+            'proceso_buscado' => $procesoNombre,  // ← CAMBIO AQUÍ
             'citas_anteriores' => $citasAnteriores
         ]);
 
@@ -401,51 +402,9 @@ private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid
             'trace' => $e->getTraceAsString()
         ]);
         
-        return 'PRIMERA VEZ'; // Default en caso de error
+        return 'PRIMERA VEZ';
     }
 }
-
-/**
- * ✅ MAPEAR PROCESO A NOMBRE FUNCIONAL
- */
-private function mapearProcesoFuncional(string $procesoNombre): string
-{
-    // Normalizar el nombre del proceso
-    $procesoNormalizado = strtoupper(trim($procesoNombre));
-    
-    // Mapeo de procesos
-    $mapeo = [
-        'ESPECIAL CONTROL' => 'MEDICINA GENERAL',
-        'ESPECIAL PRIMERA VEZ' => 'MEDICINA GENERAL',
-        'MEDICINA GENERAL CONTROL' => 'MEDICINA GENERAL',
-        'MEDICINA GENERAL PRIMERA VEZ' => 'MEDICINA GENERAL',
-        'PSICOLOGIA CONTROL' => 'PSICOLOGIA',
-        'PSICOLOGIA PRIMERA VEZ' => 'PSICOLOGIA',
-        'PSICOLOGÍA CONTROL' => 'PSICOLOGIA',
-        'PSICOLOGÍA PRIMERA VEZ' => 'PSICOLOGIA',
-    ];
-
-    // Si existe mapeo exacto, usarlo
-    if (isset($mapeo[$procesoNormalizado])) {
-        return $mapeo[$procesoNormalizado];
-    }
-
-    // Si contiene "MEDICINA GENERAL", retornar eso
-    if (str_contains($procesoNormalizado, 'MEDICINA GENERAL')) {
-        return 'MEDICINA GENERAL';
-    }
-
-    // Si contiene "PSICOLOGIA", retornar eso
-    if (str_contains($procesoNormalizado, 'PSICOLOGIA') || str_contains($procesoNormalizado, 'PSICOLOGÍA')) {
-        return 'PSICOLOGIA';
-    }
-
-    // Por defecto, retornar el nombre original
-    return $procesoNormalizado;
-}
-
-
-
 
     public function show(string $uuid): JsonResponse
     {
