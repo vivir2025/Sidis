@@ -370,11 +370,17 @@ private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid
             'proceso_funcional' => $procesoFuncional
         ]);
 
-        // 3️⃣ ✅ BUSCAR POR PROCESO ORIGINAL, NO POR EL MAPEADO
+        // 3️⃣ ✅ CAMBIO CRÍTICO: BUSCAR POR PROCESO FUNCIONAL MAPEADO
         $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
-            ->whereHas('agenda.proceso', function ($query) use ($procesoNombre) {
-                // ✅ BUSCAR POR PROCESO ORIGINAL
-                $query->where('nombre', 'LIKE', "%{$procesoNombre}%");
+            ->whereHas('agenda.proceso', function ($query) use ($procesoFuncional) {
+                // ✅ BUSCAR POR CUALQUIER VARIANTE DEL PROCESO FUNCIONAL
+                $variantes = $this->obtenerVariantesProceso($procesoFuncional);
+                
+                $query->where(function($q) use ($variantes) {
+                    foreach ($variantes as $variante) {
+                        $q->orWhere('nombre', 'LIKE', "%{$variante}%");
+                    }
+                });
             })
             ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA'])
             ->where('fecha', '<', now()->format('Y-m-d'))
@@ -382,7 +388,7 @@ private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid
 
         Log::info('📊 Citas anteriores encontradas', [
             'paciente_uuid' => $pacienteUuid,
-            'proceso_buscado' => $procesoNombre,  // ← CAMBIO AQUÍ
+            'proceso_funcional' => $procesoFuncional,
             'citas_anteriores' => $citasAnteriores
         ]);
 
@@ -406,7 +412,52 @@ private function determinarTipoConsulta(string $pacienteUuid, string $agendaUuid
     }
 }
 
-
+/**
+ * ✅ NUEVO MÉTODO: OBTENER TODAS LAS VARIANTES DE UN PROCESO
+ */
+private function obtenerVariantesProceso(string $procesoFuncional): array
+{
+    $variantes = [
+        'MEDICINA GENERAL' => [
+            'MEDICINA GENERAL',
+            'ESPECIAL CONTROL',
+            'ESPECIAL PRIMERA VEZ',
+            'CONSULTA EXTERNA',
+            'CONTROL MEDICO'
+        ],
+        'PSICOLOGIA' => [
+            'PSICOLOGIA',
+            'PSICOLOGÍA',
+            'PSICOLOGIA CONTROL',
+            'PSICOLOGIA PRIMERA VEZ'
+        ],
+        'ENFERMERIA' => [
+            'ENFERMERIA',
+            'ENFERMERÍA',
+            'ENFERMERIA CONTROL',
+            'ENFERMERIA PRIMERA VEZ'
+        ],
+        'NUTRICION' => [
+            'NUTRICION',
+            'NUTRICIÓN',
+            'NUTRICION CONTROL',
+            'NUTRICION PRIMERA VEZ'
+        ],
+        'ODONTOLOGIA' => [
+            'ODONTOLOGIA',
+            'ODONTOLOGÍA',
+            'ODONTOLOGIA CONTROL',
+            'ODONTOLOGIA PRIMERA VEZ'
+        ],
+        'TRABAJO SOCIAL' => [
+            'TRABAJO SOCIAL',
+            'TRABAJO SOCIAL CONTROL',
+            'TRABAJO SOCIAL PRIMERA VEZ'
+        ]
+    ];
+    
+    return $variantes[$procesoFuncional] ?? [$procesoFuncional];
+}
 /**
  * ✅ MAPEAR PROCESO A SU EQUIVALENTE FUNCIONAL
  */
