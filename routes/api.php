@@ -122,19 +122,40 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
     // ================================
     // CITAS
     // ================================
-    Route::prefix('citas')->group(function () {
-        Route::get('/', [CitaController::class, 'index']);
-        Route::post('/', [CitaController::class, 'store']);
-        Route::get('/del-dia', [CitaController::class, 'citasDelDia']);
-        Route::get('/agenda/{agenda}', [CitaController::class, 'citasPorAgenda']);
-        Route::post('citas/determinar-tipo-consulta', [CitaController::class, 'determinarTipoConsultaPrevio']);
-        Route::get('/{cita}', [CitaController::class, 'show']);
-        Route::put('/{cita}', [CitaController::class, 'update']);
-        Route::delete('/{cita}', [CitaController::class, 'destroy']);
-         // ✅ AGREGAR ESTAS TRES LÍNEAS PARA CAMBIAR ESTADO
-   
-    });
+Route::prefix('citas')->group(function () {
+    // ================================
+    // RUTAS BÁSICAS CRUD
+    // ================================
+    Route::get('/', [CitaController::class, 'index']);
+    Route::post('/', [CitaController::class, 'store']);
     
+    // ================================
+    // RUTAS ESPECÍFICAS (ANTES de rutas con parámetros)
+    // ================================
+    Route::get('/del-dia', [CitaController::class, 'citasDelDia']);
+    Route::post('/determinar-tipo-consulta', [CitaController::class, 'determinarTipoConsultaPrevio']);
+    
+    // ================================
+    // RUTAS CON PARÁMETROS ESPECÍFICOS
+    // ================================
+    Route::get('/agenda/{agenda}', [CitaController::class, 'citasPorAgenda']);
+    
+    // ================================
+    // RUTAS CON PARÁMETROS UUID GENÉRICOS (AL FINAL)
+    // ================================
+    Route::get('/{cita}', [CitaController::class, 'show']);
+    Route::put('/{cita}', [CitaController::class, 'update']);
+    Route::patch('/{cita}', [CitaController::class, 'update']); // Alternativa con PATCH
+    Route::delete('/{cita}', [CitaController::class, 'destroy']);
+    
+    // ================================
+    // CAMBIO DE ESTADO (múltiples métodos HTTP)
+    // ================================
+    Route::put('/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+    Route::patch('/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+    Route::post('/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
+});
+
 Route::get('agendas/{agenda_uuid}/citas', [CitaController::class, 'citasDeAgenda']);
 Route::get('/agendas/proceso-by-usuario/{usuario_uuid}', [AgendaController::class, 'getProcesoByUsuarioMedico']);
  Route::put('/citas/{uuid}/estado', [CitaController::class, 'cambiarEstado']);
