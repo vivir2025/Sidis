@@ -92,6 +92,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::get('/{uuid}/historias', [HistoriaClinicaController::class, 'historiasPaciente']);
         Route::get('/{uuid}/citas', [CitaController::class, 'citasPaciente']);
         Route::get('/{pacienteUuid}/ultima-historia-medicina-general', [HistoriaClinicaController::class, 'obtenerUltimaHistoriaMedicinaGeneral']);
+        
     });
 
 
@@ -276,6 +277,7 @@ Route::prefix('agendas')->group(function () {
         Route::put('/{historia}', [HistoriaClinicaController::class, 'update']);
         Route::delete('/{historia}', [HistoriaClinicaController::class, 'destroy']);
         
+        
         // ================================
         // RUTAS DE BÚSQUEDA Y FILTROS
         // ================================
@@ -399,6 +401,8 @@ Route::prefix('agendas')->group(function () {
         // RUTAS ESPECIALES PARA CITAS
         // ================================
         Route::get('/cita/{citaUuid}', [HistoriaClinicaController::class, 'porCita']);
+        // ✅ NUEVA RUTA
+        Route::post('/citas/determinar-tipo-consulta', [Api\CitaController::class, 'determinarTipoConsultaPrevio']);
         Route::post('/cita/{citaUuid}/crear', [HistoriaClinicaController::class, 'crearDesdeCita']);
         Route::get('/agenda/{agendaUuid}/historias', [HistoriaClinicaController::class, 'porAgenda']);
         
