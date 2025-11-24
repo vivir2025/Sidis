@@ -127,7 +127,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'sede.access'])->group(function
         Route::post('/', [CitaController::class, 'store']);
         Route::get('/del-dia', [CitaController::class, 'citasDelDia']);
         Route::get('/agenda/{agenda}', [CitaController::class, 'citasPorAgenda']);
-        
+        Route::post('/determinar-tipo-consulta', [CitaController::class, 'determinarTipoConsulta']);
         Route::get('/{cita}', [CitaController::class, 'show']);
         Route::put('/{cita}', [CitaController::class, 'update']);
         Route::delete('/{cita}', [CitaController::class, 'destroy']);
@@ -402,7 +402,7 @@ Route::prefix('agendas')->group(function () {
         // ================================
         Route::get('/cita/{citaUuid}', [HistoriaClinicaController::class, 'porCita']);
         // ✅ NUEVA RUTA
-        Route::post('/citas/determinar-tipo-consulta', [Api\CitaController::class, 'determinarTipoConsultaPrevio']);
+       
         Route::post('/cita/{citaUuid}/crear', [HistoriaClinicaController::class, 'crearDesdeCita']);
         Route::get('/agenda/{agendaUuid}/historias', [HistoriaClinicaController::class, 'porAgenda']);
         
