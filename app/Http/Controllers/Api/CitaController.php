@@ -453,12 +453,13 @@ private function determinarTipoConsultaConReglas(
         }
 
         // ✅ BUSCAR CITAS ANTERIORES DEL MISMO PROCESO
+        // ⚠️ CAMBIO CRÍTICO: Incluir más estados y NO filtrar por fecha pasada
         $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
             ->whereHas('agenda.proceso', function ($query) use ($procesoNombre) {
                 $query->where('nombre', $procesoNombre);
             })
-            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA'])
-            ->where('fecha', '<', now()->format('Y-m-d'))
+            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA', 'EN_ATENCION']) // ✅ MÁS ESTADOS
+            // ❌ REMOVIDO: ->where('fecha', '<', now()->format('Y-m-d'))
             ->count();
 
         Log::info('📊 Citas anteriores encontradas', [
@@ -468,6 +469,7 @@ private function determinarTipoConsultaConReglas(
         ]);
 
         // ✅ DETERMINAR TIPO DE CONSULTA
+        // Si tiene al menos 1 cita anterior del mismo proceso → CONTROL
         $tipoConsulta = ($citasAnteriores > 0) ? 'CONTROL' : 'PRIMERA VEZ';
         
         Log::info('✅ Tipo de consulta determinado', [
@@ -487,6 +489,8 @@ private function determinarTipoConsultaConReglas(
         return 'PRIMERA VEZ';
     }
 }
+
+
 
 private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): array
 {
