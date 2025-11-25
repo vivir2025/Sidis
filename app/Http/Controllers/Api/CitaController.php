@@ -224,118 +224,334 @@ use Illuminate\Support\Facades\Log;
      * 🔧 MÉTODO CORREGIDO - Retorna ARRAY en lugar de STRING
      */
     private function asignarCupsAutomatico($pacienteUuid, $agendaUuid)
-    {
-        try {
-            Log::info('🔍 Asignando CUPS automático', [
-                'paciente_uuid' => $pacienteUuid,
-                'agenda_uuid' => $agendaUuid
-            ]);
+{
+    try {
+        Log::info('🔍 Asignando CUPS automático', [
+            'paciente_uuid' => $pacienteUuid,
+            'agenda_uuid' => $agendaUuid
+        ]);
 
-            // 1. Obtener la agenda
-            $agenda = Agenda::where('uuid', $agendaUuid)->first();
-            
-            if (!$agenda) {
-                Log::warning('⚠️ Agenda no encontrada', ['agenda_uuid' => $agendaUuid]);
-                return [
-                    'success' => false,
-                    'error' => 'Agenda no encontrada',
-                    'cups_contratado_uuid' => null
-                ];
-            }
-
-            // 2. Obtener proceso de la agenda (solo para logging)
-            $proceso = $agenda->proceso;
-            
-            if (!$proceso) {
-                Log::warning('⚠️ Agenda sin proceso asignado');
-            } else {
-                Log::info('✅ Proceso identificado', ['proceso_nombre' => $proceso->nombre]);
-            }
-
-            // 3. Determinar tipo de consulta (PRIMERA VEZ o CONTROL)
-            $tipoConsulta = $this->determinarTipoConsulta($pacienteUuid, $agendaUuid);
-            
-            Log::info('✅ Tipo de consulta determinado', ['tipo_consulta' => $tipoConsulta]);
-
-            // 4. Obtener categoría CUPS según tipo de consulta
-            $categoriaCups = CategoriaCups::where('nombre', $tipoConsulta)->first();
-            
-            if (!$categoriaCups) {
-                Log::warning('⚠️ Categoría CUPS no encontrada', ['tipo_consulta' => $tipoConsulta]);
-                return [
-                    'success' => false,
-                    'error' => "No se encontró la categoría CUPS para '{$tipoConsulta}'",
-                    'cups_contratado_uuid' => null,
-                    'tipo_consulta' => $tipoConsulta
-                ];
-            }
-
-            Log::info('✅ Categoría CUPS encontrada', [
-                'tipo_consulta' => $tipoConsulta,
-                'categoria_id' => $categoriaCups->id
-            ]);
-
-            // 5. 🔧 BUSCAR CUPS CONTRATADO - SIN proceso_id
-            $cupsContratado = CupsContratado::where('categoria_cups_id', $categoriaCups->id)
-                ->where('estado', 'ACTIVO')
-                ->whereHas('contrato', function($query) {
-                    $query->where('estado', 'ACTIVO')
-                        ->where('fecha_inicio', '<=', now())
-                        ->where('fecha_fin', '>=', now());
-                })
-                ->with(['cups', 'contrato'])
-                ->first();
-
-            if (!$cupsContratado) {
-                Log::warning('⚠️ No se encontró CUPS contratado vigente', [
-                    'categoria_cups_id' => $categoriaCups->id,
-                    'tipo_consulta' => $tipoConsulta
-                ]);
-                return [
-                    'success' => false,
-                    'error' => "No hay CUPS contratado activo para '{$tipoConsulta}'",
-                    'cups_contratado_uuid' => null,
-                    'tipo_consulta' => $tipoConsulta
-                ];
-            }
-
-            Log::info('✅ CUPS automático asignado', [
-                'cups_contratado_uuid' => $cupsContratado->uuid,
-                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
-                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
-                'contrato_numero' => $cupsContratado->contrato->numero ?? 'N/A'
-            ]);
-
-            // ✅ RETORNAR ARRAY CON ESTRUCTURA CONSISTENTE
+        // 1. Obtener la agenda
+        $agenda = Agenda::where('uuid', $agendaUuid)->first();
+        
+        if (!$agenda) {
             return [
-                'success' => true,
-                'cups_contratado_uuid' => $cupsContratado->uuid,
-                'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
-                'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
-                'tipo_consulta' => $tipoConsulta,
-                'contrato_numero' => $cupsContratado->contrato->numero ?? 'N/A'
+                'success' => false,
+                'error' => 'Agenda no encontrada',
+                'cups_contratado_uuid' => null
             ];
+        }
 
-        } catch (\Exception $e) {
-            Log::error('💥 Error asignando CUPS automático', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+        // 2. Obtener proceso de la agenda
+        $proceso = $agenda->proceso;
+        
+        if (!$proceso) {
+            Log::warning('⚠️ Agenda sin proceso asignado');
+            return [
+                'success' => false,
+                'error' => 'La agenda no tiene un proceso asignado',
+                'cups_contratado_uuid' => null
+            ];
+        }
+
+        $procesoNombre = strtoupper(trim($proceso->nombre));
+
+        Log::info('✅ Proceso identificado', [
+            'proceso_id' => $proceso->id,
+            'proceso_nombre' => $procesoNombre
+        ]);
+
+        // 3. ✅ VALIDAR REQUISITO DE ESPECIAL CONTROL - PRIMERA VEZ
+        $validacionEspecialControl = $this->validarRequisitoEspecialControl(
+            $pacienteUuid, 
+            $procesoNombre
+        );
+
+        if (!$validacionEspecialControl['success']) {
+            return $validacionEspecialControl;
+        }
+
+        // 4. ✅ DETERMINAR TIPO DE CONSULTA SEGÚN REGLAS DE NEGOCIO
+        $tipoConsulta = $this->determinarTipoConsultaConReglas(
+            $pacienteUuid, 
+            $agendaUuid, 
+            $procesoNombre
+        );
+        
+        Log::info('✅ Tipo de consulta determinado', [
+            'tipo_consulta' => $tipoConsulta,
+            'proceso' => $procesoNombre
+        ]);
+
+        // 5. Obtener categoría CUPS según tipo de consulta
+        $categoriaCups = CategoriaCups::where('nombre', $tipoConsulta)->first();
+        
+        if (!$categoriaCups) {
+            return [
+                'success' => false,
+                'error' => "No se encontró la categoría CUPS para '{$tipoConsulta}'",
+                'cups_contratado_uuid' => null,
+                'tipo_consulta' => $tipoConsulta
+            ];
+        }
+
+        // 6. Mapear proceso a palabras clave para buscar en CUPS
+        $palabrasClave = $this->obtenerPalabrasClaveProcesoParaCups($procesoNombre);
+        
+        Log::info('🔍 Palabras clave para búsqueda CUPS', [
+            'proceso' => $procesoNombre,
+            'palabras_clave' => $palabrasClave
+        ]);
+
+        // 7. Buscar CUPS contratado por nombre
+        $cupsContratado = CupsContratado::where('categoria_cups_id', $categoriaCups->id)
+            ->where('estado', 'ACTIVO')
+            ->whereHas('contrato', function($query) {
+                $query->where('estado', 'ACTIVO')
+                    ->where('fecha_inicio', '<=', now())
+                    ->where('fecha_fin', '>=', now());
+            })
+            ->whereHas('cups', function($query) use ($palabrasClave) {
+                $query->where(function($q) use ($palabrasClave) {
+                    foreach ($palabrasClave as $palabra) {
+                        $q->orWhere('nombre', 'LIKE', "%{$palabra}%");
+                    }
+                });
+            })
+            ->with(['cups', 'contrato'])
+            ->first();
+
+        if (!$cupsContratado) {
+            Log::warning('⚠️ No se encontró CUPS contratado vigente', [
+                'categoria_cups_id' => $categoriaCups->id,
+                'proceso_nombre' => $procesoNombre,
+                'palabras_clave' => $palabrasClave,
+                'tipo_consulta' => $tipoConsulta
             ]);
             
             return [
                 'success' => false,
-                'error' => 'Error interno al asignar CUPS: ' . $e->getMessage(),
+                'error' => "No hay CUPS contratado activo para '{$tipoConsulta}' en {$procesoNombre}",
+                'cups_contratado_uuid' => null,
+                'tipo_consulta' => $tipoConsulta
+            ];
+        }
+
+        Log::info('✅ CUPS automático asignado', [
+            'cups_contratado_uuid' => $cupsContratado->uuid,
+            'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+            'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+            'proceso_nombre' => $procesoNombre,
+            'tipo_consulta' => $tipoConsulta,
+            'contrato_numero' => $cupsContratado->contrato->numero ?? 'N/A'
+        ]);
+
+        return [
+            'success' => true,
+            'cups_contratado_uuid' => $cupsContratado->uuid,
+            'cups_codigo' => $cupsContratado->cups->codigo ?? 'N/A',
+            'cups_nombre' => $cupsContratado->cups->nombre ?? 'N/A',
+            'tipo_consulta' => $tipoConsulta,
+            'proceso_nombre' => $procesoNombre,
+            'contrato_numero' => $cupsContratado->contrato->numero ?? 'N/A'
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error asignando CUPS automático', [
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return [
+            'success' => false,
+            'error' => 'Error interno al asignar CUPS: ' . $e->getMessage(),
+            'cups_contratado_uuid' => null
+        ];
+    }
+}
+private function validarRequisitoEspecialControl(string $pacienteUuid, string $procesoNombre): array
+{
+    try {
+        // ✅ SI ES ESPECIAL CONTROL, NO VALIDAR (es la primera cita permitida)
+        if ($procesoNombre === 'ESPECIAL CONTROL') {
+            return ['success' => true];
+        }
+
+        Log::info('🔍 Validando requisito de ESPECIAL CONTROL', [
+            'paciente_uuid' => $pacienteUuid,
+            'proceso_solicitado' => $procesoNombre
+        ]);
+
+        // ✅ BUSCAR SI EL PACIENTE TIENE ESPECIAL CONTROL - PRIMERA VEZ
+        $tienePrimeraVezEspecialControl = Cita::where('paciente_uuid', $pacienteUuid)
+            ->whereHas('agenda.proceso', function ($query) {
+                $query->where('nombre', 'ESPECIAL CONTROL');
+            })
+            ->whereHas('cupsContratado.categoriaCups', function ($query) {
+                $query->where('nombre', 'PRIMERA VEZ');
+            })
+            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA'])
+            ->exists();
+
+        if (!$tienePrimeraVezEspecialControl) {
+            Log::warning('⚠️ Paciente sin ESPECIAL CONTROL - PRIMERA VEZ', [
+                'paciente_uuid' => $pacienteUuid,
+                'proceso_solicitado' => $procesoNombre
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'El paciente debe tener primero una cita de ESPECIAL CONTROL - PRIMERA VEZ antes de agendar otras especialidades',
+                'requiere_especial_control' => true,
                 'cups_contratado_uuid' => null
             ];
         }
+
+        Log::info('✅ Paciente tiene ESPECIAL CONTROL - PRIMERA VEZ', [
+            'paciente_uuid' => $pacienteUuid
+        ]);
+
+        return ['success' => true];
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error validando requisito ESPECIAL CONTROL', [
+            'error' => $e->getMessage(),
+            'paciente_uuid' => $pacienteUuid
+        ]);
+
+        return [
+            'success' => false,
+            'error' => 'Error validando requisitos del paciente'
+        ];
     }
+}
 
+private function determinarTipoConsultaConReglas(
+    string $pacienteUuid, 
+    string $agendaUuid, 
+    string $procesoNombre
+): string {
+    try {
+        // ✅ REGLA 1: NEFROLOGÍA e INTERNISTA siempre son CONTROL
+        $procesosSoloControl = ['NEFROLOGIA', 'INTERNISTA'];
+        
+        if (in_array($procesoNombre, $procesosSoloControl)) {
+            Log::info('✅ Proceso solo permite CONTROL', [
+                'proceso' => $procesoNombre
+            ]);
+            return 'CONTROL';
+        }
 
+        // ✅ REGLA 2: Para otros procesos, verificar historial
+        $agenda = Agenda::with('proceso')->where('uuid', $agendaUuid)->first();
+        
+        if (!$agenda || !$agenda->proceso) {
+            Log::warning('⚠️ Agenda o proceso no encontrado');
+            return 'PRIMERA VEZ';
+        }
 
+        // ✅ BUSCAR CITAS ANTERIORES DEL MISMO PROCESO
+        $citasAnteriores = Cita::where('paciente_uuid', $pacienteUuid)
+            ->whereHas('agenda.proceso', function ($query) use ($procesoNombre) {
+                $query->where('nombre', $procesoNombre);
+            })
+            ->whereIn('estado', ['ATENDIDA', 'PROGRAMADA', 'CONFIRMADA'])
+            ->where('fecha', '<', now()->format('Y-m-d'))
+            ->count();
 
+        Log::info('📊 Citas anteriores encontradas', [
+            'paciente_uuid' => $pacienteUuid,
+            'proceso_buscado' => $procesoNombre,
+            'citas_anteriores' => $citasAnteriores
+        ]);
 
+        // ✅ DETERMINAR TIPO DE CONSULTA
+        $tipoConsulta = ($citasAnteriores > 0) ? 'CONTROL' : 'PRIMERA VEZ';
+        
+        Log::info('✅ Tipo de consulta determinado', [
+            'tipo_consulta' => $tipoConsulta,
+            'citas_previas' => $citasAnteriores,
+            'proceso' => $procesoNombre
+        ]);
+
+        return $tipoConsulta;
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error determinando tipo de consulta', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return 'PRIMERA VEZ';
+    }
+}
+
+private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): array
+{
+    $procesoNombre = strtoupper(trim($procesoNombre));
+    
+    // ✅ MAPEO BASADO EN TUS CUPS REALES
+    $mapeo = [
+        'ESPECIAL CONTROL' => [
+            'MEDICINA GENERAL',
+            'GENERAL'
+        ],
+        'NUTRICIONISTA' => [
+            'NUTRICION Y DIETETICA',
+            'NUTRICION',
+            'DIETETICA'
+        ],
+        'PSICOLOGIA' => [
+            'PSICOLOGIA'
+        ],
+        'FISIOTERAPIA' => [
+            'FISIOTERAPIA'
+        ],
+        'NEFROLOGIA' => [
+            'NEFROLOGIA',
+            'ESPECIALISTA EN NEFROLOGIA'
+        ],
+        'INTERNISTA' => [
+            'MEDICINA INTERNA',
+            'ESPECIALISTA EN MEDICINA INTERNA'
+        ],
+        'TRABAJO SOCIAL' => [
+            'TRABAJO SOCIAL'
+        ],
+        'REFORMULACION' => [
+            'REFORMULACION'
+        ]
+    ];
+    
+    // Buscar en el mapeo
+    if (isset($mapeo[$procesoNombre])) {
+        Log::info('✅ Mapeo encontrado', [
+            'proceso' => $procesoNombre,
+            'palabras_clave' => $mapeo[$procesoNombre]
+        ]);
+        return $mapeo[$procesoNombre];
+    }
+    
+    // Si no encuentra mapeo, buscar por coincidencia parcial
+    foreach ($mapeo as $key => $palabras) {
+        if (str_contains($procesoNombre, $key) || str_contains($key, $procesoNombre)) {
+            Log::info('✅ Mapeo encontrado por coincidencia parcial', [
+                'proceso' => $procesoNombre,
+                'key_encontrado' => $key,
+                'palabras_clave' => $palabras
+            ]);
+            return $palabras;
+        }
+    }
+    
+    // Por defecto, retornar el mismo nombre
+    Log::warning('⚠️ No se encontró mapeo para proceso', [
+        'proceso' => $procesoNombre
+    ]);
+    return [$procesoNombre];
+}
 
     /**
      * ✅ DETERMINAR TIPO DE CONSULTA BASADO EN HISTORIAL DEL PACIENTE
