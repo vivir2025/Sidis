@@ -407,68 +407,43 @@ use Illuminate\Support\Facades\Log;
     }
 
 
-    /**
-     * ✅ MAPEAR PROCESO A SU EQUIVALENTE FUNCIONAL
-     */
-    private function mapearProcesoFuncional(string $procesoNombre): string
-    {
-        // Normalizar nombre (quitar espacios extras, convertir a mayúsculas)
-        $procesoNombre = strtoupper(trim($procesoNombre));
-        
-        // Mapeo de procesos a su categoría funcional
-        $mapeo = [
-            // MEDICINA GENERAL
-            'MEDICINA GENERAL' => 'MEDICINA GENERAL',
-            'ESPECIAL CONTROL' => 'MEDICINA GENERAL',
-            'ESPECIAL PRIMERA VEZ' => 'MEDICINA GENERAL',
-            'CONSULTA EXTERNA' => 'MEDICINA GENERAL',
-            'CONTROL MEDICO' => 'MEDICINA GENERAL',
-            
-            // PSICOLOGÍA
-            'PSICOLOGIA' => 'PSICOLOGIA',
-            'PSICOLOGÍA' => 'PSICOLOGIA',
-            'PSICOLOGIA CONTROL' => 'PSICOLOGIA',
-            'PSICOLOGIA PRIMERA VEZ' => 'PSICOLOGIA',
-            
-            // ENFERMERÍA
-            'ENFERMERIA' => 'ENFERMERIA',
-            'ENFERMERÍA' => 'ENFERMERIA',
-            'ENFERMERIA CONTROL' => 'ENFERMERIA',
-            'ENFERMERIA PRIMERA VEZ' => 'ENFERMERIA',
-            
-            // NUTRICIÓN
-            'NUTRICION' => 'NUTRICION',
-            'NUTRICIÓN' => 'NUTRICION',
-            'NUTRICION CONTROL' => 'NUTRICION',
-            'NUTRICION PRIMERA VEZ' => 'NUTRICION',
-            
-            // ODONTOLOGÍA
-            'ODONTOLOGIA' => 'ODONTOLOGIA',
-            'ODONTOLOGÍA' => 'ODONTOLOGIA',
-            'ODONTOLOGIA CONTROL' => 'ODONTOLOGIA',
-            'ODONTOLOGIA PRIMERA VEZ' => 'ODONTOLOGIA',
-            
-            // TRABAJO SOCIAL
-            'TRABAJO SOCIAL' => 'TRABAJO SOCIAL',
-            'TRABAJO SOCIAL CONTROL' => 'TRABAJO SOCIAL',
-            'TRABAJO SOCIAL PRIMERA VEZ' => 'TRABAJO SOCIAL',
-        ];
-        
-        // Buscar en el mapeo
-        if (isset($mapeo[$procesoNombre])) {
-            return $mapeo[$procesoNombre];
-        }
-        
-        // Si no encuentra mapeo, buscar por coincidencia parcial
-        foreach ($mapeo as $key => $value) {
-            if (str_contains($procesoNombre, $key) || str_contains($key, $procesoNombre)) {
-                return $value;
-            }
-        }
-        
-        // Por defecto, retornar el mismo nombre
-        return $procesoNombre;
+  /**
+ * ✅ MAPEAR PROCESO A SU EQUIVALENTE FUNCIONAL
+ */
+private function mapearProcesoFuncional(string $procesoNombre): string
+{
+    // Normalizar nombre (quitar espacios extras, convertir a mayúsculas)
+    $procesoNombre = strtoupper(trim($procesoNombre));
+    
+    // Mapeo de procesos a su categoría funcional
+    $mapeo = [
+        // PROCESOS EXACTOS DE LA BASE DE DATOS
+        'ESPECIAL CONTROL' => 'ESPECIAL CONTROL',
+        'TRABAJO SOCIAL' => 'TRABAJO SOCIAL',
+        'REFORMULACION' => 'REFORMULACION',
+        'NUTRICIONISTA' => 'NUTRICIONISTA',
+        'PSICOLOGIA' => 'PSICOLOGIA',
+        'NEFROLOGIA' => 'NEFROLOGIA',
+        'INTERNISTA' => 'INTERNISTA',
+        'FISIOTERAPIA' => 'FISIOTERAPIA',
+    ];
+    
+    // Buscar en el mapeo
+    if (isset($mapeo[$procesoNombre])) {
+        return $mapeo[$procesoNombre];
     }
+    
+    // Si no encuentra mapeo, buscar por coincidencia parcial
+    foreach ($mapeo as $key => $value) {
+        if (str_contains($procesoNombre, $key) || str_contains($key, $procesoNombre)) {
+            return $value;
+        }
+    }
+    
+    // Por defecto, retornar el mismo nombre
+    return $procesoNombre;
+}
+
 
     /**
      * ✅ NUEVO: Endpoint para determinar tipo de consulta SIN crear la cita
