@@ -497,7 +497,7 @@ private function mapearProcesoFuncional(string $procesoNombre): string
                     'proceso_nombre' => $agenda->proceso->nombre ?? 'N/A',
                     'mensaje' => $this->generarMensajeTipoConsulta(
                         $resultadoCups['tipo_consulta'],
-                        $agenda->proceso->nombre ?? 'MEDICINA GENERAL'
+                        $agenda->proceso->nombre ?? 'ESPECIAL CONTROL'
                     )
                 ],
                 'message' => 'Tipo de consulta determinado exitosamente'
