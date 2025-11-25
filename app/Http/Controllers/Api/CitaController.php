@@ -492,7 +492,7 @@ private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): arr
 {
     $procesoNombre = strtoupper(trim($procesoNombre));
     
-    // ✅ MAPEO BASADO EN TUS CUPS REALES
+    // ✅ MAPEO ACTUALIZADO - SIN TILDES Y CON VARIACIONES
     $mapeo = [
         'ESPECIAL CONTROL' => [
             'MEDICINA GENERAL',
@@ -501,17 +501,22 @@ private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): arr
         'NUTRICIONISTA' => [
             'NUTRICION Y DIETETICA',
             'NUTRICION',
-            'DIETETICA'
+            'DIETETICA',
+            'NUTRICI?N' // ← Variación con ?
         ],
         'PSICOLOGIA' => [
-            'PSICOLOGIA'
+            'PSICOLOGIA',
+            'PSICOLOG?A', // ✅ AGREGADO: Versión con ?
+            'PSICOLOGO'
         ],
         'FISIOTERAPIA' => [
             'FISIOTERAPIA'
         ],
         'NEFROLOGIA' => [
             'NEFROLOGIA',
-            'ESPECIALISTA EN NEFROLOGIA'
+            'NEFROLOG?A', // ✅ AGREGADO: Versión con ?
+            'ESPECIALISTA EN NEFROLOGIA',
+            'ESPECIALISTA EN NEFROLOG?A' // ✅ AGREGADO
         ],
         'INTERNISTA' => [
             'MEDICINA INTERNA',
@@ -521,7 +526,8 @@ private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): arr
             'TRABAJO SOCIAL'
         ],
         'REFORMULACION' => [
-            'REFORMULACION'
+            'MEDICINA GENERAL',
+            'GENERAL'
         ]
     ];
     
@@ -552,7 +558,6 @@ private function obtenerPalabrasClaveProcesoParaCups(string $procesoNombre): arr
     ]);
     return [$procesoNombre];
 }
-
     /**
      * ✅ DETERMINAR TIPO DE CONSULTA BASADO EN HISTORIAL DEL PACIENTE
      */
