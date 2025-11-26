@@ -4604,14 +4604,17 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
     }
 }
 /**
- * ✅ COMPLETAR DATOS FALTANTES - FILTRADO POR ESPECIALIDAD
+ * ✅ COMPLETAR DATOS FALTANTES - VERSIÓN CORREGIDA QUE PRESERVA ARRAYS
  */
 private function completarDatosFaltantesDeCualquierEspecialidad(string $pacienteUuid, array $historiaBase): array
 {
     try {
         Log::info('🔍 Buscando datos faltantes en historias DE CUALQUIER ESPECIALIDAD', [
             'paciente_uuid' => $pacienteUuid,
-            'nota' => 'Se busca en TODAS las especialidades'
+            'medicamentos_iniciales' => count($historiaBase['medicamentos'] ?? []),
+            'diagnosticos_iniciales' => count($historiaBase['diagnosticos'] ?? []),
+            'remisiones_iniciales' => count($historiaBase['remisiones'] ?? []),
+            'cups_iniciales' => count($historiaBase['cups'] ?? []),
         ]);
 
         $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
@@ -4620,13 +4623,14 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             return $historiaBase;
         }
 
-        // ✅ IDENTIFICAR CAMPOS VACÍOS
+        // ✅ VERIFICAR SI LOS ARRAYS YA TIENEN DATOS (NO SOBRESCRIBIR)
+        $necesitaMedicamentos = empty($historiaBase['medicamentos']);
+        $necesitaDiagnosticos = empty($historiaBase['diagnosticos']);
+        $necesitaRemisiones = empty($historiaBase['remisiones']);
+        $necesitaCups = empty($historiaBase['cups']);
+
+        // ✅ IDENTIFICAR SOLO CAMPOS ESCALARES VACÍOS
         $camposPorCompletar = [
-            // RELACIONES
-            'medicamentos' => empty($historiaBase['medicamentos']),
-            'remisiones' => empty($historiaBase['remisiones']),
-            'cups' => empty($historiaBase['cups']),
-            
             // CLASIFICACIONES
             'clasificacion_estado_metabolico' => empty($historiaBase['clasificacion_estado_metabolico']),
             'clasificacion_hta' => empty($historiaBase['clasificacion_hta']),
@@ -4665,56 +4669,65 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             'disminucion_peso' => empty($historiaBase['disminucion_peso']),
         ];
 
-        Log::info('📋 Campos a completar', [
-            'total_vacios' => count(array_filter($camposPorCompletar)),
-            'campos' => array_keys(array_filter($camposPorCompletar))
+        Log::info('📋 Estado inicial de campos', [
+            'campos_escalares_vacios' => count(array_filter($camposPorCompletar)),
+            'necesita_medicamentos' => $necesitaMedicamentos,
+            'necesita_diagnosticos' => $necesitaDiagnosticos,
+            'necesita_remisiones' => $necesitaRemisiones,
+            'necesita_cups' => $necesitaCups,
         ]);
 
-        // ✅ SI TODO ESTÁ LLENO, RETORNAR
-        if (!in_array(true, $camposPorCompletar)) {
+        // ✅ SI TODO ESTÁ LLENO, RETORNAR SIN MODIFICAR
+        if (!in_array(true, $camposPorCompletar) && 
+            !$necesitaMedicamentos && 
+            !$necesitaDiagnosticos && 
+            !$necesitaRemisiones && 
+            !$necesitaCups) {
             Log::info('✅ Todos los campos están completos, no es necesario buscar');
             return $historiaBase;
         }
 
-        // 🔥 BUSCAR EN HISTORIAS ANTERIORES DE CUALQUIER ESPECIALIDAD (SIN FILTRO)
+        // 🔥 BUSCAR EN HISTORIAS ANTERIORES DE CUALQUIER ESPECIALIDAD
         $historiasAnteriores = \App\Models\HistoriaClinica::with([
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento',
             'historiaRemisiones.remision',
             'historiaCups.cups',
-            'cita.agenda.usuarioMedico.especialidad' // ✅ Para saber de qué especialidad viene
+            'cita.agenda.usuarioMedico.especialidad'
         ])
         ->whereHas('cita', function($query) use ($paciente) {
             $query->where('paciente_uuid', $paciente->uuid);
         })
-        // ❌ SIN FILTRO DE ESPECIALIDAD - BUSCA EN TODAS
         ->orderBy('created_at', 'desc')
         ->skip(1) // SALTAR LA PRIMERA (YA LA TENEMOS)
         ->take(20) // REVISAR ÚLTIMAS 20 HISTORIAS
         ->get();
 
-        Log::info('🔍 Historias anteriores DE TODAS LAS ESPECIALIDADES encontradas', [
+        Log::info('🔍 Historias anteriores encontradas', [
             'count' => $historiasAnteriores->count(),
             'especialidades' => $historiasAnteriores->map(function($h) {
                 return $h->cita->agenda->usuarioMedico->especialidad->nombre ?? 'N/A';
             })->unique()->values()->toArray()
         ]);
 
-        // ✅ RECORRER HISTORIAS Y COMPLETAR DATOS
+        // ✅ RECORRER HISTORIAS Y COMPLETAR SOLO DATOS FALTANTES
         foreach ($historiasAnteriores as $historia) {
             
             $especialidadHistoria = $historia->cita->agenda->usuarioMedico->especialidad->nombre ?? 'DESCONOCIDA';
             
-            Log::info('🔍 Revisando historia de cualquier especialidad', [
+            Log::info('🔍 Revisando historia', [
                 'historia_uuid' => $historia->uuid,
                 'especialidad' => $especialidadHistoria,
-                'created_at' => $historia->created_at
+                'tiene_medicamentos' => $historia->historiaMedicamentos->isNotEmpty(),
+                'tiene_diagnosticos' => $historia->historiaDiagnosticos->isNotEmpty(),
+                'tiene_remisiones' => $historia->historiaRemisiones->isNotEmpty(),
+                'tiene_cups' => $historia->historiaCups->isNotEmpty(),
             ]);
 
             // ═══════════════════════════════════════════
-            // 🔹 COMPLETAR MEDICAMENTOS
+            // 🔹 COMPLETAR MEDICAMENTOS (SOLO SI ESTÁ VACÍO)
             // ═══════════════════════════════════════════
-            if ($camposPorCompletar['medicamentos'] && $historia->historiaMedicamentos && $historia->historiaMedicamentos->isNotEmpty()) {
+            if ($necesitaMedicamentos && $historia->historiaMedicamentos->isNotEmpty()) {
                 $medicamentos = [];
                 foreach ($historia->historiaMedicamentos as $item) {
                     if ($item->medicamento) {
@@ -4734,9 +4747,8 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
                 }
                 if (!empty($medicamentos)) {
                     $historiaBase['medicamentos'] = $medicamentos;
-                    $camposPorCompletar['medicamentos'] = false;
-                    Log::info('✅ Medicamentos completados desde especialidad', [
-                        'historia_uuid' => $historia->uuid,
+                    $necesitaMedicamentos = false;
+                    Log::info('✅ Medicamentos completados', [
                         'especialidad_origen' => $especialidadHistoria,
                         'count' => count($medicamentos)
                     ]);
@@ -4744,9 +4756,40 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             }
 
             // ═══════════════════════════════════════════
-            // 🔹 COMPLETAR REMISIONES
+            // 🔹 COMPLETAR DIAGNÓSTICOS (SOLO SI ESTÁ VACÍO)
             // ═══════════════════════════════════════════
-            if ($camposPorCompletar['remisiones'] && $historia->historiaRemisiones && $historia->historiaRemisiones->isNotEmpty()) {
+            if ($necesitaDiagnosticos && $historia->historiaDiagnosticos->isNotEmpty()) {
+                $diagnosticos = [];
+                foreach ($historia->historiaDiagnosticos as $item) {
+                    if ($item->diagnostico) {
+                        $diagnosticos[] = [
+                            'uuid' => $item->uuid ?? null,
+                            'diagnostico_id' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                            'tipo' => $item->tipo ?? 'PRINCIPAL',
+                            'tipo_diagnostico' => $item->tipo_diagnostico ?? 'IMPRESION_DIAGNOSTICA',
+                            'diagnostico' => [
+                                'uuid' => $item->diagnostico->uuid ?? $item->diagnostico->id,
+                                'id' => $item->diagnostico->id,
+                                'codigo' => $item->diagnostico->codigo ?? 'Sin código',
+                                'nombre' => $item->diagnostico->nombre ?? 'Sin nombre'
+                            ]
+                        ];
+                    }
+                }
+                if (!empty($diagnosticos)) {
+                    $historiaBase['diagnosticos'] = $diagnosticos;
+                    $necesitaDiagnosticos = false;
+                    Log::info('✅ Diagnósticos completados', [
+                        'especialidad_origen' => $especialidadHistoria,
+                        'count' => count($diagnosticos)
+                    ]);
+                }
+            }
+
+            // ═══════════════════════════════════════════
+            // 🔹 COMPLETAR REMISIONES (SOLO SI ESTÁ VACÍO)
+            // ═══════════════════════════════════════════
+            if ($necesitaRemisiones && $historia->historiaRemisiones->isNotEmpty()) {
                 $remisiones = [];
                 foreach ($historia->historiaRemisiones as $item) {
                     if ($item->remision) {
@@ -4765,18 +4808,18 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
                 }
                 if (!empty($remisiones)) {
                     $historiaBase['remisiones'] = $remisiones;
-                    $camposPorCompletar['remisiones'] = false;
-                    Log::info('✅ Remisiones completadas desde especialidad', [
-                        'historia_uuid' => $historia->uuid,
-                        'especialidad_origen' => $especialidadHistoria
+                    $necesitaRemisiones = false;
+                    Log::info('✅ Remisiones completadas', [
+                        'especialidad_origen' => $especialidadHistoria,
+                        'count' => count($remisiones)
                     ]);
                 }
             }
 
             // ═══════════════════════════════════════════
-            // 🔹 COMPLETAR CUPS
+            // 🔹 COMPLETAR CUPS (SOLO SI ESTÁ VACÍO)
             // ═══════════════════════════════════════════
-            if ($camposPorCompletar['cups'] && $historia->historiaCups && $historia->historiaCups->isNotEmpty()) {
+            if ($necesitaCups && $historia->historiaCups->isNotEmpty()) {
                 $cups = [];
                 foreach ($historia->historiaCups as $item) {
                     if ($item->cups) {
@@ -4795,23 +4838,20 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
                 }
                 if (!empty($cups)) {
                     $historiaBase['cups'] = $cups;
-                    $camposPorCompletar['cups'] = false;
-                    Log::info('✅ CUPS completados desde especialidad', [
-                        'historia_uuid' => $historia->uuid,
-                        'especialidad_origen' => $especialidadHistoria
+                    $necesitaCups = false;
+                    Log::info('✅ CUPS completados', [
+                        'especialidad_origen' => $especialidadHistoria,
+                        'count' => count($cups)
                     ]);
                 }
             }
 
             // ═══════════════════════════════════════════
-            // 🔹 COMPLETAR CLASIFICACIONES
+            // 🔹 COMPLETAR CLASIFICACIONES (IGUAL QUE ANTES)
             // ═══════════════════════════════════════════
             if ($camposPorCompletar['clasificacion_estado_metabolico'] && !empty($historia->clasificacion_estado_metabolico)) {
                 $historiaBase['clasificacion_estado_metabolico'] = $historia->clasificacion_estado_metabolico;
                 $camposPorCompletar['clasificacion_estado_metabolico'] = false;
-                Log::info('✅ Clasificación metabólica desde especialidad', [
-                    'especialidad_origen' => $especialidadHistoria
-                ]);
             }
 
             if ($camposPorCompletar['clasificacion_hta'] && !empty($historia->clasificacion_hta)) {
@@ -4954,19 +4994,23 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             // ═══════════════════════════════════════════
             // 🔹 VERIFICAR SI YA COMPLETAMOS TODO
             // ═══════════════════════════════════════════
-            if (!in_array(true, $camposPorCompletar)) {
+            if (!in_array(true, $camposPorCompletar) && 
+                !$necesitaMedicamentos && 
+                !$necesitaDiagnosticos && 
+                !$necesitaRemisiones && 
+                !$necesitaCups) {
                 Log::info('✅ Todos los campos completados, deteniendo búsqueda');
                 break;
             }
         }
 
-        Log::info('📊 Resultado final de completar datos DE TODAS LAS ESPECIALIDADES', [
+        Log::info('📊 Resultado final de completar datos', [
             'medicamentos_final' => count($historiaBase['medicamentos'] ?? []),
+            'diagnosticos_final' => count($historiaBase['diagnosticos'] ?? []),
             'remisiones_final' => count($historiaBase['remisiones'] ?? []),
             'cups_final' => count($historiaBase['cups'] ?? []),
             'tiene_clasificacion' => !empty($historiaBase['clasificacion_estado_metabolico']),
             'tiene_talla' => !empty($historiaBase['talla']),
-            'campos_completados' => count(array_filter($camposPorCompletar)) === 0
         ]);
 
         return $historiaBase;
@@ -4974,12 +5018,14 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
     } catch (\Exception $e) {
         Log::error('❌ Error completando datos faltantes', [
             'error' => $e->getMessage(),
-            'line' => $e->getLine()
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
         ]);
         
         return $historiaBase;
     }
 }
+
 /**
  * ✅ VERIFICAR SI ES LA PRIMERA CONSULTA DE LA ESPECIALIDAD (VERSIÓN CORREGIDA)
  */
