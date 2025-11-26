@@ -871,9 +871,8 @@ private function procesarMedicamentos(Request $request, HistoriaClinica $histori
         'ids_procesados' => $medicamentosProcesados
     ]);
 }
-
 /**
- * ✅ PROCESAR REMISIONES - CON LOGS Y VALIDACIÓN DE DUPLICADOS
+ * ✅ PROCESAR REMISIONES - VERSIÓN CORREGIDA CON BÚSQUEDA EXACTA
  */
 private function procesarRemisiones(Request $request, HistoriaClinica $historia)
 {
@@ -899,7 +898,9 @@ private function procesarRemisiones(Request $request, HistoriaClinica $historia)
         $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
 
         Log::info("🔑 ID extraído", [
-            'remision_id' => $remisionId
+            'remision_id' => $remisionId,
+            'tipo' => gettype($remisionId),
+            'longitud' => strlen($remisionId)
         ]);
 
         if (empty($remisionId)) {
@@ -907,14 +908,38 @@ private function procesarRemisiones(Request $request, HistoriaClinica $historia)
             continue;
         }
 
-        $remision = \App\Models\Remision::where(function($query) use ($remisionId) {
-            $query->where('uuid', $remisionId)
-                  ->orWhere('id', $remisionId);
-        })->first();
+        // ✅✅✅ BÚSQUEDA CORREGIDA: Primero por UUID, luego por ID ✅✅✅
+        $remision = null;
+        
+        // 🔍 INTENTO 1: Buscar por UUID (case-insensitive y trimmed)
+        $remision = \App\Models\Remision::whereRaw('LOWER(TRIM(uuid)) = ?', [
+            strtolower(trim($remisionId))
+        ])->first();
+
+        Log::info("🔍 Búsqueda por UUID", [
+            'uuid_buscado' => $remisionId,
+            'uuid_normalizado' => strtolower(trim($remisionId)),
+            'encontrado' => !is_null($remision),
+            'remision_id' => $remision ? $remision->id : null,
+            'remision_nombre' => $remision ? $remision->nombre : null
+        ]);
+
+        // 🔍 INTENTO 2: Si no se encontró por UUID, buscar por ID numérico
+        if (!$remision && is_numeric($remisionId)) {
+            $remision = \App\Models\Remision::where('id', $remisionId)->first();
+            
+            Log::info("🔍 Búsqueda por ID numérico", [
+                'id_buscado' => $remisionId,
+                'encontrado' => !is_null($remision),
+                'remision_id' => $remision ? $remision->id : null,
+                'remision_nombre' => $remision ? $remision->nombre : null
+            ]);
+        }
 
         if (!$remision) {
-            Log::error("❌ Remisión NO encontrada", [
-                'remision_id_buscado' => $remisionId
+            Log::error("❌ Remisión NO encontrada en BD", [
+                'remision_id_buscado' => $remisionId,
+                'intentos' => ['UUID case-insensitive', 'ID numérico']
             ]);
             continue;
         }
@@ -924,11 +949,15 @@ private function procesarRemisiones(Request $request, HistoriaClinica $historia)
             'remision_nombre' => $remision->nombre
         ]);
 
+        // ✅ VERIFICAR SI YA FUE PROCESADA (EVITAR DUPLICADOS)
         if (in_array($remision->id, $remisionesProcesadas)) {
-            Log::warning("⚠️ Remisión ya procesada");
+            Log::warning("⚠️ Remisión ya procesada, omitiendo", [
+                'remision_id' => $remision->id
+            ]);
             continue;
         }
 
+        // ✅ CREAR REGISTRO
         $historiaRemision = \App\Models\HistoriaRemision::create([
             'uuid' => Str::uuid(),
             'historia_clinica_id' => $historia->id,
@@ -940,15 +969,19 @@ private function procesarRemisiones(Request $request, HistoriaClinica $historia)
 
         Log::info("✅ Registro creado", [
             'historia_remision_id' => $historiaRemision->id,
-            'remision_id_guardado' => $historiaRemision->remision_id
+            'remision_id_guardado' => $historiaRemision->remision_id,
+            'remision_nombre' => $remision->nombre,
+            'observacion' => $historiaRemision->observacion
         ]);
     }
 
-    Log::info('✅ ===== FIN: Remisiones procesadas =====');
+    Log::info('✅ ===== FIN: Remisiones procesadas =====', [
+        'total_procesadas' => count($remisionesProcesadas),
+        'ids_procesadas' => $remisionesProcesadas
+    ]);
 }
-
 /**
- * ✅ PROCESAR CUPS - CON LOGS Y VALIDACIÓN DE DUPLICADOS
+ * ✅ PROCESAR CUPS - VERSIÓN CORREGIDA CON BÚSQUEDA EXACTA
  */
 private function procesarCups(Request $request, HistoriaClinica $historia)
 {
@@ -974,7 +1007,9 @@ private function procesarCups(Request $request, HistoriaClinica $historia)
         $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
 
         Log::info("🔑 ID extraído", [
-            'cups_id' => $cupsId
+            'cups_id' => $cupsId,
+            'tipo' => gettype($cupsId),
+            'longitud' => strlen($cupsId)
         ]);
 
         if (empty($cupsId)) {
@@ -982,14 +1017,40 @@ private function procesarCups(Request $request, HistoriaClinica $historia)
             continue;
         }
 
-        $cupsModel = \App\Models\Cups::where(function($query) use ($cupsId) {
-            $query->where('uuid', $cupsId)
-                  ->orWhere('id', $cupsId);
-        })->first();
+        // ✅✅✅ BÚSQUEDA CORREGIDA: Primero por UUID, luego por ID ✅✅✅
+        $cupsModel = null;
+        
+        // 🔍 INTENTO 1: Buscar por UUID (case-insensitive y trimmed)
+        $cupsModel = \App\Models\Cups::whereRaw('LOWER(TRIM(uuid)) = ?', [
+            strtolower(trim($cupsId))
+        ])->first();
+
+        Log::info("🔍 Búsqueda por UUID", [
+            'uuid_buscado' => $cupsId,
+            'uuid_normalizado' => strtolower(trim($cupsId)),
+            'encontrado' => !is_null($cupsModel),
+            'cups_id' => $cupsModel ? $cupsModel->id : null,
+            'cups_codigo' => $cupsModel ? $cupsModel->codigo : null,
+            'cups_nombre' => $cupsModel ? $cupsModel->nombre : null
+        ]);
+
+        // 🔍 INTENTO 2: Si no se encontró por UUID, buscar por ID numérico
+        if (!$cupsModel && is_numeric($cupsId)) {
+            $cupsModel = \App\Models\Cups::where('id', $cupsId)->first();
+            
+            Log::info("🔍 Búsqueda por ID numérico", [
+                'id_buscado' => $cupsId,
+                'encontrado' => !is_null($cupsModel),
+                'cups_id' => $cupsModel ? $cupsModel->id : null,
+                'cups_codigo' => $cupsModel ? $cupsModel->codigo : null,
+                'cups_nombre' => $cupsModel ? $cupsModel->nombre : null
+            ]);
+        }
 
         if (!$cupsModel) {
-            Log::error("❌ CUPS NO encontrado", [
-                'cups_id_buscado' => $cupsId
+            Log::error("❌ CUPS NO encontrado en BD", [
+                'cups_id_buscado' => $cupsId,
+                'intentos' => ['UUID case-insensitive', 'ID numérico']
             ]);
             continue;
         }
@@ -1000,11 +1061,15 @@ private function procesarCups(Request $request, HistoriaClinica $historia)
             'cups_nombre' => $cupsModel->nombre
         ]);
 
+        // ✅ VERIFICAR SI YA FUE PROCESADO (EVITAR DUPLICADOS)
         if (in_array($cupsModel->id, $cupsProcesados)) {
-            Log::warning("⚠️ CUPS ya procesado");
+            Log::warning("⚠️ CUPS ya procesado, omitiendo", [
+                'cups_id' => $cupsModel->id
+            ]);
             continue;
         }
 
+        // ✅ CREAR REGISTRO
         $historiaCups = \App\Models\HistoriaCups::create([
             'uuid' => Str::uuid(),
             'historia_clinica_id' => $historia->id,
@@ -1016,11 +1081,17 @@ private function procesarCups(Request $request, HistoriaClinica $historia)
 
         Log::info("✅ Registro creado", [
             'historia_cups_id' => $historiaCups->id,
-            'cups_id_guardado' => $historiaCups->cups_id
+            'cups_id_guardado' => $historiaCups->cups_id,
+            'cups_codigo' => $cupsModel->codigo,
+            'cups_nombre' => $cupsModel->nombre,
+            'observacion' => $historiaCups->observacion
         ]);
     }
 
-    Log::info('✅ ===== FIN: CUPS procesados =====');
+    Log::info('✅ ===== FIN: CUPS procesados =====', [
+        'total_procesados' => count($cupsProcesados),
+        'ids_procesados' => $cupsProcesados
+    ]);
 }
 
 private function storeFisioterapia(Request $request, $cita)
