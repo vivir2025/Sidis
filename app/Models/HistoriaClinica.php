@@ -152,25 +152,42 @@ class HistoriaClinica extends Model
         );
     }
 
-    // ✅ SOLO ESTAS RELACIONES (REMOVER LAS DUPLICADAS)
+      // ✅✅✅ RELACIONES CORREGIDAS CON FOREIGN KEY EXPLÍCITA ✅✅✅
+    
+    /**
+     * ✅ DIAGNÓSTICOS
+     * Especifica explícitamente la foreign key
+     */
     public function historiaDiagnosticos(): HasMany
     {
-        return $this->hasMany(HistoriaDiagnostico::class);
+        return $this->hasMany(HistoriaDiagnostico::class, 'historia_clinica_id', 'id');
     }
 
+    /**
+     * ✅ MEDICAMENTOS
+     * Especifica explícitamente la foreign key
+     */
     public function historiaMedicamentos(): HasMany
     {
-        return $this->hasMany(HistoriaMedicamento::class);
+        return $this->hasMany(HistoriaMedicamento::class, 'historia_clinica_id', 'id');
     }
 
+    /**
+     * ✅ REMISIONES
+     * Especifica explícitamente la foreign key
+     */
     public function historiaRemisiones(): HasMany
     {
-        return $this->hasMany(HistoriaRemision::class);
+        return $this->hasMany(HistoriaRemision::class, 'historia_clinica_id', 'id');
     }
 
+    /**
+     * ✅ CUPS
+     * Especifica explícitamente la foreign key
+     */
     public function historiaCups(): HasMany
     {
-        return $this->hasMany(HistoriaCups::class);
+        return $this->hasMany(HistoriaCups::class, 'historia_clinica_id', 'id');
     }
 
     public function complementaria(): HasOne
