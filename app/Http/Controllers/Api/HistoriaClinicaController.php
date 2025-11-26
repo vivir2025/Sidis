@@ -4516,9 +4516,6 @@ private function verificarHistoriasAnterioresPorEspecialidad(string $pacienteUui
     }
 }
 
-/**
- * ✅ OBTENER ÚLTIMA HISTORIA - FILTRADO POR ESPECIALIDAD
- */
 private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, string $especialidad): ?array
 {
     try {
@@ -4535,19 +4532,19 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
             return null;
         }
 
-        // 🔥 BUSCAR LA ÚLTIMA HISTORIA DE CUALQUIER ESPECIALIDAD (SIN FILTRO)
+        // 🔥 CAMBIO CLAVE: ORDENAR POR ID DESC EN LUGAR DE created_at
         $ultimaHistoria = \App\Models\HistoriaClinica::with([
             'historiaDiagnosticos.diagnostico',
             'historiaMedicamentos.medicamento',
             'historiaRemisiones.remision',
             'historiaCups.cups',
-            'cita.agenda.usuarioMedico.especialidad' // ✅ Para saber de qué especialidad viene
+            'cita.agenda.usuarioMedico.especialidad'
         ])
         ->whereHas('cita', function($query) use ($paciente) {
             $query->where('paciente_uuid', $paciente->uuid);
         })
-        // ❌ SIN FILTRO DE ESPECIALIDAD - BUSCA EN TODAS
-        ->orderBy('created_at', 'desc')
+        // ✅✅✅ ORDENAR POR ID (AUTO-INCREMENTAL) EN LUGAR DE created_at ✅✅✅
+        ->orderBy('id', 'desc')
         ->first();
 
         if (!$ultimaHistoria) {
@@ -4561,17 +4558,20 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         $especialidadOrigen = $ultimaHistoria->cita->agenda->usuarioMedico->especialidad->nombre ?? 'DESCONOCIDA';
 
         Log::info('✅ Historia encontrada (puede ser de otra especialidad)', [
+            'historia_id' => $ultimaHistoria->id, // ✅ AGREGAR ID AL LOG
             'historia_uuid' => $ultimaHistoria->uuid,
             'especialidad_origen' => $especialidadOrigen,
             'especialidad_actual' => $especialidad,
             'es_misma_especialidad' => $especialidadOrigen === $especialidad,
-            'created_at' => $ultimaHistoria->created_at
+            'created_at' => $ultimaHistoria->created_at,
+            'updated_at' => $ultimaHistoria->updated_at, // ✅ AGREGAR updated_at AL LOG
         ]);
 
         // ✅ FORMATEAR LA HISTORIA BASE
         $historiaFormateada = $this->procesarHistoriaParaFrontend($ultimaHistoria);
 
         Log::info('📊 Historia procesada (de cualquier especialidad)', [
+            'historia_id' => $ultimaHistoria->id, // ✅ AGREGAR ID
             'historia_uuid' => $ultimaHistoria->uuid,
             'especialidad_origen' => $especialidadOrigen,
             'especialidad_actual' => $especialidad,
@@ -4584,6 +4584,7 @@ private function obtenerUltimaHistoriaPorEspecialidad(string $pacienteUuid, stri
         $historiaFormateada = $this->completarDatosFaltantesDeCualquierEspecialidad($paciente->uuid, $historiaFormateada);
 
         Log::info('✅ Historia COMPLETA después de rellenar (de todas las especialidades)', [
+            'historia_id' => $ultimaHistoria->id, // ✅ AGREGAR ID
             'especialidad_actual' => $especialidad,
             'medicamentos_final' => count($historiaFormateada['medicamentos'] ?? []),
             'diagnosticos_final' => count($historiaFormateada['diagnosticos'] ?? []),
