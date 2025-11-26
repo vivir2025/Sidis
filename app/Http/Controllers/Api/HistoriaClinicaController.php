@@ -763,85 +763,247 @@ private function procesarDiagnosticos(Request $request, HistoriaClinica $histori
 }
 
 /**
- * ✅ PROCESAR MEDICAMENTOS
+ * ✅ PROCESAR MEDICAMENTOS - CON LOGS Y VALIDACIÓN DE DUPLICADOS
  */
 private function procesarMedicamentos(Request $request, HistoriaClinica $historia)
 {
-    if ($request->has('medicamentos') && is_array($request->medicamentos)) {
-        foreach ($request->medicamentos as $med) {
-            $medicamentoId = $med['medicamento_id'] ?? $med['idMedicamento'] ?? null;
-            
-            if (!empty($medicamentoId)) {
-                $medicamento = \App\Models\Medicamento::where('uuid', $medicamentoId)
-                    ->orWhere('id', $medicamentoId)
-                    ->first();
-                
-                if ($medicamento) {
-                    \App\Models\HistoriaMedicamento::create([
-                        'uuid' => Str::uuid(),
-                        'historia_clinica_id' => $historia->id,
-                        'medicamento_id' => $medicamento->id,
-                        'cantidad' => $med['cantidad'] ?? '1',
-                        'dosis' => $med['dosis'] ?? 'Según indicación médica',
-                    ]);
-                }
-            }
-        }
+    Log::info('🔍 ===== INICIO: Procesando medicamentos =====', [
+        'historia_id' => $historia->id
+    ]);
+
+    if (!$request->has('medicamentos') || !is_array($request->medicamentos)) {
+        Log::warning('⚠️ No hay medicamentos para procesar');
+        return;
     }
+
+    Log::info('📦 Medicamentos recibidos', [
+        'total' => count($request->medicamentos),
+        'medicamentos_raw' => $request->medicamentos
+    ]);
+
+    $medicamentosProcesados = []; // ✅ AGREGAR CONTROL DE DUPLICADOS
+
+    foreach ($request->medicamentos as $index => $med) {
+        Log::info("💊 ===== Procesando medicamento #{$index} =====", [
+            'medicamento_data' => $med
+        ]);
+
+        $medicamentoId = $med['medicamento_id'] ?? $med['idMedicamento'] ?? null;
+
+        Log::info("🔑 ID extraído", [
+            'medicamento_id' => $medicamentoId,
+            'tipo' => gettype($medicamentoId)
+        ]);
+
+        if (empty($medicamentoId)) {
+            Log::error("❌ Medicamento #{$index} sin ID");
+            continue;
+        }
+
+        // ✅ BUSCAR MEDICAMENTO CON LOGS DETALLADOS
+        Log::info("🔍 Buscando en BD", [
+            'buscando_uuid' => $medicamentoId,
+            'buscando_id' => $medicamentoId
+        ]);
+
+        $medicamento = \App\Models\Medicamento::where(function($query) use ($medicamentoId) {
+            $query->where('uuid', $medicamentoId)
+                  ->orWhere('id', $medicamentoId);
+        })->first();
+
+        if (!$medicamento) {
+            Log::error("❌ Medicamento NO encontrado en BD", [
+                'medicamento_id_buscado' => $medicamentoId
+            ]);
+            continue;
+        }
+
+        Log::info("✅ Medicamento encontrado", [
+            'medicamento_id_bd' => $medicamento->id,
+            'medicamento_uuid_bd' => $medicamento->uuid,
+            'medicamento_nombre' => $medicamento->nombre
+        ]);
+
+        // ✅ VERIFICAR SI YA FUE PROCESADO (EVITAR DUPLICADOS)
+        if (in_array($medicamento->id, $medicamentosProcesados)) {
+            Log::warning("⚠️ Medicamento ya procesado, omitiendo", [
+                'medicamento_id' => $medicamento->id
+            ]);
+            continue;
+        }
+
+        // ✅ CREAR REGISTRO
+        $historiaMedicamento = \App\Models\HistoriaMedicamento::create([
+            'uuid' => Str::uuid(),
+            'historia_clinica_id' => $historia->id,
+            'medicamento_id' => $medicamento->id,
+            'cantidad' => $med['cantidad'] ?? '1',
+            'dosis' => $med['dosis'] ?? 'Según indicación médica',
+        ]);
+
+        $medicamentosProcesados[] = $medicamento->id; // ✅ MARCAR COMO PROCESADO
+
+        Log::info("✅ Registro creado", [
+            'historia_medicamento_id' => $historiaMedicamento->id,
+            'medicamento_id_guardado' => $historiaMedicamento->medicamento_id,
+            'cantidad' => $historiaMedicamento->cantidad
+        ]);
+    }
+
+    Log::info('✅ ===== FIN: Medicamentos procesados =====', [
+        'total_procesados' => count($medicamentosProcesados)
+    ]);
 }
 
 /**
- * ✅ PROCESAR REMISIONES
+ * ✅ PROCESAR REMISIONES - CON LOGS Y VALIDACIÓN DE DUPLICADOS
  */
 private function procesarRemisiones(Request $request, HistoriaClinica $historia)
 {
-    if ($request->has('remisiones') && is_array($request->remisiones)) {
-        foreach ($request->remisiones as $rem) {
-            $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
-            
-            if (!empty($remisionId)) {
-                $remision = \App\Models\Remision::where('uuid', $remisionId)
-                    ->orWhere('id', $remisionId)
-                    ->first();
-                
-                if ($remision) {
-                    \App\Models\HistoriaRemision::create([
-                        'uuid' => Str::uuid(),
-                        'historia_clinica_id' => $historia->id,
-                        'remision_id' => $remision->id,
-                        'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
-                    ]);
-                }
-            }
-        }
+    Log::info('🔍 ===== INICIO: Procesando remisiones =====');
+
+    if (!$request->has('remisiones') || !is_array($request->remisiones)) {
+        Log::warning('⚠️ No hay remisiones para procesar');
+        return;
     }
+
+    Log::info('📦 Remisiones recibidas', [
+        'total' => count($request->remisiones),
+        'remisiones_raw' => $request->remisiones
+    ]);
+
+    $remisionesProcesadas = [];
+
+    foreach ($request->remisiones as $index => $rem) {
+        Log::info("🏥 ===== Procesando remisión #{$index} =====", [
+            'remision_data' => $rem
+        ]);
+
+        $remisionId = $rem['remision_id'] ?? $rem['idRemision'] ?? null;
+
+        Log::info("🔑 ID extraído", [
+            'remision_id' => $remisionId
+        ]);
+
+        if (empty($remisionId)) {
+            Log::error("❌ Remisión #{$index} sin ID");
+            continue;
+        }
+
+        $remision = \App\Models\Remision::where(function($query) use ($remisionId) {
+            $query->where('uuid', $remisionId)
+                  ->orWhere('id', $remisionId);
+        })->first();
+
+        if (!$remision) {
+            Log::error("❌ Remisión NO encontrada", [
+                'remision_id_buscado' => $remisionId
+            ]);
+            continue;
+        }
+
+        Log::info("✅ Remisión encontrada", [
+            'remision_id_bd' => $remision->id,
+            'remision_nombre' => $remision->nombre
+        ]);
+
+        if (in_array($remision->id, $remisionesProcesadas)) {
+            Log::warning("⚠️ Remisión ya procesada");
+            continue;
+        }
+
+        $historiaRemision = \App\Models\HistoriaRemision::create([
+            'uuid' => Str::uuid(),
+            'historia_clinica_id' => $historia->id,
+            'remision_id' => $remision->id,
+            'observacion' => $rem['observacion'] ?? $rem['remObservacion'] ?? null,
+        ]);
+
+        $remisionesProcesadas[] = $remision->id;
+
+        Log::info("✅ Registro creado", [
+            'historia_remision_id' => $historiaRemision->id,
+            'remision_id_guardado' => $historiaRemision->remision_id
+        ]);
+    }
+
+    Log::info('✅ ===== FIN: Remisiones procesadas =====');
 }
 
 /**
- * ✅ PROCESAR CUPS
+ * ✅ PROCESAR CUPS - CON LOGS Y VALIDACIÓN DE DUPLICADOS
  */
 private function procesarCups(Request $request, HistoriaClinica $historia)
 {
-    if ($request->has('cups') && is_array($request->cups)) {
-        foreach ($request->cups as $cup) {
-            $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
-            
-            if (!empty($cupsId)) {
-                $cupsModel = \App\Models\Cups::where('uuid', $cupsId)
-                    ->orWhere('id', $cupsId)
-                    ->first();
-                
-                if ($cupsModel) {
-                    \App\Models\HistoriaCups::create([
-                        'uuid' => Str::uuid(),
-                        'historia_clinica_id' => $historia->id,
-                        'cups_id' => $cupsModel->id,
-                        'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
-                    ]);
-                }
-            }
-        }
+    Log::info('🔍 ===== INICIO: Procesando CUPS =====');
+
+    if (!$request->has('cups') || !is_array($request->cups)) {
+        Log::warning('⚠️ No hay CUPS para procesar');
+        return;
     }
+
+    Log::info('📦 CUPS recibidos', [
+        'total' => count($request->cups),
+        'cups_raw' => $request->cups
+    ]);
+
+    $cupsProcesados = [];
+
+    foreach ($request->cups as $index => $cup) {
+        Log::info("🩺 ===== Procesando CUPS #{$index} =====", [
+            'cups_data' => $cup
+        ]);
+
+        $cupsId = $cup['cups_id'] ?? $cup['idCups'] ?? null;
+
+        Log::info("🔑 ID extraído", [
+            'cups_id' => $cupsId
+        ]);
+
+        if (empty($cupsId)) {
+            Log::error("❌ CUPS #{$index} sin ID");
+            continue;
+        }
+
+        $cupsModel = \App\Models\Cups::where(function($query) use ($cupsId) {
+            $query->where('uuid', $cupsId)
+                  ->orWhere('id', $cupsId);
+        })->first();
+
+        if (!$cupsModel) {
+            Log::error("❌ CUPS NO encontrado", [
+                'cups_id_buscado' => $cupsId
+            ]);
+            continue;
+        }
+
+        Log::info("✅ CUPS encontrado", [
+            'cups_id_bd' => $cupsModel->id,
+            'cups_codigo' => $cupsModel->codigo,
+            'cups_nombre' => $cupsModel->nombre
+        ]);
+
+        if (in_array($cupsModel->id, $cupsProcesados)) {
+            Log::warning("⚠️ CUPS ya procesado");
+            continue;
+        }
+
+        $historiaCups = \App\Models\HistoriaCups::create([
+            'uuid' => Str::uuid(),
+            'historia_clinica_id' => $historia->id,
+            'cups_id' => $cupsModel->id,
+            'observacion' => $cup['observacion'] ?? $cup['cupObservacion'] ?? null,
+        ]);
+
+        $cupsProcesados[] = $cupsModel->id;
+
+        Log::info("✅ Registro creado", [
+            'historia_cups_id' => $historiaCups->id,
+            'cups_id_guardado' => $historiaCups->cups_id
+        ]);
+    }
+
+    Log::info('✅ ===== FIN: CUPS procesados =====');
 }
 
 private function storeFisioterapia(Request $request, $cita)
