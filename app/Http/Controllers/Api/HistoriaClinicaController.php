@@ -761,10 +761,6 @@ private function procesarDiagnosticos(Request $request, HistoriaClinica $histori
         }
     }
 }
-
-/**
- * ✅ PROCESAR MEDICAMENTOS - CON LOGS Y VALIDACIÓN DE DUPLICADOS
- */
 private function procesarMedicamentos(Request $request, HistoriaClinica $historia)
 {
     Log::info('🔍 ===== INICIO: Procesando medicamentos =====', [
@@ -781,7 +777,7 @@ private function procesarMedicamentos(Request $request, HistoriaClinica $histori
         'medicamentos_raw' => $request->medicamentos
     ]);
 
-    $medicamentosProcesados = []; // ✅ AGREGAR CONTROL DE DUPLICADOS
+    $medicamentosProcesados = [];
 
     foreach ($request->medicamentos as $index => $med) {
         Log::info("💊 ===== Procesando medicamento #{$index} =====", [
@@ -792,7 +788,8 @@ private function procesarMedicamentos(Request $request, HistoriaClinica $histori
 
         Log::info("🔑 ID extraído", [
             'medicamento_id' => $medicamentoId,
-            'tipo' => gettype($medicamentoId)
+            'tipo' => gettype($medicamentoId),
+            'longitud' => strlen($medicamentoId)
         ]);
 
         if (empty($medicamentoId)) {
@@ -800,20 +797,38 @@ private function procesarMedicamentos(Request $request, HistoriaClinica $histori
             continue;
         }
 
-        // ✅ BUSCAR MEDICAMENTO CON LOGS DETALLADOS
-        Log::info("🔍 Buscando en BD", [
-            'buscando_uuid' => $medicamentoId,
-            'buscando_id' => $medicamentoId
+        // ✅✅✅ BÚSQUEDA CORREGIDA: Primero por UUID, luego por ID ✅✅✅
+        $medicamento = null;
+        
+        // 🔍 INTENTO 1: Buscar por UUID (case-insensitive y trimmed)
+        $medicamento = \App\Models\Medicamento::whereRaw('LOWER(TRIM(uuid)) = ?', [
+            strtolower(trim($medicamentoId))
+        ])->first();
+
+        Log::info("🔍 Búsqueda por UUID", [
+            'uuid_buscado' => $medicamentoId,
+            'uuid_normalizado' => strtolower(trim($medicamentoId)),
+            'encontrado' => !is_null($medicamento),
+            'medicamento_id' => $medicamento ? $medicamento->id : null,
+            'medicamento_nombre' => $medicamento ? $medicamento->nombre : null
         ]);
 
-        $medicamento = \App\Models\Medicamento::where(function($query) use ($medicamentoId) {
-            $query->where('uuid', $medicamentoId)
-                  ->orWhere('id', $medicamentoId);
-        })->first();
+        // 🔍 INTENTO 2: Si no se encontró por UUID, buscar por ID numérico
+        if (!$medicamento && is_numeric($medicamentoId)) {
+            $medicamento = \App\Models\Medicamento::where('id', $medicamentoId)->first();
+            
+            Log::info("🔍 Búsqueda por ID numérico", [
+                'id_buscado' => $medicamentoId,
+                'encontrado' => !is_null($medicamento),
+                'medicamento_id' => $medicamento ? $medicamento->id : null,
+                'medicamento_nombre' => $medicamento ? $medicamento->nombre : null
+            ]);
+        }
 
         if (!$medicamento) {
             Log::error("❌ Medicamento NO encontrado en BD", [
-                'medicamento_id_buscado' => $medicamentoId
+                'medicamento_id_buscado' => $medicamentoId,
+                'intentos' => ['UUID case-insensitive', 'ID numérico']
             ]);
             continue;
         }
@@ -841,17 +856,19 @@ private function procesarMedicamentos(Request $request, HistoriaClinica $histori
             'dosis' => $med['dosis'] ?? 'Según indicación médica',
         ]);
 
-        $medicamentosProcesados[] = $medicamento->id; // ✅ MARCAR COMO PROCESADO
+        $medicamentosProcesados[] = $medicamento->id;
 
         Log::info("✅ Registro creado", [
             'historia_medicamento_id' => $historiaMedicamento->id,
             'medicamento_id_guardado' => $historiaMedicamento->medicamento_id,
+            'medicamento_nombre' => $medicamento->nombre,
             'cantidad' => $historiaMedicamento->cantidad
         ]);
     }
 
     Log::info('✅ ===== FIN: Medicamentos procesados =====', [
-        'total_procesados' => count($medicamentosProcesados)
+        'total_procesados' => count($medicamentosProcesados),
+        'ids_procesados' => $medicamentosProcesados
     ]);
 }
 
