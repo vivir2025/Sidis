@@ -20,22 +20,21 @@ use PDF;
 class HistoriaClinicaController extends Controller
 {
  
- public function index(Request $request)
+public function index(Request $request)
 {
     try {
         Log::info('📋 API GET Request - Historias Clínicas', [
             'filters' => $request->all()
         ]);
 
-        // ✅ JOIN con citas para poder ordenar por su fecha
+        // ✅ JOIN con citas usando fecha_inicio y fecha_final
         $query = HistoriaClinica::query()
             ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
             ->select(
                 'historias_clinicas.*', 
                 'citas.fecha as cita_fecha',
-                'citas.hora as cita_hora',
-                // ✅ AGREGAR created_at de historia para ordenar por fecha real de creación
-                DB::raw('COALESCE(historias_clinicas.created_at, citas.fecha) as fecha_ordenamiento')
+                'citas.fecha_inicio as cita_fecha_inicio',
+                'citas.fecha_final as cita_fecha_final'
             )
             ->with([
                 'sede',
@@ -90,11 +89,10 @@ class HistoriaClinicaController extends Controller
         $perPage = $request->get('per_page', 15);
         $perPage = max(5, min(100, (int) $perPage));
         
-        // ✅ ORDENAR POR FECHA DE CREACIÓN DE HISTORIA (MÁS RECIENTE PRIMERO)
+        // ✅ ORDENAR: Primero por created_at de historia, luego por fecha_inicio de cita
         $historias = $query
-            ->orderBy('historias_clinicas.created_at', 'desc') // ← Primero por created_at de historia
-            ->orderBy('citas.fecha', 'desc')                    // ← Luego por fecha de cita
-            ->orderBy('citas.hora', 'desc')                     // ← Finalmente por hora
+            ->orderBy('historias_clinicas.created_at', 'desc')
+            ->orderBy('citas.fecha_inicio', 'desc')
             ->paginate($perPage);
 
         // ✅ TRANSFORMAR DATOS
@@ -106,6 +104,18 @@ class HistoriaClinicaController extends Controller
 
             $tipoConsulta = $this->obtenerTipoConsulta($historia);
 
+            // ✅ EXTRAER HORA DE fecha_inicio
+            $horaInicio = null;
+            $horaFinal = null;
+            
+            if ($historia->cita && $historia->cita->fecha_inicio) {
+                $horaInicio = \Carbon\Carbon::parse($historia->cita->fecha_inicio)->format('H:i');
+            }
+            
+            if ($historia->cita && $historia->cita->fecha_final) {
+                $horaFinal = \Carbon\Carbon::parse($historia->cita->fecha_final)->format('H:i');
+            }
+
             return [
                 'uuid' => $historia->uuid,
                 'cita_id' => $historia->cita_id,
@@ -116,15 +126,19 @@ class HistoriaClinicaController extends Controller
                 'motivo_consulta' => $historia->motivo_consulta,
                 'enfermedad_actual' => $historia->enfermedad_actual,
                 
-                // ✅ FECHAS CORRECTAS (SIN CONVERSIÓN DE ZONA HORARIA)
                 'created_at' => $historia->created_at ? $historia->created_at->format('Y-m-d H:i:s') : null,
                 'updated_at' => $historia->updated_at ? $historia->updated_at->format('Y-m-d H:i:s') : null,
                 
                 'cita' => [
                     'uuid' => $historia->cita->uuid ?? null,
-                    // ✅ FECHA SIN CONVERSIÓN (FORMATO ISO)
                     'fecha' => $historia->cita->fecha ?? null,
-                    'hora' => $historia->cita->hora ?? null,
+                    
+                    // ✅ AGREGAR FECHA Y HORA DE INICIO/FIN
+                    'fecha_inicio' => $historia->cita->fecha_inicio ?? null,
+                    'fecha_final' => $historia->cita->fecha_final ?? null,
+                    'hora_inicio' => $horaInicio,
+                    'hora_final' => $horaFinal,
+                    
                     'estado' => $historia->cita->estado ?? null,
                     
                     'paciente' => $historia->cita && $historia->cita->paciente ? [
@@ -192,6 +206,7 @@ class HistoriaClinicaController extends Controller
         ], 500);
     }
 }
+
 
 
  /////✅ OBTENER TIPO DE CONSULTA CON DEBUG COMPLETO
