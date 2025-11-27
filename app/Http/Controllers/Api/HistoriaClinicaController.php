@@ -20,192 +20,208 @@ use PDF;
 class HistoriaClinicaController extends Controller
 {
  
-public function index(Request $request)
-{
-    try {
-        Log::info('📋 API GET Request - Historias Clínicas', [
-            'filters' => $request->all()
-        ]);
-
-        // ✅ JOIN con citas usando fecha_inicio y fecha_final
-        $query = HistoriaClinica::query()
-            ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
-            ->select(
-                'historias_clinicas.*', 
-                'citas.fecha as cita_fecha',
-                'citas.fecha_inicio as cita_fecha_inicio',
-                'citas.fecha_final as cita_fecha_final'
-            )
-            ->with([
-                'sede',
-                'cita',
-                'cita.paciente',
-                'cita.agenda.usuario',
-                'cita.agenda.usuarioMedico',
-                'cita.agenda.proceso',
-                'cita.cupsContratado',
-                'cita.cupsContratado.categoriaCups',
-                'historiaDiagnosticos.diagnostico',
-                'historiaMedicamentos.medicamento',
-                'historiaRemisiones.remision',
-                'historiaCups.cups',
-                'complementaria'
+    public function index(Request $request)
+    {
+        try {
+            Log::info('📋 API GET Request - Historias Clínicas', [
+                'filters' => $request->all()
             ]);
 
-        // Filtros
-        if ($request->filled('documento')) {
-            $query->whereHas('cita.paciente', function ($q) use ($request) {
-                $q->where('documento', $request->documento);
-            });
-        }
+            $query = HistoriaClinica::query()
+                ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
+                ->select(
+                    'historias_clinicas.*', 
+                    'citas.fecha as cita_fecha',
+                    'citas.fecha_inicio as cita_fecha_inicio',
+                    'citas.fecha_final as cita_fecha_final'
+                )
+                ->with([
+                    'sede',
+                    'cita',
+                    'cita.paciente',
+                    'cita.agenda.usuario',
+                    'cita.agenda.usuarioMedico',
+                    'cita.agenda.proceso',
+                    'cita.cupsContratado',
+                    'cita.cupsContratado.categoriaCups',
+                    'historiaDiagnosticos.diagnostico',
+                    'historiaMedicamentos.medicamento',
+                    'historiaRemisiones.remision',
+                    'historiaCups.cups',
+                    'complementaria'
+                ]);
 
-        if ($request->has('fecha_desde')) {
-            $query->whereDate('citas.fecha', '>=', $request->fecha_desde);
-        }
+            // Filtros
+            if ($request->filled('documento')) {
+                $query->whereHas('cita.paciente', function ($q) use ($request) {
+                    $q->where('documento', $request->documento);
+                });
+            }
 
-        if ($request->has('fecha_hasta')) {
-            $query->whereDate('citas.fecha', '<=', $request->fecha_hasta);
-        }
+            if ($request->has('fecha_desde')) {
+                $query->whereDate('citas.fecha', '>=', $request->fecha_desde);
+            }
 
-        if ($request->filled('especialidad')) {
-            $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
-                $q->where('nombre', 'like', '%' . $request->especialidad . '%');
-            });
-        }
+            if ($request->has('fecha_hasta')) {
+                $query->whereDate('citas.fecha', '<=', $request->fecha_hasta);
+            }
 
-        if ($request->filled('tipo_consulta')) {
-            $tipoConsulta = strtoupper($request->tipo_consulta);
+            if ($request->filled('especialidad')) {
+                $query->whereHas('cita.agenda.proceso', function ($q) use ($request) {
+                    $q->where('nombre', 'like', '%' . $request->especialidad . '%');
+                });
+            }
+
+            if ($request->filled('tipo_consulta')) {
+                $tipoConsulta = strtoupper($request->tipo_consulta);
+                
+                $query->whereHas('cita.cupsContratado.categoriaCups', function ($q) use ($tipoConsulta) {
+                    if ($tipoConsulta === 'PRIMERA VEZ' || $tipoConsulta === 'PRIMERA_VEZ') {
+                        $q->where('id', 1);
+                    } elseif ($tipoConsulta === 'CONTROL') {
+                        $q->where('id', 2);
+                    }
+                });
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $perPage = max(5, min(100, (int) $perPage));
             
-            $query->whereHas('cita.cupsContratado.categoriaCups', function ($q) use ($tipoConsulta) {
-                if ($tipoConsulta === 'PRIMERA VEZ' || $tipoConsulta === 'PRIMERA_VEZ') {
-                    $q->where('id', 1);
-                } elseif ($tipoConsulta === 'CONTROL') {
-                    $q->where('id', 2);
+            $historias = $query
+                ->orderBy('historias_clinicas.created_at', 'desc')
+                ->orderBy('citas.fecha_inicio', 'desc')
+                ->paginate($perPage);
+
+            // ✅ TRANSFORMAR DATOS CON FECHAS CORRECTAS
+            $historiasTransformadas = $historias->getCollection()->map(function ($historia) {
+                $especialidad = 'N/A';
+                if ($historia->cita && $historia->cita->agenda && $historia->cita->agenda->proceso) {
+                    $especialidad = $historia->cita->agenda->proceso->nombre ?? 'N/A';
                 }
-            });
-        }
 
-        // Paginación
-        $perPage = $request->get('per_page', 15);
-        $perPage = max(5, min(100, (int) $perPage));
-        
-        // ✅ ORDENAR: Primero por created_at de historia, luego por fecha_inicio de cita
-        $historias = $query
-            ->orderBy('historias_clinicas.created_at', 'desc')
-            ->orderBy('citas.fecha_inicio', 'desc')
-            ->paginate($perPage);
+                $tipoConsulta = $this->obtenerTipoConsulta($historia);
 
-        // ✅ TRANSFORMAR DATOS
-        $historiasTransformadas = $historias->getCollection()->map(function ($historia) {
-            $especialidad = 'N/A';
-            if ($historia->cita && $historia->cita->agenda && $historia->cita->agenda->proceso) {
-                $especialidad = $historia->cita->agenda->proceso->nombre ?? 'N/A';
-            }
-
-            $tipoConsulta = $this->obtenerTipoConsulta($historia);
-
-            // ✅ EXTRAER HORA DE fecha_inicio
-            $horaInicio = null;
-            $horaFinal = null;
-            
-            if ($historia->cita && $historia->cita->fecha_inicio) {
-                $horaInicio = \Carbon\Carbon::parse($historia->cita->fecha_inicio)->format('H:i');
-            }
-            
-            if ($historia->cita && $historia->cita->fecha_final) {
-                $horaFinal = \Carbon\Carbon::parse($historia->cita->fecha_final)->format('H:i');
-            }
-
-            return [
-                'uuid' => $historia->uuid,
-                'cita_id' => $historia->cita_id,
-                'sede_id' => $historia->sede_id,
-                'especialidad' => $especialidad,
-                'tipo_consulta' => $tipoConsulta,
-                'diagnostico_principal' => $historia->diagnostico_principal,
-                'motivo_consulta' => $historia->motivo_consulta,
-                'enfermedad_actual' => $historia->enfermedad_actual,
+                // ✅ FORMATEAR FECHAS SIN CONVERSIÓN DE ZONA HORARIA
+                $fechaCita = null;
+                $fechaInicio = null;
+                $fechaFinal = null;
+                $horaInicio = null;
+                $horaFinal = null;
                 
-                'created_at' => $historia->created_at ? $historia->created_at->format('Y-m-d H:i:s') : null,
-                'updated_at' => $historia->updated_at ? $historia->updated_at->format('Y-m-d H:i:s') : null,
+                // ✅ FECHA DE LA CITA (solo fecha, sin hora)
+                if ($historia->cita && $historia->cita->fecha) {
+                    // Usar Carbon para formatear sin conversión
+                    $fechaCita = \Carbon\Carbon::parse($historia->cita->fecha)->format('Y-m-d');
+                }
                 
-                'cita' => [
-                    'uuid' => $historia->cita->uuid ?? null,
-                    'fecha' => $historia->cita->fecha ?? null,
+                // ✅ FECHA Y HORA DE INICIO
+                if ($historia->cita && $historia->cita->fecha_inicio) {
+                    $carbon = \Carbon\Carbon::parse($historia->cita->fecha_inicio);
+                    $fechaInicio = $carbon->format('Y-m-d H:i:s');
+                    $horaInicio = $carbon->format('H:i');
+                }
+                
+                // ✅ FECHA Y HORA FINAL
+                if ($historia->cita && $historia->cita->fecha_final) {
+                    $carbon = \Carbon\Carbon::parse($historia->cita->fecha_final);
+                    $fechaFinal = $carbon->format('Y-m-d H:i:s');
+                    $horaFinal = $carbon->format('H:i');
+                }
+
+                return [
+                    'uuid' => $historia->uuid,
+                    'cita_id' => $historia->cita_id,
+                    'sede_id' => $historia->sede_id,
+                    'especialidad' => $especialidad,
+                    'tipo_consulta' => $tipoConsulta,
+                    'diagnostico_principal' => $historia->diagnostico_principal,
+                    'motivo_consulta' => $historia->motivo_consulta,
+                    'enfermedad_actual' => $historia->enfermedad_actual,
                     
-                    // ✅ AGREGAR FECHA Y HORA DE INICIO/FIN
-                    'fecha_inicio' => $historia->cita->fecha_inicio ?? null,
-                    'fecha_final' => $historia->cita->fecha_final ?? null,
-                    'hora_inicio' => $horaInicio,
-                    'hora_final' => $horaFinal,
+                    // ✅ FECHAS DE HISTORIA SIN CONVERSIÓN
+                    'created_at' => $historia->created_at ? 
+                                \Carbon\Carbon::parse($historia->created_at)->format('Y-m-d H:i:s') : null,
+                    'updated_at' => $historia->updated_at ? 
+                                \Carbon\Carbon::parse($historia->updated_at)->format('Y-m-d H:i:s') : null,
                     
-                    'estado' => $historia->cita->estado ?? null,
-                    
-                    'paciente' => $historia->cita && $historia->cita->paciente ? [
-                        'uuid' => $historia->cita->paciente->uuid,
-                        'nombre_completo' => $historia->cita->paciente->nombre_completo ?? 
-                                            trim(($historia->cita->paciente->primer_nombre ?? '') . ' ' . 
-                                                ($historia->cita->paciente->segundo_nombre ?? '') . ' ' . 
-                                                ($historia->cita->paciente->primer_apellido ?? '') . ' ' . 
-                                                ($historia->cita->paciente->segundo_apellido ?? '')),
-                        'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
-                        'documento' => $historia->cita->paciente->documento ?? 'N/A',
-                        'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
-                        'sexo' => $historia->cita->paciente->sexo ?? null,
-                    ] : null,
-                    
-                    'agenda' => $historia->cita && $historia->cita->agenda ? [
-                        'uuid' => $historia->cita->agenda->uuid,
+                    'cita' => [
+                        'uuid' => $historia->cita->uuid ?? null,
                         
-                        'proceso' => $historia->cita->agenda->proceso ? [
-                            'uuid' => $historia->cita->agenda->proceso->uuid,
-                            'nombre' => $historia->cita->agenda->proceso->nombre ?? 'N/A',
+                        // ✅ FECHAS FORMATEADAS CORRECTAMENTE
+                        'fecha' => $fechaCita,
+                        'fecha_inicio' => $fechaInicio,
+                        'fecha_final' => $fechaFinal,
+                        'hora_inicio' => $horaInicio,
+                        'hora_final' => $horaFinal,
+                        
+                        'estado' => $historia->cita->estado ?? null,
+                        
+                        'paciente' => $historia->cita && $historia->cita->paciente ? [
+                            'uuid' => $historia->cita->paciente->uuid,
+                            'nombre_completo' => $historia->cita->paciente->nombre_completo ?? 
+                                                trim(($historia->cita->paciente->primer_nombre ?? '') . ' ' . 
+                                                    ($historia->cita->paciente->segundo_nombre ?? '') . ' ' . 
+                                                    ($historia->cita->paciente->primer_apellido ?? '') . ' ' . 
+                                                    ($historia->cita->paciente->segundo_apellido ?? '')),
+                            'tipo_documento' => $historia->cita->paciente->tipo_documento ?? 'CC',
+                            'documento' => $historia->cita->paciente->documento ?? 'N/A',
+                            'fecha_nacimiento' => $historia->cita->paciente->fecha_nacimiento ?? null,
+                            'sexo' => $historia->cita->paciente->sexo ?? null,
                         ] : null,
                         
-                        'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
-                            'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
-                            'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
-                                                trim(($historia->cita->agenda->usuarioMedico->primer_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->agenda->usuarioMedico->primer_apellido ?? '')),
-                        ] : ($historia->cita->agenda->usuario ? [
-                            'uuid' => $historia->cita->agenda->usuario->uuid,
-                            'nombre_completo' => $historia->cita->agenda->usuario->nombre_completo ?? 
-                                                trim(($historia->cita->agenda->usuario->primer_nombre ?? '') . ' ' . 
-                                                    ($historia->cita->agenda->usuario->primer_apellido ?? '')),
-                        ] : null),
+                        'agenda' => $historia->cita && $historia->cita->agenda ? [
+                            'uuid' => $historia->cita->agenda->uuid,
+                            
+                            'proceso' => $historia->cita->agenda->proceso ? [
+                                'uuid' => $historia->cita->agenda->proceso->uuid,
+                                'nombre' => $historia->cita->agenda->proceso->nombre ?? 'N/A',
+                            ] : null,
+                            
+                            'usuario_medico' => $historia->cita->agenda->usuarioMedico ? [
+                                'uuid' => $historia->cita->agenda->usuarioMedico->uuid,
+                                'nombre_completo' => $historia->cita->agenda->usuarioMedico->nombre_completo ?? 
+                                                    trim(($historia->cita->agenda->usuarioMedico->primer_nombre ?? '') . ' ' . 
+                                                        ($historia->cita->agenda->usuarioMedico->primer_apellido ?? '')),
+                            ] : ($historia->cita->agenda->usuario ? [
+                                'uuid' => $historia->cita->agenda->usuario->uuid,
+                                'nombre_completo' => $historia->cita->agenda->usuario->nombre_completo ?? 
+                                                    trim(($historia->cita->agenda->usuario->primer_nombre ?? '') . ' ' . 
+                                                        ($historia->cita->agenda->usuario->primer_apellido ?? '')),
+                            ] : null),
+                        ] : null,
+                    ],
+                    
+                    'sede' => $historia->sede ? [
+                        'uuid' => $historia->sede->uuid,
+                        'nombre' => $historia->sede->nombre ?? 'N/A',
                     ] : null,
-                ],
-                
-                'sede' => $historia->sede ? [
-                    'uuid' => $historia->sede->uuid,
-                    'nombre' => $historia->sede->nombre ?? 'N/A',
-                ] : null,
-            ];
-        });
+                ];
+            });
 
-        $historias->setCollection($historiasTransformadas);
+            $historias->setCollection($historiasTransformadas);
 
-        return response()->json([
-            'success' => true,
-            'data' => $historias,
-            'message' => 'Historias clínicas obtenidas exitosamente'
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $historias,
+                'message' => 'Historias clínicas obtenidas exitosamente'
+            ]);
 
-    } catch (\Exception $e) {
-        Log::error('❌ Error en HistoriaClinicaController', [
-            'error' => $e->getMessage(),
-            'line' => $e->getLine(),
-            'file' => $e->getFile(),
-            'trace' => $e->getTraceAsString()
-        ]);
+        } catch (\Exception $e) {
+            Log::error('❌ Error en HistoriaClinicaController', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al obtener historias clínicas',
-            'error' => $e->getMessage()
-        ], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener historias clínicas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
+
 
 
 
