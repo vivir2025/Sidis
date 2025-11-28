@@ -334,30 +334,163 @@ private function obtenerTipoConsulta($historia): ?string
         return null;
     }
 }
+private function determinarTipoConsultaReal(string $pacienteUuid, string $especialidad, int $citaActualId): string
+{
+    try {
+        \Log::info('🧠 Determinando tipo de consulta REAL (backend)', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad,
+            'cita_actual_id' => $citaActualId
+        ]);
 
+        // ✅ ESPECIALIDADES QUE SOLO TIENEN CONTROL
+        $especialidadesSoloControl = ['NEFROLOGIA', 'INTERNISTA'];
+        
+        if (in_array($especialidad, $especialidadesSoloControl)) {
+            \Log::info('🔒 Especialidad solo-control detectada - FORZANDO CONTROL', [
+                'especialidad' => $especialidad
+            ]);
+            return 'CONTROL';
+        }
+
+        // ✅ USAR EL MÉTODO QUE YA TIENES
+        $esPrimeraVez = $this->esPrimeraConsultaDeEspecialidad($pacienteUuid, $especialidad, $citaActualId);
+        
+        $tipoConsulta = $esPrimeraVez ? 'PRIMERA VEZ' : 'CONTROL';
+        
+        \Log::info('✅ Tipo consulta determinado (backend)', [
+            'es_primera_vez' => $esPrimeraVez,
+            'tipo_consulta' => $tipoConsulta,
+            'especialidad' => $especialidad
+        ]);
+        
+        return $tipoConsulta;
+        
+    } catch (\Exception $e) {
+        \Log::error('❌ Error determinando tipo consulta real', [
+            'error' => $e->getMessage()
+        ]);
+        
+        // ✅ En caso de error, asumir PRIMERA VEZ por seguridad
+        return 'PRIMERA VEZ';
+    }
+}
+/**
+ * ✅ VERIFICAR SI ES LA PRIMERA CONSULTA DE LA ESPECIALIDAD
+ */
+private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $especialidad, ?int $citaActualId = null): bool
+{
+    try {
+        \Log::info('🔍 Verificando si es PRIMERA CONSULTA de la especialidad', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad,
+            'cita_actual_id' => $citaActualId
+        ]);
+
+        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
+        
+        if (!$paciente) {
+            \Log::warning('⚠️ Paciente no encontrado, asumiendo PRIMERA VEZ');
+            return true;
+        }
+
+        // ✅ NORMALIZAR ESPECIALIDAD
+        $especialidadNormalizada = strtoupper(str_replace([' ', 'Á', 'É', 'Í', 'Ó', 'Ú'], ['', 'A', 'E', 'I', 'O', 'U'], trim($especialidad)));
+
+        // ✅ OBTENER TODAS LAS HISTORIAS **EXCLUYENDO LA CITA ACTUAL**
+        $historias = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente, $citaActualId) {
+            $query->where('paciente_uuid', $paciente->uuid)
+                  ->whereIn('estado', ['ATENDIDA', 'CONFIRMADA']);
+            
+            // ✅ EXCLUIR LA CITA ACTUAL
+            if ($citaActualId) {
+                $query->where('id', '!=', $citaActualId);
+            }
+        })
+        ->with([
+            'cita.agenda.usuarioMedico.especialidad',
+            'cita.agenda.proceso'
+        ])
+        ->get();
+
+        \Log::info('📋 Total de historias encontradas (excluyendo cita actual)', [
+            'total' => $historias->count(),
+            'paciente_uuid' => $pacienteUuid,
+            'cita_actual_excluida' => $citaActualId
+        ]);
+
+        if ($historias->isEmpty()) {
+            \Log::info('✅ No hay historias previas → PRIMERA VEZ');
+            return true;
+        }
+
+        // ✅ FILTRAR POR ESPECIALIDAD
+        $historiasDeEspecialidad = $historias->filter(function($historia) use ($especialidadNormalizada, $especialidad) {
+            $cita = $historia->cita;
+            $agenda = $cita->agenda ?? null;
+            
+            if (!$agenda) {
+                return false;
+            }
+            
+            // ✅ INTENTO 1: Verificar en usuarioMedico.especialidad
+            $especialidadHistoria = null;
+            if ($agenda->usuarioMedico && $agenda->usuarioMedico->especialidad) {
+                $especialidadHistoria = $agenda->usuarioMedico->especialidad->nombre ?? '';
+            }
+            
+            // ✅ INTENTO 2: Si no hay especialidad, verificar en proceso
+            if (empty($especialidadHistoria) && $agenda->proceso) {
+                $especialidadHistoria = $agenda->proceso->nombre ?? '';
+            }
+            
+            if (empty($especialidadHistoria)) {
+                return false;
+            }
+            
+            // ✅ NORMALIZAR Y COMPARAR
+            $especialidadHistoriaNormalizada = strtoupper(str_replace([' ', 'Á', 'É', 'Í', 'Ó', 'Ú'], ['', 'A', 'E', 'I', 'O', 'U'], trim($especialidadHistoria)));
+            
+            $coincide = $especialidadHistoriaNormalizada === $especialidadNormalizada;
+            
+            \Log::info('🔍 Comparando especialidades', [
+                'historia_uuid' => $historia->uuid,
+                'especialidad_historia' => $especialidadHistoria,
+                'especialidad_buscada' => $especialidad,
+                'coincide' => $coincide ? '✅ SÍ' : '❌ NO'
+            ]);
+            
+            return $coincide;
+        });
+
+        $totalHistorias = $historiasDeEspecialidad->count();
+        $esPrimeraVez = $totalHistorias === 0;
+
+        \Log::info('✅ Resultado: Verificación de primera consulta', [
+            'paciente_uuid' => $pacienteUuid,
+            'especialidad' => $especialidad,
+            'total_historias_de_especialidad' => $totalHistorias,
+            'es_primera_vez' => $esPrimeraVez,
+            'tipo_consulta' => $esPrimeraVez ? '🆕 PRIMERA VEZ' : '🔄 CONTROL'
+        ]);
+
+        return $esPrimeraVez;
+
+    } catch (\Exception $e) {
+        \Log::error('❌ Error verificando primera consulta', [
+            'error' => $e->getMessage()
+        ]);
+        return true; // ✅ EN CASO DE ERROR, ASUMIR PRIMERA VEZ
+    }
+}
 
 public function store(Request $request)
 {
-    // ✅ VALIDACIÓN
-    $request->validate([
-        'paciente_uuid' => 'required|string',
-        'usuario_id' => 'required|integer',
-        'sede_id' => 'required|integer',
-        'cita_uuid' => 'required|string',
-        'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
-        'motivo_consulta' => 'nullable|string',
-        'enfermedad_actual' => 'nullable|string',
-        'idDiagnostico' => 'nullable|string',
-        'diagnosticos' => 'nullable|array',
-        'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
-        'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
-        'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
-        'medicamentos' => 'nullable|array',
-        'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
-        'remisiones' => 'nullable|array',
-        'remisiones.*.remision_id' => 'required_with:remisiones|string',
-        'cups' => 'nullable|array',
-        'cups.*.cups_id' => 'required_with:cups|string',
+    // ✅ LOG INICIAL - VER QUÉ LLEGA DEL FRONTEND
+    \Log::info('🔍 ===== INICIO STORE - DATOS RECIBIDOS =====', [
+        'tipo_consulta_recibido_frontend' => $request->tipo_consulta,
+        'cita_uuid' => $request->cita_uuid,
+        'paciente_uuid' => $request->paciente_uuid,
     ]);
 
     DB::beginTransaction();
@@ -373,8 +506,47 @@ public function store(Request $request)
         
         \Log::info('🔍 Especialidad detectada en store', [
             'especialidad' => $especialidad,
-            'tipo_consulta' => $request->tipo_consulta,
+            'tipo_consulta_frontend' => $request->tipo_consulta,
             'cita_uuid' => $request->cita_uuid
+        ]);
+
+        // 🔥🔥🔥 NUEVO: DETERMINAR EL TIPO DE CONSULTA CORRECTO 🔥🔥🔥
+        $tipoConsultaCorrecto = $this->determinarTipoConsultaReal(
+            $request->paciente_uuid, 
+            $especialidad, 
+            $cita->id
+        );
+        
+        // ✅ SOBRESCRIBIR EL TIPO DE CONSULTA EN EL REQUEST
+        $request->merge(['tipo_consulta' => $tipoConsultaCorrecto]);
+        
+        \Log::info('🔄 Tipo de consulta corregido', [
+            'tipo_frontend' => $request->input('tipo_consulta_original', $request->tipo_consulta),
+            'tipo_backend_correcto' => $tipoConsultaCorrecto,
+            'especialidad' => $especialidad,
+            'paciente_uuid' => $request->paciente_uuid
+        ]);
+
+        // ✅ VALIDACIÓN (ahora con el tipo correcto)
+        $request->validate([
+            'paciente_uuid' => 'required|string',
+            'usuario_id' => 'required|integer',
+            'sede_id' => 'required|integer',
+            'cita_uuid' => 'required|string',
+            'tipo_consulta' => 'required|in:PRIMERA VEZ,CONTROL,URGENCIAS',
+            'motivo_consulta' => 'nullable|string',
+            'enfermedad_actual' => 'nullable|string',
+            'idDiagnostico' => 'nullable|string',
+            'diagnosticos' => 'nullable|array',
+            'diagnosticos.*.diagnostico_id' => 'required_with:diagnosticos|string',
+            'diagnosticos.*.tipo' => 'required_with:diagnosticos|in:PRINCIPAL,SECUNDARIO',
+            'diagnosticos.*.tipo_diagnostico' => 'required_with:diagnosticos|in:IMPRESION_DIAGNOSTICA,CONFIRMADO_NUEVO,CONFIRMADO_REPETIDO',
+            'medicamentos' => 'nullable|array',
+            'medicamentos.*.medicamento_id' => 'required_with:medicamentos|string',
+            'remisiones' => 'nullable|array',
+            'remisiones.*.remision_id' => 'required_with:remisiones|string',
+            'cups' => 'nullable|array',
+            'cups.*.cups_id' => 'required_with:cups|string',
         ]);
 
         // ✅ SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
@@ -383,7 +555,6 @@ public function store(Request $request)
             return $this->storeFisioterapia($request, $cita);
         }
 
-        
         if ($especialidad === 'PSICOLOGÍA' || $especialidad === 'PSICOLOGIA') {
             DB::rollBack();
             return $this->storePsicologia($request, $cita);
@@ -399,29 +570,27 @@ public function store(Request $request)
             return $this->storeInternista($request, $cita);
         }
 
-         // ✅ SI ES FISIOTERAPIA, USAR MÉTODO ESPECÍFICO
         if ($especialidad === 'NEFROLOGIA') {
             DB::rollBack();
             return $this->storeNefrologia($request, $cita);
         }
 
-        
-        // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA
+        // ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA (ahora usa el tipo correcto)
         $datosHistoria = $this->prepararDatosHistoriaSegunTipo($request, $cita);
 
         // ✅ CREAR HISTORIA
         $historia = HistoriaClinica::create($datosHistoria);
 
-        // ✅ PROCESAR DIAGNÓSTICOS (sin cambios)
+        // ✅ PROCESAR DIAGNÓSTICOS
         $this->procesarDiagnosticos($request, $historia);
 
-        // ✅ PROCESAR MEDICAMENTOS (sin cambios)
+        // ✅ PROCESAR MEDICAMENTOS
         $this->procesarMedicamentos($request, $historia);
 
-        // ✅ PROCESAR REMISIONES (sin cambios)
+        // ✅ PROCESAR REMISIONES
         $this->procesarRemisiones($request, $historia);
 
-        // ✅ PROCESAR CUPS (sin cambios)
+        // ✅ PROCESAR CUPS
         $this->procesarCups($request, $historia);
 
         DB::commit();
@@ -437,7 +606,7 @@ public function store(Request $request)
         ]);
 
         \Log::info('✅ Historia clínica creada exitosamente', [
-            'tipo_consulta' => $request->tipo_consulta,
+            'tipo_consulta_final' => $tipoConsultaCorrecto,
             'historia_uuid' => $historia->uuid,
         ]);
 
@@ -463,6 +632,7 @@ public function store(Request $request)
         ], 500);
     }
 }
+
 
 /**
  * ✅ PREPARAR DATOS SEGÚN TIPO DE CONSULTA - VERSIÓN CORREGIDA CON valorONull()
@@ -5301,99 +5471,6 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
     }
 }
 
-/**
- * ✅ VERIFICAR SI ES LA PRIMERA CONSULTA DE LA ESPECIALIDAD (VERSIÓN CORREGIDA)
- */
-private function esPrimeraConsultaDeEspecialidad(string $pacienteUuid, string $especialidad, ?int $citaActualId = null): bool
-{
-    try {
-        Log::info('🔍 Verificando si es PRIMERA CONSULTA de la especialidad', [
-            'paciente_uuid' => $pacienteUuid,
-            'especialidad' => $especialidad,
-            'cita_actual_id' => $citaActualId
-        ]);
-
-        $paciente = \App\Models\Paciente::where('uuid', $pacienteUuid)->first();
-        
-        if (!$paciente) {
-            Log::warning('⚠️ Paciente no encontrado, asumiendo PRIMERA VEZ');
-            return true;
-        }
-
-        $especialidadNormalizada = strtoupper(str_replace(' ', '', trim($especialidad)));
-
-        // ✅ OBTENER TODAS LAS HISTORIAS **EXCLUYENDO LA CITA ACTUAL**
-        $historias = \App\Models\HistoriaClinica::whereHas('cita', function($query) use ($paciente, $citaActualId) {
-            $query->where('paciente_uuid', $paciente->uuid)
-                  ->whereIn('estado', ['ATENDIDA', 'CONFIRMADA']);
-            
-            // ✅ EXCLUIR LA CITA ACTUAL
-            if ($citaActualId) {
-                $query->where('id', '!=', $citaActualId);
-            }
-        })
-        ->with([
-            'cita.agenda.usuarioMedico',
-            'cita.agenda.especialidad'
-        ])
-        ->get();
-
-        Log::info('📋 Total de historias encontradas (excluyendo cita actual)', [
-            'total' => $historias->count(),
-            'paciente_uuid' => $pacienteUuid,
-            'cita_actual_excluida' => $citaActualId
-        ]);
-
-        if ($historias->isEmpty()) {
-            Log::info('✅ No hay historias previas → PRIMERA VEZ');
-            return true;
-        }
-
-        // ✅ FILTRAR POR ESPECIALIDAD
-        $historiasDeEspecialidad = $historias->filter(function($historia) use ($especialidadNormalizada, $especialidad) {
-            $cita = $historia->cita;
-            $agenda = $cita->agenda ?? null;
-            
-            if (!$agenda || !$agenda->especialidad) {
-                return false;
-            }
-            
-            $especialidadHistoria = $agenda->especialidad->nombre ?? '';
-            $especialidadHistoriaNormalizada = strtoupper(str_replace(' ', '', trim($especialidadHistoria)));
-            
-            $coincide = $especialidadHistoriaNormalizada === $especialidadNormalizada;
-            
-            Log::info('🔍 Comparando especialidades', [
-                'historia_uuid' => $historia->uuid,
-                'cita_id' => $historia->cita_id,
-                'especialidad_historia' => $especialidadHistoria,
-                'especialidad_buscada' => $especialidad,
-                'coincide' => $coincide ? '✅ SÍ' : '❌ NO'
-            ]);
-            
-            return $coincide;
-        });
-
-        $totalHistorias = $historiasDeEspecialidad->count();
-        $esPrimeraVez = $totalHistorias === 0;
-
-        Log::info('✅ Resultado: Verificación de primera consulta', [
-            'paciente_uuid' => $pacienteUuid,
-            'especialidad' => $especialidad,
-            'total_historias_de_especialidad' => $totalHistorias,
-            'es_primera_vez' => $esPrimeraVez,
-            'tipo_consulta' => $esPrimeraVez ? '🆕 PRIMERA VEZ' : '🔄 CONTROL'
-        ]);
-
-        return $esPrimeraVez;
-
-    } catch (\Exception $e) {
-        Log::error('❌ Error verificando primera consulta', [
-            'error' => $e->getMessage()
-        ]);
-        return true;
-    }
-}
 
 
 
