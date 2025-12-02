@@ -48,7 +48,20 @@ class CupsController extends Controller
         $sortOrder = $request->get('sort_order', 'asc');
         $query->orderBy($sortBy, $sortOrder);
 
-        // Paginación
+        // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+        if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+            // Devolver todos los registros sin paginación
+            $cups = $query->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $cups,
+                'message' => 'CUPS obtenidos exitosamente',
+                'total' => $cups->count()
+            ]);
+        }
+
+        // Paginación normal
         $perPage = $request->get('per_page', 15);
         $cups = $query->paginate($perPage);
 
