@@ -84,6 +84,7 @@ class HistoriaClinica extends Model
         
         // Clasificaciones
         'clasificacion_hta', 'clasificacion_dm', 'clasificacion_erc_estado',
+        'clasificacion_erc_estadodos',
         'clasificacion_erc_categoria_ambulatoria_persistente', 'clasificacion_rcv',
         
         // Educación

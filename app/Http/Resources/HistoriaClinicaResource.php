@@ -74,6 +74,7 @@ class HistoriaClinicaResource extends JsonResource
                 'hta' => $this->clasificacion_hta,
                 'dm' => $this->clasificacion_dm,
                 'erc_estado' => $this->clasificacion_erc_estado,
+                'erc_estadodos' => $this->clasificacion_erc_estadodos,
                 'rcv' => $this->clasificacion_rcv,
                 'estado_metabolico' => $this->clasificacion_estado_metabolico
             ],

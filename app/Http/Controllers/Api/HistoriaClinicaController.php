@@ -5082,6 +5082,7 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             'clasificacion_dm' => empty($historiaBase['clasificacion_dm']),
             'clasificacion_rcv' => empty($historiaBase['clasificacion_rcv']),
             'clasificacion_erc_estado' => empty($historiaBase['clasificacion_erc_estado']),
+            'clasificacion_erc_estadodos' => empty($historiaBase['clasificacion_erc_estadodos']),
             'clasificacion_erc_categoria_ambulatoria_persistente' => empty($historiaBase['clasificacion_erc_categoria_ambulatoria_persistente']),
             
             // TASAS DE FILTRACIÓN
@@ -5317,6 +5318,10 @@ private function completarDatosFaltantesDeCualquierEspecialidad(string $paciente
             if ($camposPorCompletar['clasificacion_erc_estado'] && !empty($historia->clasificacion_erc_estado)) {
                 $historiaBase['clasificacion_erc_estado'] = $historia->clasificacion_erc_estado;
                 $camposPorCompletar['clasificacion_erc_estado'] = false;
+            }
+            if ($camposPorCompletar['clasificacion_erc_estadodos'] && !empty($historia->clasificacion_erc_estadodos)) {
+                $historiaBase['clasificacion_erc_estadodos'] = $historia->clasificacion_erc_estadodos;
+                $camposPorCompletar['clasificacion_erc_estadodos'] = false;
             }
 
             if ($camposPorCompletar['clasificacion_erc_categoria_ambulatoria_persistente'] && !empty($historia->clasificacion_erc_categoria_ambulatoria_persistente)) {
@@ -5920,6 +5925,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'clasificacion_dm' => $historia->clasificacion_dm ?? null,
             'clasificacion_rcv' => $historia->clasificacion_rcv ?? null,
             'clasificacion_erc_estado' => $historia->clasificacion_erc_estado ?? null,
+            'clasificacion_erc_estadodos' => $historia->clasificacion_erc_estadodos ?? null,
             'clasificacion_erc_categoria_ambulatoria_persistente' => $historia->clasificacion_erc_categoria_ambulatoria_persistente ?? null,
 
             // ✅ TASAS DE FILTRACIÓN
@@ -5980,6 +5986,7 @@ private function procesarHistoriaParaFrontend(\App\Models\HistoriaClinica $histo
             'clasificacion_dm' => null,
             'clasificacion_rcv' => null,
             'clasificacion_erc_estado' => null,
+            'clasificacion_erc_estadodos' => null,
             'clasificacion_erc_categoria_ambulatoria_persistente' => null,
             'tasa_filtracion_glomerular_ckd_epi' => null,
             'tasa_filtracion_glomerular_gockcroft_gault' => null,
@@ -6040,6 +6047,7 @@ private function formatearHistoriaDesdeAPI(array $historiaAPI): array
             'clasificacion_dm' => $historiaAPI['clasificacion_dm'] ?? '',
             'clasificacion_rcv' => $historiaAPI['clasificacion_rcv'] ?? '',
             'clasificacion_erc_estado' => $historiaAPI['clasificacion_erc_estado'] ?? '',
+            'clasificacion_erc_estadodos' => $historiaAPI['clasificacion_erc_estadodos'] ?? '',
             'clasificacion_erc_categoria_ambulatoria_persistente' => $historiaAPI['clasificacion_erc_categoria_ambulatoria_persistente'] ?? '',
 
             // ✅ TASAS DE FILTRACIÓN
