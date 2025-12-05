@@ -738,6 +738,7 @@ private function prepararDatosHistoriaSegunTipo(Request $request, $cita)
         'clasificacion_dm' => $this->valorONull($request->clasificacion_dm),
         'clasificacion_rcv' => $this->valorONull($request->clasificacion_rcv),
         'clasificacion_erc_estado' => $this->valorONull($request->clasificacion_erc_estado),
+        'clasificacion_erc_estadodos' => $this->valorONull($request->clasificacion_erc_estadodos),
         'clasificacion_erc_categoria_ambulatoria_persistente' => $this->valorONull($request->clasificacion_erc_categoria_ambulatoria_persistente),
         
         // ✅✅✅ TASAS DE FILTRACIÓN - AHORA CON valorONull ✅✅✅
