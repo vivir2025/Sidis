@@ -6163,5 +6163,154 @@ private function formatearCupsDesdeAPI(array $cups): array
         ];
     }, $cups);
 }
- 
+ /**
+ * 🧪 DEBUG: Verificar por qué faltan historias en la API
+ */
+public function debugHistoriasApi(Request $request)
+{
+    try {
+        Log::info('🧪 DEBUG API: Verificando historias faltantes');
+
+        // ✅ CONTAR DIRECTAMENTE EN BD (sin filtros)
+        $totalBD = HistoriaClinica::whereNull('deleted_at')->count();
+        $totalSede1 = HistoriaClinica::where('sede_id', 1)->whereNull('deleted_at')->count();
+
+        Log::info('📊 Conteos directos en BD', [
+            'total_bd' => $totalBD,
+            'total_sede_1' => $totalSede1
+        ]);
+
+        // ✅ SIMULAR LA QUERY DEL MÉTODO index() PASO A PASO
+        
+        // PASO 1: Query base
+        $queryBase = HistoriaClinica::query()->whereNull('deleted_at');
+        $totalQueryBase = $queryBase->count();
+        
+        // PASO 2: Con JOIN a citas
+        $queryConJoin = HistoriaClinica::query()
+            ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
+            ->whereNull('historias_clinicas.deleted_at');
+        $totalConJoin = $queryConJoin->count();
+        
+        // PASO 3: Con filtro de sede
+        $queryConSede = HistoriaClinica::query()
+            ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
+            ->whereNull('historias_clinicas.deleted_at')
+            ->where('historias_clinicas.sede_id', 1);
+        $totalConSede = $queryConSede->count();
+        
+        // PASO 4: Con todas las relaciones (como en index())
+        $queryCompleta = HistoriaClinica::query()
+            ->join('citas', 'historias_clinicas.cita_id', '=', 'citas.id')
+            ->select(
+                'historias_clinicas.*', 
+                'citas.fecha as cita_fecha',
+                'citas.fecha_inicio as cita_fecha_inicio',
+                'citas.fecha_final as cita_fecha_final'
+            )
+            ->with([
+                'sede',
+                'cita',
+                'cita.paciente',
+                'cita.agenda.usuario',
+                'cita.agenda.usuarioMedico',
+                'cita.agenda.proceso',
+                'cita.cupsContratado',
+                'cita.cupsContratado.categoriaCups',
+                'historiaDiagnosticos.diagnostico',
+                'historiaMedicamentos.medicamento',
+                'historiaRemisiones.remision',
+                'historiaCups.cups',
+                'complementaria'
+            ])
+            ->whereNull('historias_clinicas.deleted_at')
+            ->where('historias_clinicas.sede_id', 1);
+            
+        $totalCompleta = $queryCompleta->count();
+        
+        // ✅ VERIFICAR CUÁLES HISTORIAS TIENEN PROBLEMAS
+        $historiasSinCita = HistoriaClinica::whereNull('deleted_at')
+            ->where('sede_id', 1)
+            ->whereNotExists(function($query) {
+                $query->select(\DB::raw(1))
+                      ->from('citas')
+                      ->whereRaw('citas.id = historias_clinicas.cita_id');
+            })->get(['id', 'uuid', 'cita_id']);
+
+        $citasSinPaciente = \DB::table('historias_clinicas as hc')
+            ->join('citas as c', 'hc.cita_id', '=', 'c.id')
+            ->whereNull('hc.deleted_at')
+            ->where('hc.sede_id', 1)
+            ->whereNull('c.paciente_uuid')
+            ->select('hc.id', 'hc.uuid', 'c.id as cita_id', 'c.paciente_uuid')
+            ->get();
+
+        $citasSinAgenda = \DB::table('historias_clinicas as hc')
+            ->join('citas as c', 'hc.cita_id', '=', 'c.id')
+            ->whereNull('hc.deleted_at')
+            ->where('hc.sede_id', 1)
+            ->whereNotExists(function($query) {
+                $query->select(\DB::raw(1))
+                      ->from('agendas as a')
+                      ->whereRaw('a.id = c.agenda_id');
+            })
+            ->select('hc.id', 'hc.uuid', 'c.id as cita_id', 'c.agenda_id')
+            ->get();
+
+        // ✅ OBTENER LAS HISTORIAS QUE SÍ PASAN TODOS LOS FILTROS
+        $historiasValidas = $queryCompleta->take(15)->get();
+
+        return response()->json([
+            'success' => true,
+            'debug' => [
+                'conteos_progresivos' => [
+                    'total_bd_directo' => $totalBD,
+                    'total_sede_1_directo' => $totalSede1,
+                    'total_query_base' => $totalQueryBase,
+                    'total_con_join_citas' => $totalConJoin,
+                    'total_con_filtro_sede' => $totalConSede,
+                    'total_con_todas_relaciones' => $totalCompleta,
+                    'diferencia_bd_vs_api' => $totalSede1 - 13,
+                    'diferencia_join' => $totalSede1 - $totalConJoin,
+                    'diferencia_relaciones' => $totalConSede - $totalCompleta
+                ],
+                'problemas_detectados' => [
+                    'historias_sin_cita' => $historiasSinCita->count(),
+                    'citas_sin_paciente' => $citasSinPaciente->count(),
+                    'citas_sin_agenda' => $citasSinAgenda->count()
+                ],
+                'detalles_problemas' => [
+                    'sin_cita' => $historiasSinCita->toArray(),
+                    'sin_paciente' => $citasSinPaciente->toArray(),
+                    'sin_agenda' => $citasSinAgenda->toArray()
+                ],
+                'historias_validas_muestra' => $historiasValidas->map(function($h) {
+                    return [
+                        'uuid' => $h->uuid,
+                        'id' => $h->id,
+                        'cita_id' => $h->cita_id,
+                        'tiene_cita' => !is_null($h->cita),
+                        'tiene_paciente' => $h->cita ? !is_null($h->cita->paciente) : false,
+                        'tiene_agenda' => $h->cita ? !is_null($h->cita->agenda) : false,
+                        'created_at' => $h->created_at
+                    ];
+                })
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Error en debug API historias', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+}
+
 }

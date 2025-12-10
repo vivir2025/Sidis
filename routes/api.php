@@ -37,6 +37,9 @@ use App\Http\Controllers\Api\{
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/cups-contratados/por-cups/{cupsUuid}', [CupsContratadoController::class, 'porCupsUuid']);
+    // 🧪 RUTA TEMPORAL PARA DEBUG API
+Route::get('/debug/historias-api', [App\Http\Controllers\Api\HistoriaClinicaController::class, 'debugHistoriasApi']);
+
     Route::get('/health', function () {
         return response()->json([
             'success' => true,
