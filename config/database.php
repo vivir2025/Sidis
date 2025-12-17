@@ -63,6 +63,9 @@ return [
         'engine' => null,
         'options' => extension_loaded('pdo_mysql') ? array_filter([
             PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            PDO::ATTR_PERSISTENT => true, // ⚡ Conexión persistente para reducir latencia
+            PDO::ATTR_EMULATE_PREPARES => true, // ⚡ Mejora rendimiento en conexiones remotas
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true, // ⚡ Buffer de queries
         ]) : [],
 
         

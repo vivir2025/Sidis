@@ -42,6 +42,11 @@ trait SyncableTrait
 
     protected function shouldSync(): bool
     {
+        // ⚡ No sincronizar durante el login (optimización de rendimiento)
+        if (request()->is('api/auth/login') || request()->is('api/login')) {
+            return false;
+        }
+        
         return !app()->runningInConsole() || 
                request()->header('X-Sync-Enabled') === 'true';
     }

@@ -20,10 +20,22 @@ class AuthController extends Controller
                 'sede_id' => 'required|integer'
             ]);
 
-            // ✅ CAMBIO PRINCIPAL: Buscar usuario SIN restricción de sede
-            $usuario = Usuario::where('login', $validated['login'])
-                ->with(['sede', 'rol', 'especialidad', 'estado'])
-                ->first();
+            // ✅ OPTIMIZACIÓN: Cargar solo campos necesarios en UNA SOLA QUERY con JOIN
+            $usuario = Usuario::select([
+                'usuarios.id', 'usuarios.uuid', 'usuarios.sede_id', 'usuarios.documento', 
+                'usuarios.nombre', 'usuarios.apellido', 'usuarios.telefono', 'usuarios.correo', 
+                'usuarios.login', 'usuarios.password', 'usuarios.registro_profesional',
+                'usuarios.estado_id', 'usuarios.rol_id', 'usuarios.especialidad_id',
+                'roles.nombre as rol_nombre',
+                'estados.nombre as estado_nombre'
+            ])
+            ->join('roles', 'usuarios.rol_id', '=', 'roles.id')
+            ->join('estados', 'usuarios.estado_id', '=', 'estados.id')
+            ->where('usuarios.login', $validated['login'])
+            ->whereNull('usuarios.deleted_at')
+            ->whereNull('roles.deleted_at')
+            ->whereNull('estados.deleted_at')
+            ->first();
 
             if (!$usuario || !Hash::check($validated['password'], $usuario->password)) {
                 throw ValidationException::withMessages([
@@ -31,14 +43,20 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Verificar si el usuario está activo
-            if (!$usuario->estaActivo()) {
+            // Verificar estado directamente
+            if (strtoupper($usuario->estado_nombre) !== 'ACTIVO') {
                 throw ValidationException::withMessages([
                     'login' => ['El usuario está inactivo o suspendido.'],
                 ]);
             }
 
-            // ✅ OBTENER LA SEDE SELECCIONADA (no la del usuario) - optimizado con where
+            // Cargar sede y especialidad solo si son necesarias
+            $usuario->load([
+                'sede:id,nombre',
+                'especialidad:id,nombre'
+            ]);
+
+            // ✅ Validar y obtener sede en una sola query
             $sedeSeleccionada = Sede::where('id', $validated['sede_id'])
                 ->where('activo', true)
                 ->first(['id', 'nombre']);
@@ -49,12 +67,13 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Calcular permisos una sola vez
-            $esAdmin = $usuario->esAdministrador();
-            $esMedico = $usuario->esMedico();
-            $esEnfermero = $usuario->esEnfermero();
-            $esSecretaria = $usuario->esSecretaria();
-            $esAuxiliar = $usuario->esAuxiliar();
+            // Calcular permisos directamente (sin acceder a relaciones)
+            $rolNombre = strtoupper($usuario->rol_nombre);
+            $esAdmin = $rolNombre === 'ADMINISTRADOR';
+            $esMedico = $rolNombre === 'MEDICO';
+            $esEnfermero = $rolNombre === 'ENFERMERO';
+            $esSecretaria = $rolNombre === 'SECRETARIA';
+            $esAuxiliar = $rolNombre === 'AUXILIAR';
 
             // Crear token con expiración de 8 horas
             $token = $usuario->createToken('api-token', ['*'], now()->addHours(8))->plainTextToken;
@@ -93,8 +112,8 @@ class AuthController extends Controller
                         
                         'rol_id' => $usuario->rol_id,
                         'rol' => [
-                            'id' => $usuario->rol?->id,
-                            'nombre' => $usuario->rol?->nombre,
+                            'id' => $usuario->rol_id,
+                            'nombre' => $usuario->rol_nombre,
                         ],
                         
                         'especialidad_id' => $usuario->especialidad_id,
@@ -105,8 +124,8 @@ class AuthController extends Controller
                         
                         'estado_id' => $usuario->estado_id,
                         'estado' => [
-                            'id' => $usuario->estado?->id,
-                            'nombre' => $usuario->estado?->nombre,
+                            'id' => $usuario->estado_id,
+                            'nombre' => $usuario->estado_nombre,
                         ],
                         
                         // Permisos optimizados
@@ -184,7 +203,16 @@ class AuthController extends Controller
                 'sede_id' => 'required|integer'
             ]);
 
-            $usuario = $request->user()->load(['rol', 'especialidad']);
+            $usuario = $request->user();
+            
+            // Cargar solo las relaciones necesarias con campos específicos
+            if (!$usuario->relationLoaded('rol')) {
+                $usuario->load('rol:id,nombre');
+            }
+            if (!$usuario->relationLoaded('especialidad')) {
+                $usuario->load('especialidad:id,nombre');
+            }
+            
             $nuevaSede = Sede::where('id', $validated['sede_id'])
                 ->where('activo', true)
                 ->first(['id', 'nombre']);
@@ -196,12 +224,13 @@ class AuthController extends Controller
                 ], 400);
             }
 
-            // Calcular permisos una sola vez
-            $esAdmin = $usuario->esAdministrador();
-            $esMedico = $usuario->esMedico();
-            $esEnfermero = $usuario->esEnfermero();
-            $esSecretaria = $usuario->esSecretaria();
-            $esAuxiliar = $usuario->esAuxiliar();
+            // Calcular permisos directamente del rol
+            $rolNombre = $usuario->rol ? strtoupper($usuario->rol->nombre) : '';
+            $esAdmin = $rolNombre === 'ADMINISTRADOR';
+            $esMedico = $rolNombre === 'MEDICO';
+            $esEnfermero = $rolNombre === 'ENFERMERO';
+            $esSecretaria = $rolNombre === 'SECRETARIA';
+            $esAuxiliar = $rolNombre === 'AUXILIAR';
 
             return response()->json([
                 'success' => true,
@@ -279,14 +308,29 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         try {
-            $usuario = $request->user()->load(['sede', 'rol', 'especialidad', 'estado']);
+            $usuario = $request->user();
+            
+            // Cargar relaciones solo si no están cargadas, con campos específicos
+            if (!$usuario->relationLoaded('sede')) {
+                $usuario->load('sede:id,nombre');
+            }
+            if (!$usuario->relationLoaded('rol')) {
+                $usuario->load('rol:id,nombre');
+            }
+            if (!$usuario->relationLoaded('especialidad')) {
+                $usuario->load('especialidad:id,nombre');
+            }
+            if (!$usuario->relationLoaded('estado')) {
+                $usuario->load('estado:id,nombre');
+            }
 
-            // Calcular permisos una sola vez
-            $esAdmin = $usuario->esAdministrador();
-            $esMedico = $usuario->esMedico();
-            $esEnfermero = $usuario->esEnfermero();
-            $esSecretaria = $usuario->esSecretaria();
-            $esAuxiliar = $usuario->esAuxiliar();
+            // Calcular permisos directamente del rol
+            $rolNombre = $usuario->rol ? strtoupper($usuario->rol->nombre) : '';
+            $esAdmin = $rolNombre === 'ADMINISTRADOR';
+            $esMedico = $rolNombre === 'MEDICO';
+            $esEnfermero = $rolNombre === 'ENFERMERO';
+            $esSecretaria = $rolNombre === 'SECRETARIA';
+            $esAuxiliar = $rolNombre === 'AUXILIAR';
 
             return response()->json([
                 'success' => true,
@@ -385,14 +429,20 @@ class AuthController extends Controller
     public function checkPermissions(Request $request): JsonResponse
     {
         try {
-            $usuario = $request->user()->load(['rol']);
+            $usuario = $request->user();
             
-            // Calcular permisos una sola vez
-            $esAdmin = $usuario->esAdministrador();
-            $esMedico = $usuario->esMedico();
-            $esEnfermero = $usuario->esEnfermero();
-            $esSecretaria = $usuario->esSecretaria();
-            $esAuxiliar = $usuario->esAuxiliar();
+            // Cargar rol solo si no está cargado
+            if (!$usuario->relationLoaded('rol')) {
+                $usuario->load('rol:id,nombre');
+            }
+            
+            // Calcular permisos directamente del rol
+            $rolNombre = $usuario->rol ? strtoupper($usuario->rol->nombre) : '';
+            $esAdmin = $rolNombre === 'ADMINISTRADOR';
+            $esMedico = $rolNombre === 'MEDICO';
+            $esEnfermero = $rolNombre === 'ENFERMERO';
+            $esSecretaria = $rolNombre === 'SECRETARIA';
+            $esAuxiliar = $rolNombre === 'AUXILIAR';
             
             return response()->json([
                 'success' => true,
