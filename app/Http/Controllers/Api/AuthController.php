@@ -17,7 +17,7 @@ class AuthController extends Controller
             $validated = $request->validate([
                 'login' => 'required|string',
                 'password' => 'required|string',
-                'sede_id' => 'required|integer|exists:sedes,id'
+                'sede_id' => 'required|integer'
             ]);
 
             // ✅ CAMBIO PRINCIPAL: Buscar usuario SIN restricción de sede
@@ -38,14 +38,23 @@ class AuthController extends Controller
                 ]);
             }
 
-            // ✅ OBTENER LA SEDE SELECCIONADA (no la del usuario)
-            $sedeSeleccionada = Sede::find($validated['sede_id']);
+            // ✅ OBTENER LA SEDE SELECCIONADA (no la del usuario) - optimizado con where
+            $sedeSeleccionada = Sede::where('id', $validated['sede_id'])
+                ->where('activo', true)
+                ->first(['id', 'nombre']);
             
-            if (!$sedeSeleccionada || !$sedeSeleccionada->activo) {
+            if (!$sedeSeleccionada) {
                 throw ValidationException::withMessages([
                     'sede_id' => ['La sede seleccionada no está disponible.'],
                 ]);
             }
+
+            // Calcular permisos una sola vez
+            $esAdmin = $usuario->esAdministrador();
+            $esMedico = $usuario->esMedico();
+            $esEnfermero = $usuario->esEnfermero();
+            $esSecretaria = $usuario->esSecretaria();
+            $esAuxiliar = $usuario->esAuxiliar();
 
             // Crear token con expiración de 8 horas
             $token = $usuario->createToken('api-token', ['*'], now()->addHours(8))->plainTextToken;
@@ -100,14 +109,23 @@ class AuthController extends Controller
                             'nombre' => $usuario->estado?->nombre,
                         ],
                         
-                        // Permisos y roles (sin cambios)
-                        'permisos' => $usuario->permisos,
+                        // Permisos optimizados
+                        'permisos' => [
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
+                            'puede_crear_citas' => $esAdmin || $esSecretaria,
+                            'puede_ver_agenda' => $esAdmin || $esMedico || $esEnfermero,
+                            'puede_gestionar_usuarios' => $esAdmin,
+                        ],
                         'tipo_usuario' => [
-                            'es_administrador' => $usuario->esAdministrador(),
-                            'es_medico' => $usuario->esMedico(),
-                            'es_enfermero' => $usuario->esEnfermero(),
-                            'es_secretaria' => $usuario->esSecretaria(),
-                            'es_auxiliar' => $usuario->esAuxiliar(),
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
                         ]
                     ]
                 ],
@@ -163,18 +181,27 @@ class AuthController extends Controller
     {
         try {
             $validated = $request->validate([
-                'sede_id' => 'required|integer|exists:sedes,id'
+                'sede_id' => 'required|integer'
             ]);
 
-            $usuario = $request->user();
-            $nuevaSede = Sede::find($validated['sede_id']);
+            $usuario = $request->user()->load(['rol', 'especialidad']);
+            $nuevaSede = Sede::where('id', $validated['sede_id'])
+                ->where('activo', true)
+                ->first(['id', 'nombre']);
             
-            if (!$nuevaSede || !$nuevaSede->activo) {
+            if (!$nuevaSede) {
                 return response()->json([
                     'success' => false,
                     'message' => 'La sede seleccionada no está disponible'
                 ], 400);
             }
+
+            // Calcular permisos una sola vez
+            $esAdmin = $usuario->esAdministrador();
+            $esMedico = $usuario->esMedico();
+            $esEnfermero = $usuario->esEnfermero();
+            $esSecretaria = $usuario->esSecretaria();
+            $esAuxiliar = $usuario->esAuxiliar();
 
             return response()->json([
                 'success' => true,
@@ -201,13 +228,22 @@ class AuthController extends Controller
                             'id' => $usuario->especialidad->id,
                             'nombre' => $usuario->especialidad->nombre,
                         ] : null,
-                        'permisos' => $usuario->permisos,
+                        'permisos' => [
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
+                            'puede_crear_citas' => $esAdmin || $esSecretaria,
+                            'puede_ver_agenda' => $esAdmin || $esMedico || $esEnfermero,
+                            'puede_gestionar_usuarios' => $esAdmin,
+                        ],
                         'tipo_usuario' => [
-                            'es_administrador' => $usuario->esAdministrador(),
-                            'es_medico' => $usuario->esMedico(),
-                            'es_enfermero' => $usuario->esEnfermero(),
-                            'es_secretaria' => $usuario->esSecretaria(),
-                            'es_auxiliar' => $usuario->esAuxiliar(),
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
                         ]
                     ]
                 ],
@@ -245,6 +281,13 @@ class AuthController extends Controller
         try {
             $usuario = $request->user()->load(['sede', 'rol', 'especialidad', 'estado']);
 
+            // Calcular permisos una sola vez
+            $esAdmin = $usuario->esAdministrador();
+            $esMedico = $usuario->esMedico();
+            $esEnfermero = $usuario->esEnfermero();
+            $esSecretaria = $usuario->esSecretaria();
+            $esAuxiliar = $usuario->esAuxiliar();
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -281,14 +324,23 @@ class AuthController extends Controller
                             'nombre' => $usuario->estado?->nombre,
                         ],
                         
-                        // Permisos y roles
-                        'permisos' => $usuario->permisos,
+                        // Permisos optimizados
+                        'permisos' => [
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
+                            'puede_crear_citas' => $esAdmin || $esSecretaria,
+                            'puede_ver_agenda' => $esAdmin || $esMedico || $esEnfermero,
+                            'puede_gestionar_usuarios' => $esAdmin,
+                        ],
                         'tipo_usuario' => [
-                            'es_administrador' => $usuario->esAdministrador(),
-                            'es_medico' => $usuario->esMedico(),
-                            'es_enfermero' => $usuario->esEnfermero(),
-                            'es_secretaria' => $usuario->esSecretaria(),
-                            'es_auxiliar' => $usuario->esAuxiliar(),
+                            'es_administrador' => $esAdmin,
+                            'es_medico' => $esMedico,
+                            'es_enfermero' => $esEnfermero,
+                            'es_secretaria' => $esSecretaria,
+                            'es_auxiliar' => $esAuxiliar,
                         ]
                     ]
                 ],
@@ -335,16 +387,32 @@ class AuthController extends Controller
         try {
             $usuario = $request->user()->load(['rol']);
             
+            // Calcular permisos una sola vez
+            $esAdmin = $usuario->esAdministrador();
+            $esMedico = $usuario->esMedico();
+            $esEnfermero = $usuario->esEnfermero();
+            $esSecretaria = $usuario->esSecretaria();
+            $esAuxiliar = $usuario->esAuxiliar();
+            
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'permisos' => $usuario->permisos,
+                    'permisos' => [
+                        'es_administrador' => $esAdmin,
+                        'es_medico' => $esMedico,
+                        'es_enfermero' => $esEnfermero,
+                        'es_secretaria' => $esSecretaria,
+                        'es_auxiliar' => $esAuxiliar,
+                        'puede_crear_citas' => $esAdmin || $esSecretaria,
+                        'puede_ver_agenda' => $esAdmin || $esMedico || $esEnfermero,
+                        'puede_gestionar_usuarios' => $esAdmin,
+                    ],
                     'rol' => $usuario->rol?->nombre,
                     'puede_acceder' => [
-                        'dashboard_admin' => $usuario->esAdministrador(),
-                        'gestion_citas' => $usuario->esAdministrador() || $usuario->esSecretaria(),
-                        'agenda_medica' => $usuario->esMedico() || $usuario->esEnfermero(),
-                        'reportes' => $usuario->esAdministrador() || $usuario->esMedico(),
+                        'dashboard_admin' => $esAdmin,
+                        'gestion_citas' => $esAdmin || $esSecretaria,
+                        'agenda_medica' => $esMedico || $esEnfermero,
+                        'reportes' => $esAdmin || $esMedico,
                     ]
                 ]
             ]);
