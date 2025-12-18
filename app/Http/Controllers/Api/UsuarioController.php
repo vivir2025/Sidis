@@ -71,6 +71,25 @@ class UsuarioController extends Controller
                 $query->medicos();
             }
 
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $usuarios = $query->orderBy('nombre')->get();
+                
+                Log::info('✅ [API] Todos los usuarios obtenidos exitosamente', [
+                    'total' => $usuarios->count()
+                ]);
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $usuarios->map(function ($usuario) {
+                        return $this->formatUsuario($usuario);
+                    }),
+                    'message' => 'Usuarios obtenidos exitosamente',
+                    'total' => $usuarios->count()
+                ]);
+            }
+
             $perPage = $request->input('per_page', 15);
             $usuarios = $query->orderBy('nombre')->paginate($perPage);
 

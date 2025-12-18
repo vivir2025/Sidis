@@ -89,6 +89,19 @@ class PacienteController extends Controller
                       ->orderBy('created_at', 'desc');
             }
 
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $pacientes = $query->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => PacienteResource::collection($pacientes),
+                    'message' => 'Pacientes obtenidos exitosamente',
+                    'total' => $pacientes->count()
+                ]);
+            }
+
             // ✅ PAGINACIÓN MEJORADA
             $perPage = $request->get('per_page', 15);
             $perPage = max(5, min(100, (int) $perPage));
