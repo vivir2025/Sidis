@@ -28,6 +28,19 @@ class RemisionController extends Controller
             // ✅ REMOVER FILTRO DE ACTIVAS
             $query->whereNull('deleted_at');
             
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $remisiones = $query->orderBy('nombre')->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $remisiones,
+                    'message' => 'Remisiones obtenidas exitosamente',
+                    'total' => $remisiones->count()
+                ]);
+            }
+            
             $remisiones = $query->orderBy('nombre')
                 ->paginate($request->get('per_page', 50));
             

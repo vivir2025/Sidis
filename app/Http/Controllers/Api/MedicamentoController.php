@@ -23,6 +23,19 @@ class MedicamentoController extends Controller
             // Solo usar soft deletes si existe
             $query->whereNull('deleted_at');
             
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $medicamentos = $query->orderBy('nombre')->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $medicamentos,
+                    'message' => 'Medicamentos obtenidos exitosamente',
+                    'total' => $medicamentos->count()
+                ]);
+            }
+            
             $medicamentos = $query->orderBy('nombre')
                 ->paginate($request->get('per_page', 50));
             

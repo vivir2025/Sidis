@@ -22,6 +22,19 @@ class DiagnosticoController extends Controller
             // ✅ REMOVER FILTRO DE ACTIVOS
             $query->whereNull('deleted_at');
             
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $diagnosticos = $query->orderBy('codigo')->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $diagnosticos,
+                    'message' => 'Diagnósticos obtenidos exitosamente',
+                    'total' => $diagnosticos->count()
+                ]);
+            }
+            
             $diagnosticos = $query->orderBy('codigo')
                 ->paginate($request->get('per_page', 50));
             
