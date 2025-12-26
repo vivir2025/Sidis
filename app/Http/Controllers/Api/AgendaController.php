@@ -86,8 +86,44 @@ class AgendaController extends Controller
     }
 
     // ✅ PAGINACIÓN MEJORADA
+      // ✅ PAGINACIÓN MEJORADA
     $perPage = $request->get('per_page', 15);
     $perPage = max(5, min(100, (int) $perPage)); // Entre 5 y 100
+    
+    // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+    if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+        // Devolver todos los registros sin paginación
+        $agendas = $query->get();
+        
+        // ✅ ENRIQUECER DATOS DE RESPUESTA
+        $agendas->transform(function ($agenda) {
+            // Calcular cupos disponibles
+            $inicio = \Carbon\Carbon::parse($agenda->hora_inicio);
+            $fin = \Carbon\Carbon::parse($agenda->hora_fin);
+            $intervalo = (int) ($agenda->intervalo ?? 15);
+            
+            $duracionMinutos = $fin->diffInMinutes($inicio);
+            $totalCupos = floor($duracionMinutos / $intervalo);
+            
+            // Contar citas activas
+            $citasCount = $agenda->citas()
+                ->whereNotIn('estado', ['CANCELADA', 'NO_ASISTIO'])
+                ->count();
+            
+            $agenda->total_cupos = $totalCupos;
+            $agenda->citas_count = $citasCount;
+            $agenda->cupos_disponibles = max(0, $totalCupos - $citasCount);
+            
+            return $agenda;
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $agendas,
+            'message' => 'Agendas obtenidas exitosamente',
+            'total' => $agendas->count()
+        ]);
+    }
     
     $agendas = $query->paginate($perPage);
 

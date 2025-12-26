@@ -94,9 +94,22 @@ use Illuminate\Support\Facades\Log;
                     ->orderBy('fecha_inicio', 'desc');
             }
 
-            // ✅ PAGINACIÓN MEJORADA
+           // ✅ PAGINACIÓN MEJORADA
             $perPage = $request->get('per_page', 15);
             $perPage = max(5, min(100, (int) $perPage));
+            
+            // ✅ NUEVO: Verificar si se solicitan TODOS los registros
+            if ($request->get('all') === 'true' || $request->get('all') === true || $request->boolean('all')) {
+                // Devolver todos los registros sin paginación
+                $citas = $query->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => CitaResource::collection($citas),
+                    'message' => 'Citas obtenidas exitosamente',
+                    'total' => $citas->count()
+                ]);
+            }
             
             $citas = $query->paginate($perPage);
 
