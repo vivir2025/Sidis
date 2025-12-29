@@ -16,7 +16,11 @@ class PacienteController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth:sanctum');
+        // Excluir los métodos de verificación de identidad (públicos para bot WhatsApp)
+        $this->middleware('auth:sanctum')->except([
+            'iniciarVerificacion',
+            'validarVerificacion'
+        ]);
     }
 
     public function index(Request $request): JsonResponse
