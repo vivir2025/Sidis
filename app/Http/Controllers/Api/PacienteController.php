@@ -1022,10 +1022,15 @@ class PacienteController extends Controller
             }
 
             // Generar 3 fechas: 1 verdadera + 2 falsas
-            $fechaReal = $paciente->fecha_nacimiento->format('Y-m-d');
+            // Convertir a Carbon si es string
+            $fechaNacimiento = $paciente->fecha_nacimiento instanceof \Carbon\Carbon 
+                ? $paciente->fecha_nacimiento 
+                : \Carbon\Carbon::parse($paciente->fecha_nacimiento);
+            
+            $fechaReal = $fechaNacimiento->format('Y-m-d');
             
             // Generar 2 fechas falsas aleatorias cercanas a la real
-            $fechasFalsas = $this->generarFechasFalsas($paciente->fecha_nacimiento);
+            $fechasFalsas = $this->generarFechasFalsas($fechaNacimiento);
             
             // Mezclar las fechas aleatoriamente
             $fechas = array_merge([$fechaReal], $fechasFalsas);
@@ -1085,7 +1090,12 @@ class PacienteController extends Controller
             }
 
             // Verificar si la fecha coincide
-            $fechaReal = $paciente->fecha_nacimiento->format('Y-m-d');
+            // Convertir a Carbon si es string
+            $fechaNacimiento = $paciente->fecha_nacimiento instanceof \Carbon\Carbon 
+                ? $paciente->fecha_nacimiento 
+                : \Carbon\Carbon::parse($paciente->fecha_nacimiento);
+            
+            $fechaReal = $fechaNacimiento->format('Y-m-d');
             $fechaSeleccionada = $request->fecha_nacimiento;
 
             if ($fechaReal === $fechaSeleccionada) {
