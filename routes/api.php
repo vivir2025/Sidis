@@ -40,6 +40,10 @@ Route::prefix('v1')->group(function () {
     // 🧪 RUTA TEMPORAL PARA DEBUG API
 Route::get('/debug/historias-api', [App\Http\Controllers\Api\HistoriaClinicaController::class, 'debugHistoriasApi']);
 
+    // 🔐 VERIFICACIÓN DE IDENTIDAD (públicas para bot de WhatsApp)
+    Route::post('/pacientes/verificacion/iniciar', [PacienteController::class, 'iniciarVerificacion']);
+    Route::post('/pacientes/verificacion/validar', [PacienteController::class, 'validarVerificacion']);
+
     Route::get('/health', function () {
         return response()->json([
             'success' => true,

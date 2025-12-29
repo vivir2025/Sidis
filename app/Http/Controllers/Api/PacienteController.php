@@ -989,6 +989,162 @@ class PacienteController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * PASO 1: Iniciar verificación de identidad
+     * Recibe documento y retorna nombre completo + 3 fechas de nacimiento
+     */
+    public function iniciarVerificacion(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'documento' => 'required|string'
+            ]);
+
+            Log::info('🔐 Verificación de identidad - PASO 1', [
+                'documento' => $request->documento
+            ]);
+
+            // Buscar paciente por documento
+            $paciente = Paciente::where('documento', $request->documento)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$paciente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró paciente con ese documento'
+                ], 404);
+            }
+
+            // Generar 3 fechas: 1 verdadera + 2 falsas
+            $fechaReal = $paciente->fecha_nacimiento->format('Y-m-d');
+            
+            // Generar 2 fechas falsas aleatorias cercanas a la real
+            $fechasFalsas = $this->generarFechasFalsas($paciente->fecha_nacimiento);
+            
+            // Mezclar las fechas aleatoriamente
+            $fechas = array_merge([$fechaReal], $fechasFalsas);
+            shuffle($fechas);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'nombre_completo' => $paciente->nombre_completo,
+                    'opciones_fecha_nacimiento' => $fechas,
+                    'mensaje' => 'Seleccione su fecha de nacimiento correcta'
+                ],
+                'message' => 'Verificación iniciada'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en verificación de identidad - PASO 1', [
+                'error' => $e->getMessage(),
+                'documento' => $request->documento ?? null
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al iniciar verificación'
+            ], 500);
+        }
+    }
+
+    /**
+     * PASO 2: Validar fecha de nacimiento seleccionada
+     * Verifica si la fecha coincide con el paciente
+     */
+    public function validarVerificacion(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'documento' => 'required|string',
+                'fecha_nacimiento' => 'required|date_format:Y-m-d'
+            ]);
+
+            Log::info('🔐 Verificación de identidad - PASO 2', [
+                'documento' => $request->documento,
+                'fecha_seleccionada' => $request->fecha_nacimiento
+            ]);
+
+            // Buscar paciente por documento
+            $paciente = Paciente::where('documento', $request->documento)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$paciente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Verificación fallida',
+                    'verificado' => false
+                ], 404);
+            }
+
+            // Verificar si la fecha coincide
+            $fechaReal = $paciente->fecha_nacimiento->format('Y-m-d');
+            $fechaSeleccionada = $request->fecha_nacimiento;
+
+            if ($fechaReal === $fechaSeleccionada) {
+                Log::info('✅ Verificación de identidad EXITOSA', [
+                    'documento' => $request->documento,
+                    'paciente_uuid' => $paciente->uuid
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'verificado' => true,
+                        'paciente_uuid' => $paciente->uuid,
+                        'nombre_completo' => $paciente->nombre_completo
+                    ],
+                    'message' => '✅ Validación exitosa - Identidad verificada'
+                ]);
+            } else {
+                Log::warning('❌ Verificación de identidad FALLIDA', [
+                    'documento' => $request->documento,
+                    'fecha_seleccionada' => $fechaSeleccionada
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'data' => [
+                        'verificado' => false
+                    ],
+                    'message' => 'Fecha de nacimiento incorrecta'
+                ], 401);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en verificación de identidad - PASO 2', [
+                'error' => $e->getMessage(),
+                'documento' => $request->documento ?? null
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al validar verificación',
+                'verificado' => false
+            ], 500);
+        }
+    }
+
+    /**
+     * Generar 2 fechas falsas cercanas a la fecha real
+     */
+    private function generarFechasFalsas(\Carbon\Carbon $fechaReal): array
+    {
+        $fechasFalsas = [];
+        
+        // Fecha falsa 1: Restar entre 1-5 años
+        $fecha1 = $fechaReal->copy()->subYears(rand(1, 5))->format('Y-m-d');
+        $fechasFalsas[] = $fecha1;
+        
+        // Fecha falsa 2: Sumar entre 1-5 años
+        $fecha2 = $fechaReal->copy()->addYears(rand(1, 5))->format('Y-m-d');
+        $fechasFalsas[] = $fecha2;
+        
+        return $fechasFalsas;
+    }
 }
 
                 
